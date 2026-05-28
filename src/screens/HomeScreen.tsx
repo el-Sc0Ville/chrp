@@ -1,28 +1,37 @@
-// C-01 · Player Home
-// Primary job: "Do I have a game coming up, and am I in?"
-// Three UI regions:
-//   1. Hero event card — date, opponent, venue, In/Out/Maybe toggle
-//   2. Announcements section — manager messages
-//   3. (Tab bar lives in the navigator)
+// Home tab — switches between B-01 (Manager) and C-01 (Player) based on role.
+// Temporary scaffolding: flip IS_MANAGER to preview each view.
+// Replace with Firebase auth role check when backend is connected.
+
+const IS_MANAGER = true;
 
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Pressable, Platform,
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navy, ice, teams, fonts, radius, spacing } from '../theme';
+import { navy, teams, status, fonts, radius, spacing } from '../theme';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
 const TEAM = teams.trashdogs;
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// Placeholder availability counts for B-01
+const AVAIL = { in: 7, out: 2, maybe: 1, noResp: 3 } as const;
+
+// ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  return IS_MANAGER ? <ManagerHomeScreen /> : <PlayerHomeScreen />;
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  B-01 · Manager Home                                                     ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
-  const [response, setResponse] = useState<Response>('in');
-  const hasEvent = true; // swap to false to preview empty state
+  const hasEvent = true;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -30,22 +39,17 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Page title strip */}
-        <PageHeader hasEvent={hasEvent} />
+        <ManagerPageHeader hasEvent={hasEvent} />
 
-        {/* Region 1: Hero or empty state */}
+        {/* Region 1: hero or empty state */}
         <View style={styles.heroWrapper}>
-          {hasEvent ? (
-            <HeroEventCard
-              response={response}
-              onRespond={setResponse}
-            />
-          ) : (
-            <EmptyEventCard />
-          )}
+          {hasEvent ? <ManagerHeroCard /> : <ManagerEmptyCard />}
         </View>
 
-        {/* Region 2: Announcements */}
+        {/* Region 2: quick actions (between card and announcements) */}
+        {hasEvent && <ManagerQuickActions noRespCount={AVAIL.noResp} />}
+
+        {/* Region 3: announcements */}
         <AnnouncementsSection hasEvent={hasEvent} />
 
         <View style={{ height: spacing[24] }} />
@@ -54,38 +58,36 @@ export default function HomeScreen() {
   );
 }
 
-// ─── Page header ──────────────────────────────────────────────────────────────
+// ─── Manager header — team switcher + title + "+" add-event button ────────────
 
-function PageHeader({ hasEvent }: { hasEvent: boolean }) {
+function ManagerPageHeader({ hasEvent }: { hasEvent: boolean }) {
   return (
     <View style={styles.header}>
       <View>
-        {/* Team switcher pill */}
         <View style={styles.teamPill}>
           <View style={styles.teamDot} />
           <Text style={styles.teamPillText}>Trashdogs</Text>
           <Text style={styles.teamPillChevron}>›</Text>
         </View>
-
         <Text style={styles.pageTitle}>
           {hasEvent ? 'Next up' : 'No games yet'}
         </Text>
       </View>
 
-      {/* Avatar shortcut */}
-      <View style={styles.avatarChip}>
-        <Text style={styles.avatarText}>JM</Text>
-      </View>
+      {/* Add-event shortcut — filled pill, manager-primary action */}
+      <Pressable
+        style={styles.addEventBtn}
+        android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
+      >
+        <Text style={styles.addEventBtnText}>+</Text>
+      </Pressable>
     </View>
   );
 }
 
-// ─── Hero event card ──────────────────────────────────────────────────────────
+// ─── Manager hero card — event details + availability summary bar ─────────────
 
-function HeroEventCard({ response, onRespond }: {
-  response: Response;
-  onRespond: (r: Response) => void;
-}) {
+function ManagerHeroCard() {
   return (
     <View style={styles.heroCard}>
       {/* Meta row */}
@@ -96,10 +98,8 @@ function HeroEventCard({ response, onRespond }: {
           </View>
           <Text style={styles.metaSubtext}>In 2 days</Text>
         </View>
-        <View style={styles.inCount}>
-          <View style={styles.inCountDot} />
-          <Text style={styles.inCountText}>10 in</Text>
-        </View>
+        {/* Responded tally instead of player "in" count */}
+        <Text style={styles.respondedTally}>13 / 16 responded</Text>
       </View>
 
       {/* Day + time */}
@@ -121,17 +121,240 @@ function HeroEventCard({ response, onRespond }: {
       {/* Divider */}
       <View style={styles.dividerRow}>
         <View style={styles.dividerLine} />
+        <Text style={styles.dividerLabel}>Availability</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* Availability summary — 4 chips in a row */}
+      <AvailabilityBar avail={AVAIL} />
+    </View>
+  );
+}
+
+// ─── Availability bar — four status chips in a horizontal row ─────────────────
+
+type AvailCounts = typeof AVAIL;
+
+const AVAIL_CHIPS: {
+  key: keyof AvailCounts;
+  label: string;
+  dot: string;
+  bg: string;
+  border: string;
+  text: string;
+}[] = [
+  {
+    key: 'in',
+    label: 'In',
+    dot: TEAM[300],
+    bg: `rgba(${hexToRgbVals(TEAM[500])}, 0.16)`,
+    border: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
+    text: TEAM[300],
+  },
+  {
+    key: 'out',
+    label: 'Out',
+    dot: status.error.pure,
+    bg: status.error.subtle,
+    border: 'rgba(239,68,68,0.38)',
+    text: status.error.light,
+  },
+  {
+    key: 'maybe',
+    label: 'Maybe',
+    dot: status.alert.pure,
+    bg: status.alert.subtle,
+    border: 'rgba(245,158,11,0.38)',
+    text: status.alert.light,
+  },
+  {
+    key: 'noResp',
+    label: 'No resp.',
+    dot: navy[400],
+    bg: 'rgba(95,107,133,0.14)',
+    border: 'rgba(95,107,133,0.28)',
+    text: navy[300],
+  },
+];
+
+function AvailabilityBar({ avail }: { avail: AvailCounts }) {
+  return (
+    <View style={styles.availRow}>
+      {AVAIL_CHIPS.map((chip) => (
+        <View
+          key={chip.key}
+          style={[
+            styles.availChip,
+            { backgroundColor: chip.bg, borderColor: chip.border },
+          ]}
+        >
+          <View style={[styles.availDot, { backgroundColor: chip.dot }]} />
+          <Text style={[styles.availLabel, { color: chip.text }]}>
+            {chip.label}
+          </Text>
+          <Text style={[styles.availCount, { color: chip.text }]}>
+            {avail[chip.key]}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── Manager quick actions ────────────────────────────────────────────────────
+
+function ManagerQuickActions({ noRespCount }: { noRespCount: number }) {
+  return (
+    <View style={styles.quickActions}>
+      {/* "Remind" only shown when there are non-responders */}
+      {noRespCount > 0 && (
+        <Pressable
+          style={styles.remindBtn}
+          android_ripple={{ color: `rgba(${hexToRgbVals(TEAM[500])}, 0.15)` }}
+        >
+          <Text style={styles.remindBtnText}>
+            🔔  Remind {noRespCount} non-responder{noRespCount !== 1 ? 's' : ''}
+          </Text>
+        </Pressable>
+      )}
+
+      <Pressable
+        style={styles.addEventLargeBtn}
+        android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
+      >
+        <Text style={styles.addEventLargeBtnText}>+ Add event</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Manager empty state ──────────────────────────────────────────────────────
+
+function ManagerEmptyCard() {
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIconWrap}>
+        <Text style={styles.emptyIcon}>📅</Text>
+      </View>
+      <Text style={styles.emptyTitle}>No games scheduled.</Text>
+      <Text style={styles.emptyBody}>
+        Add your first event and your team will be notified instantly.
+      </Text>
+    </View>
+  );
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  C-01 · Player Home                                                      ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+function PlayerHomeScreen() {
+  const insets = useSafeAreaInsets();
+  const [response, setResponse] = useState<Response>('in');
+  const hasEvent = true;
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <PlayerPageHeader hasEvent={hasEvent} />
+
+        <View style={styles.heroWrapper}>
+          {hasEvent ? (
+            <PlayerHeroCard response={response} onRespond={setResponse} />
+          ) : (
+            <PlayerEmptyCard />
+          )}
+        </View>
+
+        <AnnouncementsSection hasEvent={hasEvent} />
+
+        <View style={{ height: spacing[24] }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+function PlayerPageHeader({ hasEvent }: { hasEvent: boolean }) {
+  return (
+    <View style={styles.header}>
+      <View>
+        <View style={styles.teamPill}>
+          <View style={styles.teamDot} />
+          <Text style={styles.teamPillText}>Trashdogs</Text>
+          <Text style={styles.teamPillChevron}>›</Text>
+        </View>
+        <Text style={styles.pageTitle}>
+          {hasEvent ? 'Next up' : 'No games yet'}
+        </Text>
+      </View>
+      <View style={styles.avatarChip}>
+        <Text style={styles.avatarText}>JM</Text>
+      </View>
+    </View>
+  );
+}
+
+function PlayerHeroCard({ response, onRespond }: {
+  response: Response;
+  onRespond: (r: Response) => void;
+}) {
+  return (
+    <View style={styles.heroCard}>
+      <View style={styles.metaRow}>
+        <View style={styles.metaLeft}>
+          <View style={styles.gamePill}>
+            <Text style={styles.gamePillText}>Game</Text>
+          </View>
+          <Text style={styles.metaSubtext}>In 2 days</Text>
+        </View>
+        <View style={styles.inCount}>
+          <View style={styles.inCountDot} />
+          <Text style={styles.inCountText}>10 in</Text>
+        </View>
+      </View>
+
+      <View style={styles.daytimeRow}>
+        <Text style={styles.dayText}>Friday</Text>
+        <Text style={styles.timeText}>7:30 pm</Text>
+      </View>
+
+      <Text style={styles.vsLabel}>vs.</Text>
+      <Text style={styles.opponentText}>Ice Sharks</Text>
+
+      <View style={styles.venuePill}>
+        <Text style={styles.venuePin}>📍</Text>
+        <Text style={styles.venueText}>The Barn — Rink 2</Text>
+      </View>
+
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
         <Text style={styles.dividerLabel}>Are you in?</Text>
         <View style={styles.dividerLine} />
       </View>
 
-      {/* The toggle */}
       <InOutMaybeToggle response={response} onRespond={onRespond} />
     </View>
   );
 }
 
-// ─── In/Out/Maybe toggle ──────────────────────────────────────────────────────
+function PlayerEmptyCard() {
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIconWrap}>
+        <Text style={styles.emptyIcon}>📅</Text>
+      </View>
+      <Text style={styles.emptyTitle}>Nothing scheduled yet.</Text>
+      <Text style={styles.emptyBody}>
+        Ask your manager to add a game — you'll get a notification the moment it's posted.
+      </Text>
+    </View>
+  );
+}
+
+// ─── In/Out/Maybe toggle (player only) ───────────────────────────────────────
 
 const OPTS: { id: Response; label: string; glyph: string }[] = [
   { id: 'in',    label: "I'm in", glyph: '✓' },
@@ -139,13 +362,13 @@ const OPTS: { id: Response; label: string; glyph: string }[] = [
   { id: 'maybe', label: 'Maybe',  glyph: '?' },
 ];
 
-const TINTS: Record<NonNullable<Response>, string> = {
+const RESPONSE_TINTS: Record<NonNullable<Response>, string> = {
   in:    TEAM[500],
-  out:   '#D6253F',
-  maybe: '#F59E0B',
+  out:   status.error.pure,
+  maybe: status.alert.pure,
 };
 
-const ON_TINTS: Record<NonNullable<Response>, string> = {
+const RESPONSE_ON: Record<NonNullable<Response>, string> = {
   in:    TEAM.on,
   out:   '#FFFFFF',
   maybe: '#0B1220',
@@ -159,7 +382,6 @@ function InOutMaybeToggle({ response, onRespond }: {
 
   return (
     <View style={styles.toggleContainer}>
-      {/* Sliding pill indicator */}
       {response && (
         <View
           style={[
@@ -167,18 +389,16 @@ function InOutMaybeToggle({ response, onRespond }: {
             {
               left: `${(Math.max(0, activeIdx) / OPTS.length) * 100}%` as any,
               width: `${(1 / OPTS.length) * 100}%` as any,
-              backgroundColor: TINTS[response],
+              backgroundColor: RESPONSE_TINTS[response],
             },
           ]}
         />
       )}
-
       {OPTS.map((opt) => {
         const isActive = response === opt.id;
         const textColor = isActive && opt.id
-          ? ON_TINTS[opt.id]
+          ? RESPONSE_ON[opt.id]
           : 'rgba(255,255,255,0.70)';
-
         return (
           <Pressable
             key={opt.id}
@@ -204,23 +424,9 @@ function InOutMaybeToggle({ response, onRespond }: {
   );
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function EmptyEventCard() {
-  return (
-    <View style={styles.emptyCard}>
-      <View style={styles.emptyIconWrap}>
-        <Text style={styles.emptyIcon}>📅</Text>
-      </View>
-      <Text style={styles.emptyTitle}>Nothing scheduled yet.</Text>
-      <Text style={styles.emptyBody}>
-        Ask your manager to add a game — you'll get a notification the moment it's posted.
-      </Text>
-    </View>
-  );
-}
-
-// ─── Announcements ────────────────────────────────────────────────────────────
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  Shared components                                                       ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 function AnnouncementsSection({ hasEvent }: { hasEvent: boolean }) {
   const ann = hasEvent
@@ -235,7 +441,6 @@ function AnnouncementsSection({ hasEvent }: { hasEvent: boolean }) {
           <Text style={styles.announcementsAll}>All →</Text>
         </TouchableOpacity>
       </View>
-
       <TouchableOpacity style={styles.announcementCard} activeOpacity={0.75}>
         <View style={styles.announcementIcon}>
           <Text>📣</Text>
@@ -252,7 +457,9 @@ function AnnouncementsSection({ hasEvent }: { hasEvent: boolean }) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  Styles                                                                  ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
 
 const styles = StyleSheet.create({
   container: {
@@ -264,7 +471,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
 
-  // Header
+  // ── Header (shared shell, different right element per role) ──────────────
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -306,6 +513,32 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: '#FFFFFF',
   },
+
+  // Manager header right: filled "+" button
+  addEventBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: TEAM[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 22,
+    shadowColor: TEAM[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addEventBtnText: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEAM.on,
+    lineHeight: 22,
+    marginTop: -1,
+  },
+
+  // Player header right: avatar chip
   avatarChip: {
     width: 36,
     height: 36,
@@ -324,12 +557,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Hero wrapper
+  // ── Hero card (shared shell) ─────────────────────────────────────────────
   heroWrapper: {
     paddingHorizontal: spacing[16],
   },
-
-  // Hero card
   heroCard: {
     borderRadius: radius.xxl,
     padding: 18,
@@ -372,6 +603,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.65)',
   },
+  // Manager meta right: response tally
+  respondedTally: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    color: 'rgba(255,255,255,0.55)',
+  },
+  // Player meta right: "N in" with dot
   inCount: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -392,7 +631,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Day/time
+  // Day / time
   daytimeRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -450,9 +689,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
     marginBottom: 18,
   },
-  venuePin: {
-    fontSize: 11,
-  },
+  venuePin: { fontSize: 11 },
   venueText: {
     fontFamily: fonts.uiMedium,
     fontSize: 13,
@@ -465,7 +702,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   dividerLine: {
     flex: 1,
@@ -481,7 +718,81 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Toggle
+  // ── Availability bar (B-01) ──────────────────────────────────────────────
+  availRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  availChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: radius.s,
+    borderWidth: 0.5,
+  },
+  availDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  availLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9.5,
+    letterSpacing: 0.4,
+    fontWeight: '600',
+  },
+  availCount: {
+    fontFamily: fonts.monoBold,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 15,
+  },
+
+  // ── Quick actions (B-01) ─────────────────────────────────────────────────
+  quickActions: {
+    paddingHorizontal: spacing[16],
+    paddingTop: spacing[12],
+    gap: spacing[8],
+  },
+  remindBtn: {
+    height: 52,
+    borderRadius: radius.l,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+  },
+  remindBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    color: TEAM[300],
+  },
+  addEventLargeBtn: {
+    height: 52,
+    borderRadius: radius.l,
+    backgroundColor: TEAM[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: TEAM[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  addEventLargeBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    color: TEAM.on,
+  },
+
+  // ── Player toggle (C-01) ─────────────────────────────────────────────────
   toggleContainer: {
     flexDirection: 'row',
     height: 56,
@@ -525,7 +836,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Empty state
+  // ── Empty state (shared layout, different copy per role) ─────────────────
   emptyCard: {
     borderRadius: radius.xxl,
     padding: spacing[40],
@@ -548,9 +859,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 22,
   },
-  emptyIcon: {
-    fontSize: 32,
-  },
+  emptyIcon: { fontSize: 32 },
   emptyTitle: {
     fontFamily: fonts.display,
     fontSize: 22,
@@ -569,7 +878,7 @@ const styles = StyleSheet.create({
     maxWidth: 240,
   },
 
-  // Announcements
+  // ── Announcements (shared) ───────────────────────────────────────────────
   announcements: {
     paddingHorizontal: spacing[20],
     paddingTop: spacing[24],
@@ -642,7 +951,8 @@ const styles = StyleSheet.create({
   },
 });
 
-// Helper: convert hex to "r, g, b" string for rgba() usage in StyleSheet
+// ─── Utility ──────────────────────────────────────────────────────────────────
+
 function hexToRgbVals(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
