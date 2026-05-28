@@ -3,9 +3,9 @@
 
 const IS_MANAGER = true;
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
@@ -19,22 +19,22 @@ interface RosterPlayer {
   initials: string;
   jersey: number;
   role: PlayerRole;
-  trend: [TrendDot, TrendDot, TrendDot];
+  trend: [TrendDot, TrendDot, TrendDot, TrendDot, TrendDot];
 }
 
 const TEAM = teams.trashdogs;
 
 const ROSTER_DATA: RosterPlayer[] = [
-  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, role: 'manager', trend: ['in',    'in',    'in']    },
-  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, role: 'player',  trend: ['in',    'out',   'in']    },
-  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, role: 'player',  trend: ['in',    'in',    'maybe'] },
-  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, role: 'player',  trend: ['out',   'out',   'in']    },
-  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, role: 'player',  trend: ['in',    'maybe', 'in']    },
-  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, role: 'player',  trend: ['in',    'in',    'in']    },
-  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, role: 'player',  trend: [null,    'in',    'out']   },
-  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, role: 'player',  trend: ['in',    'in',    'maybe'] },
-  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, role: 'player',  trend: ['maybe', 'in',    'in']    },
-  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, role: 'player',  trend: ['in',    null,    'in']    },
+  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, role: 'manager', trend: ['in',    'in',    'in',    'in',    'in']    },
+  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, role: 'manager', trend: ['in',    'in',    'out',   'in',    'in']    },
+  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, role: 'player',  trend: ['in',    'in',    'in',    'in',    'maybe'] },
+  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, role: 'player',  trend: ['out',   'in',    'out',   'out',   'in']    },
+  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, role: 'player',  trend: ['in',    'in',    'maybe', 'in',    'in']    },
+  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, role: 'player',  trend: ['in',    'in',    'in',    'in',    'in']    },
+  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, role: 'player',  trend: [null,    null,    'in',    'out',   'in']    },
+  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, role: 'player',  trend: ['in',    'maybe', 'in',    'in',    'maybe'] },
+  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, role: 'player',  trend: ['maybe', 'in',    'in',    'in',    'in']    },
+  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, role: 'player',  trend: ['in',    null,    'in',    'in',    'in']    },
 ];
 
 // ─── Root export ──────────────────────────────────────────────────────────────
@@ -50,39 +50,64 @@ export default function RosterScreen() {
 function ManagerRosterScreen() {
   const insets = useSafeAreaInsets();
   const [roster, setRoster] = useState<RosterPlayer[]>(ROSTER_DATA);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [actionPlayer, setActionPlayer] = useState<RosterPlayer | null>(null);
 
-  const toggleActive = (id: string) =>
-    setActiveId(prev => (prev === id ? null : id));
+  const inviteCode = useMemo(() => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 6 }, () =>
+      chars[Math.floor(Math.random() * chars.length)]
+    ).join('');
+  }, []);
+
+  const makeManager = (id: string) => {
+    setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'manager' as PlayerRole } : p));
+    setActionPlayer(null);
+  };
 
   const removePlayer = (id: string) => {
     setRoster(prev => prev.filter(p => p.id !== id));
-    setActiveId(null);
+    setActionPlayer(null);
   };
+
+  const managerCount = roster.filter(p => p.role === 'manager').length;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <RosterHeader isManager />
+      <RosterHeader isManager onInvite={() => setInviteVisible(true)} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        onScrollBeginDrag={() => setActiveId(null)}
       >
         {roster.map(player => (
           <PlayerRow
             key={player.id}
             player={player}
-            isActive={activeId === player.id}
-            onLongPress={() => toggleActive(player.id)}
-            onRemove={() => removePlayer(player.id)}
-            onDismiss={() => setActiveId(null)}
+            onLongPress={() => setActionPlayer(player)}
           />
         ))}
-        <Text style={styles.countCaption}>
-          {roster.length} player{roster.length !== 1 ? 's' : ''}
-        </Text>
       </ScrollView>
+      <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
+        <Text style={styles.stickyCount}>
+          {roster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+        </Text>
+      </View>
+
+      <InviteSheet
+        visible={inviteVisible}
+        inviteCode={inviteCode}
+        onClose={() => setInviteVisible(false)}
+      />
+      {actionPlayer && (
+        <ActionSheet
+          player={actionPlayer}
+          canPromote={actionPlayer.role === 'player'}
+          onMakeManager={() => makeManager(actionPlayer.id)}
+          onRemove={() => removePlayer(actionPlayer.id)}
+          onClose={() => setActionPlayer(null)}
+        />
+      )}
     </View>
   );
 }
@@ -93,6 +118,9 @@ function ManagerRosterScreen() {
 
 function PlayerRosterScreen() {
   const insets = useSafeAreaInsets();
+  const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
+
+  const managerCount = ROSTER_DATA.filter(p => p.role === 'manager').length;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -103,17 +131,32 @@ function PlayerRosterScreen() {
         showsVerticalScrollIndicator={false}
       >
         {ROSTER_DATA.map(player => (
-          <PlayerRow key={player.id} player={player} />
+          <PlayerRow
+            key={player.id}
+            player={player}
+            onPress={() => setSelectedPlayer(player)}
+          />
         ))}
-        <Text style={styles.countCaption}>{ROSTER_DATA.length} players</Text>
       </ScrollView>
+      <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
+        <Text style={styles.stickyCount}>
+          {ROSTER_DATA.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+        </Text>
+      </View>
+
+      {selectedPlayer && (
+        <ProfileCardModal
+          player={selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+        />
+      )}
     </View>
   );
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function RosterHeader({ isManager }: { isManager: boolean }) {
+function RosterHeader({ isManager, onInvite }: { isManager: boolean; onInvite?: () => void }) {
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
@@ -125,6 +168,7 @@ function RosterHeader({ isManager }: { isManager: boolean }) {
         {isManager && (
           <Pressable
             style={({ pressed }) => [styles.inviteBtn, pressed && { opacity: 0.7 }]}
+            onPress={onInvite}
           >
             <Text style={styles.inviteBtnText}>+ Invite</Text>
           </Pressable>
@@ -138,26 +182,20 @@ function RosterHeader({ isManager }: { isManager: boolean }) {
 
 function PlayerRow({
   player,
-  isActive = false,
+  onPress,
   onLongPress,
-  onRemove,
-  onDismiss,
 }: {
   player: RosterPlayer;
-  isActive?: boolean;
+  onPress?: () => void;
   onLongPress?: () => void;
-  onRemove?: () => void;
-  onDismiss?: () => void;
 }) {
-  const canRemove = !!onRemove;
-
   return (
     <Pressable
-      onLongPress={canRemove ? onLongPress : undefined}
+      onPress={onPress}
+      onLongPress={onLongPress}
       delayLongPress={400}
-      style={[styles.rowOuter, isActive && styles.rowOuterActive]}
+      style={({ pressed }) => [styles.rowOuter, pressed && styles.rowPressed]}
     >
-      {/* Main content */}
       <View style={styles.rowMain}>
         <PlayerAvatar player={player} />
         <View style={styles.rowInfo}>
@@ -167,39 +205,29 @@ function PlayerRow({
           </View>
           <View style={styles.rowBottom}>
             <RolePill role={player.role} />
-            <TrendDots trend={player.trend} />
+            <TrendDots trend={player.trend.slice(-3)} />
           </View>
         </View>
       </View>
-
-      {/* Action strip — revealed on long-press (manager only) */}
-      {isActive && canRemove && (
-        <View style={styles.actionStrip}>
-          <Pressable
-            style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.75 }]}
-            onPress={onRemove}
-          >
-            <Text style={styles.removeBtnText}>Remove from team</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
-            onPress={onDismiss}
-          >
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </Pressable>
-        </View>
-      )}
     </Pressable>
   );
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
-function PlayerAvatar({ player }: { player: RosterPlayer }) {
+function PlayerAvatar({ player, size = 44 }: { player: RosterPlayer; size?: number }) {
   const isManager = player.role === 'manager';
   return (
-    <View style={[styles.avatar, isManager ? styles.avatarManager : styles.avatarPlayer]}>
-      <Text style={[styles.avatarInitials, isManager && styles.avatarInitialsManager]}>
+    <View style={[
+      styles.avatar,
+      { width: size, height: size, borderRadius: size / 2 },
+      isManager ? styles.avatarManager : styles.avatarPlayer,
+    ]}>
+      <Text style={[
+        styles.avatarInitials,
+        { fontSize: Math.round(size * 0.32) },
+        isManager && styles.avatarInitialsManager,
+      ]}>
         {player.initials}
       </Text>
     </View>
@@ -227,19 +255,166 @@ const TREND_COLORS: Record<NonNullable<TrendDot>, string> = {
   maybe: status.alert.pure,
 };
 
-function TrendDots({ trend }: { trend: RosterPlayer['trend'] }) {
+function TrendDots({ trend, size = 7 }: { trend: TrendDot[]; size?: number }) {
   return (
     <View style={styles.trendRow}>
       {trend.map((dot, i) => (
         <View
           key={i}
-          style={[
-            styles.trendDot,
-            { backgroundColor: dot ? TREND_COLORS[dot] : navy[500] },
-          ]}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: dot ? TREND_COLORS[dot] : navy[500],
+          }}
         />
       ))}
     </View>
+  );
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  Modals                                                                  ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+// ─── Invite bottom sheet ──────────────────────────────────────────────────────
+
+function InviteSheet({
+  visible,
+  inviteCode,
+  onClose,
+}: {
+  visible: boolean;
+  inviteCode: string;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShare = () => {
+    Share.share({
+      message: `Join Trashdogs on Chrp! Code: ${inviteCode} — https://chrp.app/join/${inviteCode}`,
+    });
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Invite to Trashdogs</Text>
+          <Text style={styles.sheetSub}>Share this code or link with your teammates</Text>
+
+          <View style={styles.inviteCodeBox}>
+            <Text style={styles.inviteCodeText}>{inviteCode}</Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.sheetBtn, styles.sheetBtnGhost, pressed && { opacity: 0.7 }]}
+            onPress={handleCopy}
+          >
+            <Text style={styles.sheetBtnGhostText}>{copied ? '✓ Copied!' : 'Copy invite link'}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.sheetBtn, styles.sheetBtnFilled, pressed && { opacity: 0.85 }]}
+            onPress={handleShare}
+          >
+            <Text style={styles.sheetBtnFilledText}>Share</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Long-press action sheet ──────────────────────────────────────────────────
+
+function ActionSheet({
+  player,
+  canPromote,
+  onMakeManager,
+  onRemove,
+  onClose,
+}: {
+  player: RosterPlayer;
+  canPromote: boolean;
+  onMakeManager: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
+          <View style={styles.sheetHandle} />
+
+          <View style={styles.actionHeader}>
+            <PlayerAvatar player={player} size={36} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actionHeaderName}>{player.name}</Text>
+              <Text style={styles.actionHeaderJersey}>#{player.jersey}</Text>
+            </View>
+          </View>
+
+          <View style={styles.actionDivider} />
+
+          {canPromote && (
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+              onPress={onMakeManager}
+            >
+              <Text style={styles.actionRowText}>Make Manager</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+            onPress={onRemove}
+          >
+            <Text style={[styles.actionRowText, { color: status.error.pure }]}>Remove from team</Text>
+          </Pressable>
+
+          <View style={styles.actionDivider} />
+
+          <Pressable
+            style={({ pressed }) => [styles.actionRowCancel, pressed && { backgroundColor: navy[600] }]}
+            onPress={onClose}
+          >
+            <Text style={styles.actionRowCancelText}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Player profile card (player view only) ───────────────────────────────────
+
+function ProfileCardModal({ player, onClose }: { player: RosterPlayer; onClose: () => void }) {
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.cardOverlay} onPress={onClose}>
+        <Pressable onPress={() => {}} style={styles.profileCard}>
+          <PlayerAvatar player={player} size={64} />
+          <Text style={styles.cardName}>{player.name}</Text>
+          <Text style={styles.cardJersey}>#{player.jersey}</Text>
+          <View style={styles.cardPillRow}>
+            <RolePill role={player.role} />
+          </View>
+          <Text style={styles.cardTrendLabel}>Last 5 events</Text>
+          <View style={styles.trendRow}>
+            <TrendDots trend={player.trend} size={10} />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -306,7 +481,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing[16],
     paddingTop: spacing[4],
-    paddingBottom: spacing[32],
+    paddingBottom: spacing[16],
   },
 
   // ── Row card ─────────────────────────────────────────────────────────────
@@ -318,9 +493,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.05)',
     overflow: 'hidden',
   },
-  rowOuterActive: {
-    borderColor: `rgba(${hexToRgbVals(status.error.pure)}, 0.35)`,
-    backgroundColor: `rgba(${hexToRgbVals(status.error.pure)}, 0.04)`,
+  rowPressed: {
+    backgroundColor: navy[600],
   },
   rowMain: {
     flexDirection: 'row',
@@ -360,9 +534,6 @@ const styles = StyleSheet.create({
 
   // ── Avatar ────────────────────────────────────────────────────────────────
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -377,7 +548,6 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     fontFamily: fonts.uiBold,
-    fontSize: 14,
     fontWeight: '700',
     color: TEAM[300],
   },
@@ -419,64 +589,208 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginLeft: spacing[4],
-  },
-  trendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
   },
 
-  // ── Action strip ──────────────────────────────────────────────────────────
-  actionStrip: {
-    flexDirection: 'row',
-    gap: spacing[8],
-    paddingHorizontal: spacing[14],
-    paddingBottom: spacing[12],
-    paddingTop: spacing[4],
+  // ── Sticky footer bar ─────────────────────────────────────────────────────
+  stickyBar: {
+    borderTopWidth: 0.5,
+    borderTopColor: navy[600],
+    paddingTop: spacing[10],
+    paddingHorizontal: spacing[20],
+    backgroundColor: navy[800],
   },
-  removeBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: radius.s,
-    backgroundColor: status.error.subtle,
-    borderWidth: 1,
-    borderColor: `rgba(${hexToRgbVals(status.error.pure)}, 0.38)`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeBtnText: {
-    fontFamily: fonts.uiSemiBold,
-    fontSize: 13,
-    fontWeight: '600',
-    color: status.error.light,
-  },
-  cancelBtn: {
-    paddingHorizontal: spacing[16],
-    height: 40,
-    borderRadius: radius.s,
-    backgroundColor: navy[600],
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 13,
-    fontWeight: '500',
-    color: navy[300],
-  },
-
-  // ── Footer count ──────────────────────────────────────────────────────────
-  countCaption: {
+  stickyCount: {
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.0,
     color: navy[400],
     textAlign: 'center',
+  },
+
+  // ── Bottom sheet (shared) ─────────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.60)',
+  },
+  sheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[20],
+    paddingTop: spacing[16],
+    borderTopWidth: 0.5,
+    borderLeftWidth: 0.5,
+    borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: navy[500],
+    alignSelf: 'center',
+    marginBottom: spacing[20],
+  },
+  sheetTitle: {
+    ...T.headingL,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: spacing[4],
+  },
+  sheetSub: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    lineHeight: 18,
+    color: navy[300],
+    textAlign: 'center',
+    marginBottom: spacing[24],
+  },
+
+  // ── Invite code ───────────────────────────────────────────────────────────
+  inviteCodeBox: {
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+    borderRadius: radius.l,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)`,
+    paddingVertical: spacing[20],
+    paddingHorizontal: spacing[24],
+    marginBottom: spacing[20],
+    alignItems: 'center',
+  },
+  inviteCodeText: {
+    fontFamily: fonts.mono,
+    fontSize: 34,
+    fontWeight: '600',
+    color: TEAM[300],
+    letterSpacing: 10,
+  },
+
+  // ── Sheet buttons ─────────────────────────────────────────────────────────
+  sheetBtn: {
+    height: 52,
+    borderRadius: radius.l,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[10],
+  },
+  sheetBtnGhost: {
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+  },
+  sheetBtnFilled: {
+    backgroundColor: TEAM[500],
+    shadowColor: TEAM[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  sheetBtnGhostText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    color: TEAM[300],
+  },
+  sheetBtnFilledText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    color: TEAM.on,
+  },
+
+  // ── Action sheet rows ─────────────────────────────────────────────────────
+  actionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[12],
+    paddingVertical: spacing[12],
+  },
+  actionHeaderName: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  actionHeaderJersey: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    color: navy[400],
+    marginTop: 2,
+  },
+  actionDivider: {
+    height: 0.5,
+    backgroundColor: navy[600],
+    marginVertical: spacing[4],
+  },
+  actionRow: {
+    paddingVertical: spacing[14],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.s,
+  },
+  actionRowText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  actionRowCancel: {
+    paddingVertical: spacing[14],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.s,
+  },
+  actionRowCancelText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 16,
+    fontWeight: '600',
+    color: navy[300],
+  },
+
+  // ── Profile card modal ────────────────────────────────────────────────────
+  cardOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.70)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing[32],
+  },
+  profileCard: {
+    backgroundColor: navy[700],
+    borderRadius: radius.xxl,
+    padding: spacing[28],
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  cardName: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    marginTop: spacing[14],
+    textAlign: 'center',
+  },
+  cardJersey: {
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    color: navy[400],
+    letterSpacing: 0.5,
     marginTop: spacing[4],
-    paddingBottom: spacing[8],
+  },
+  cardPillRow: {
+    marginTop: spacing[12],
+  },
+  cardTrendLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 9.5,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: navy[400],
+    marginTop: spacing[20],
+    marginBottom: spacing[8],
   },
 });
 
