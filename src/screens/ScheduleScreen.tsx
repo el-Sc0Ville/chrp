@@ -249,8 +249,7 @@ function PastSection() {
   );
 }
 
-function EmptyState() {
-  const navigation = useNavigation<any>();
+function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No upcoming events</Text>
@@ -261,7 +260,7 @@ function EmptyState() {
       </Text>
       {IS_MANAGER && (
         <Pressable
-          onPress={() => navigation.navigate('CreateEvent')}
+          onPress={onAdd}
           style={({ pressed }) => [styles.emptyAddBtn, pressed && { opacity: 0.8 }]}
         >
           <Text style={styles.emptyAddBtnText}>+ Add your first event</Text>
@@ -271,8 +270,7 @@ function EmptyState() {
   );
 }
 
-function ScheduleHeader() {
-  const navigation = useNavigation<any>();
+function ScheduleHeader({ onAdd }: { onAdd: () => void }) {
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
@@ -285,7 +283,7 @@ function ScheduleHeader() {
           <TouchableOpacity
             style={styles.addBtn}
             activeOpacity={0.75}
-            onPress={() => navigation.navigate('CreateEvent')}
+            onPress={onAdd}
           >
             <Text style={styles.addBtnText}>+</Text>
           </TouchableOpacity>
@@ -300,17 +298,18 @@ function ScheduleHeader() {
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const goToCreateEvent = () => navigation.navigate('CreateEvent');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScheduleHeader />
+      <ScheduleHeader onAdd={goToCreateEvent} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {UPCOMING.length === 0 ? (
-          <EmptyState />
+          <EmptyState onAdd={goToCreateEvent} />
         ) : (
           <>
             <Text style={styles.sectionLabel}>Upcoming</Text>

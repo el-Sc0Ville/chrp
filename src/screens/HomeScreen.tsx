@@ -32,7 +32,10 @@ export default function HomeScreen() {
 
 function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const hasEvent = true;
+
+  const goToCreateEvent = () => navigation.navigate('CreateEvent');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -40,7 +43,7 @@ function ManagerHomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <ManagerPageHeader hasEvent={hasEvent} />
+        <ManagerPageHeader hasEvent={hasEvent} onAdd={goToCreateEvent} />
 
         {/* Region 1: hero or empty state */}
         <View style={styles.heroWrapper}>
@@ -48,7 +51,7 @@ function ManagerHomeScreen() {
         </View>
 
         {/* Region 2: quick actions (between card and announcements) */}
-        {hasEvent && <ManagerQuickActions noRespCount={AVAIL.noResp} />}
+        {hasEvent && <ManagerQuickActions noRespCount={AVAIL.noResp} onAdd={goToCreateEvent} />}
 
         {/* Region 3: announcements */}
         <AnnouncementsSection hasEvent={hasEvent} />
@@ -61,8 +64,7 @@ function ManagerHomeScreen() {
 
 // ─── Manager header — team switcher + title + "+" add-event button ────────────
 
-function ManagerPageHeader({ hasEvent }: { hasEvent: boolean }) {
-  const navigation = useNavigation<any>();
+function ManagerPageHeader({ hasEvent, onAdd }: { hasEvent: boolean; onAdd: () => void }) {
   return (
     <View style={styles.header}>
       <View>
@@ -79,7 +81,7 @@ function ManagerPageHeader({ hasEvent }: { hasEvent: boolean }) {
       {/* Add-event shortcut — filled pill, manager-primary action */}
       <Pressable
         style={styles.addEventBtn}
-        onPress={() => navigation.navigate('CreateEvent')}
+        onPress={onAdd}
         android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
       >
         <Text style={styles.addEventBtnText}>+</Text>
@@ -206,7 +208,7 @@ function AvailabilityBar({ avail }: { avail: AvailCounts }) {
 
 // ─── Manager quick actions ────────────────────────────────────────────────────
 
-function ManagerQuickActions({ noRespCount }: { noRespCount: number }) {
+function ManagerQuickActions({ noRespCount, onAdd }: { noRespCount: number; onAdd: () => void }) {
   return (
     <View style={styles.quickActions}>
       {/* "Remind" only shown when there are non-responders */}
@@ -223,6 +225,7 @@ function ManagerQuickActions({ noRespCount }: { noRespCount: number }) {
 
       <Pressable
         style={styles.addEventLargeBtn}
+        onPress={onAdd}
         android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
       >
         <Text style={styles.addEventLargeBtnText}>+ Add event</Text>
