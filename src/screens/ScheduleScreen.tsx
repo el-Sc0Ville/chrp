@@ -250,19 +250,29 @@ function PastSection() {
 }
 
 function EmptyState() {
+  const navigation = useNavigation<any>();
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No upcoming events</Text>
       <Text style={styles.emptySub}>
         {IS_MANAGER
-          ? 'Tap + to schedule your first event.'
+          ? 'Schedule your first event and notify the team.'
           : "Your manager hasn't added any events yet."}
       </Text>
+      {IS_MANAGER && (
+        <Pressable
+          onPress={() => navigation.navigate('CreateEvent')}
+          style={({ pressed }) => [styles.emptyAddBtn, pressed && { opacity: 0.8 }]}
+        >
+          <Text style={styles.emptyAddBtnText}>+ Add your first event</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 function ScheduleHeader() {
+  const navigation = useNavigation<any>();
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
@@ -272,7 +282,11 @@ function ScheduleHeader() {
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Schedule</Text>
         {IS_MANAGER && (
-          <TouchableOpacity style={styles.addBtn} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={styles.addBtn}
+            activeOpacity={0.75}
+            onPress={() => navigation.navigate('CreateEvent')}
+          >
             <Text style={styles.addBtnText}>+</Text>
           </TouchableOpacity>
         )}
@@ -574,4 +588,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing[32],
   },
+  emptyAddBtn: {
+    marginTop: spacing[8],
+    paddingHorizontal: spacing[20],
+    paddingVertical: spacing[12],
+    borderRadius: radius.l,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+  },
+  emptyAddBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: TEAM[300],
+  },
 });
+
+function hexToRgbVals(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
+}

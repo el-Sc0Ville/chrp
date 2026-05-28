@@ -10,11 +10,13 @@ import ScheduleScreen from '../screens/ScheduleScreen';
 import RosterScreen from '../screens/RosterScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
+import CreateEventScreen from '../screens/CreateEventScreen';
 import { navy, teams, fonts } from '../theme';
 
 export type RootStackParamList = {
   Tabs: undefined;
   EventDetail: { eventId: string; title: string };
+  CreateEvent: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -215,6 +217,7 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Tabs" component={TabsNavigator} />
         <Stack.Screen name="EventDetail" component={EventDetailScreen} />
+        <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

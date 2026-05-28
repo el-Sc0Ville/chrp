@@ -10,6 +10,7 @@ import {
   StyleSheet, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 
 type Response = 'in' | 'out' | 'maybe' | null;
@@ -61,6 +62,7 @@ function ManagerHomeScreen() {
 // ─── Manager header — team switcher + title + "+" add-event button ────────────
 
 function ManagerPageHeader({ hasEvent }: { hasEvent: boolean }) {
+  const navigation = useNavigation<any>();
   return (
     <View style={styles.header}>
       <View>
@@ -77,6 +79,7 @@ function ManagerPageHeader({ hasEvent }: { hasEvent: boolean }) {
       {/* Add-event shortcut — filled pill, manager-primary action */}
       <Pressable
         style={styles.addEventBtn}
+        onPress={() => navigation.navigate('CreateEvent')}
         android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
       >
         <Text style={styles.addEventBtnText}>+</Text>
