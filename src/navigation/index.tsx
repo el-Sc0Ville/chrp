@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,8 +9,15 @@ import HomeScreen from '../screens/HomeScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import RosterScreen from '../screens/RosterScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import EventDetailScreen from '../screens/EventDetailScreen';
 import { navy, teams, fonts } from '../theme';
 
+export type RootStackParamList = {
+  Tabs: undefined;
+  EventDetail: { eventId: string; title: string };
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 // ─── Tab bar icons ─────────────────────────────────────────────────────────────
@@ -185,20 +193,29 @@ const styles = StyleSheet.create({
   },
 });
 
-// ─── Root navigator ────────────────────────────────────────────────────────────
+// ─── Navigators ───────────────────────────────────────────────────────────────
+
+function TabsNavigator() {
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <ChrpTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="Schedule" component={ScheduleScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Roster" component={RosterScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        tabBar={(props) => <ChrpTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
-      >
-        <Tab.Screen name="Schedule" component={ScheduleScreen} />
-        <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Roster" component={RosterScreen} />
-        <Tab.Screen name="Profile" component={ProfileScreen} />
-      </Tab.Navigator>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Tabs" component={TabsNavigator} />
+        <Stack.Screen name="EventDetail" component={EventDetailScreen} />
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }
