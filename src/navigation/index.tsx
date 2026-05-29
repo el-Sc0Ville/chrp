@@ -253,20 +253,15 @@ function AppStack() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {resolvedUser ? (
-          <>
-            <Stack.Screen name="Tabs"               component={TabsNavigator} />
-            <Stack.Screen name="Gameday"            component={GamedayScreen} />
-            <Stack.Screen name="Profile"            component={ProfileScreen} />
-            <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />
-            <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
-            <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
-            <Stack.Screen name="Subs"               component={SubsScreen} />
-            <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />
-          </>
-        ) : (
-          <Stack.Screen name="Auth" component={AuthScreen} />
-        )}
+        {resolvedUser && <Stack.Screen name="Tabs"               component={TabsNavigator} />}
+        {resolvedUser && <Stack.Screen name="Gameday"            component={GamedayScreen} />}
+        {resolvedUser && <Stack.Screen name="Profile"            component={ProfileScreen} />}
+        {resolvedUser && <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />}
+        {resolvedUser && <Stack.Screen name="EventDetail"        component={EventDetailScreen} />}
+        {resolvedUser && <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />}
+        {resolvedUser && <Stack.Screen name="Subs"               component={SubsScreen} />}
+        {resolvedUser && <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />}
+        {!resolvedUser && <Stack.Screen name="Auth"              component={AuthScreen} />}
       </Stack.Navigator>
     </NavigationContainer>
   );

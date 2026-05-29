@@ -269,14 +269,12 @@ function PlayerEventDetail() {
         <EventSummary event={event} fallbackTitle={fallbackTitle} score={score} />
 
         {!isPast && (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Are you in?</Text>
-              <InOutMaybeToggle response={response} onRespond={handleRespond} />
-            </View>
-            <View style={styles.sectionDivider} />
-          </>
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Are you in?</Text>
+            <InOutMaybeToggle response={response} onRespond={handleRespond} />
+          </View>
         )}
+        {!isPast && <View style={styles.sectionDivider} />}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>

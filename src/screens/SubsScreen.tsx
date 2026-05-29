@@ -213,48 +213,45 @@ function ManagerSubsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Open requests ── */}
-        {openRequests.length === 0 ? (
+        {openRequests.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No open requests</Text>
             <Text style={styles.emptyBody}>
               When a player requests a sub, it'll show up here.
             </Text>
           </View>
-        ) : (
-          <>
-            <Text style={styles.sectionLabel}>Open</Text>
-            <View style={styles.card}>
-              {openRequests.map((req, idx) => (
-                <React.Fragment key={req.id}>
-                  {idx > 0 && <View style={styles.rowDivider} />}
-                  <ManagerRequestRow request={req} onFindSub={() => setFindSubTarget(req)} />
-                </React.Fragment>
-              ))}
-            </View>
-          </>
+        )}
+        {openRequests.length > 0 && <Text style={styles.sectionLabel}>Open</Text>}
+        {openRequests.length > 0 && (
+          <View style={styles.card}>
+            {openRequests.map((req, idx) => (
+              <React.Fragment key={req.id}>
+                {idx > 0 && <View style={styles.rowDivider} />}
+                <ManagerRequestRow request={req} onFindSub={() => setFindSubTarget(req)} />
+              </React.Fragment>
+            ))}
+          </View>
         )}
 
         {/* ── Filled requests (collapsible) ── */}
         {filledRequests.length > 0 && (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.filledToggle, pressed && { opacity: 0.7 }]}
-              onPress={() => setFilledExpanded(v => !v)}
-            >
-              <Text style={styles.filledToggleLabel}>Filled ({filledRequests.length})</Text>
-              <Text style={[styles.filledChevron, filledExpanded && styles.filledChevronOpen]}>›</Text>
-            </Pressable>
-            {filledExpanded && (
-              <View style={styles.card}>
-                {filledRequests.map((req, idx) => (
-                  <React.Fragment key={req.id}>
-                    {idx > 0 && <View style={styles.rowDivider} />}
-                    <FilledRequestRow request={req} />
-                  </React.Fragment>
-                ))}
-              </View>
-            )}
-          </>
+          <Pressable
+            style={({ pressed }) => [styles.filledToggle, pressed && { opacity: 0.7 }]}
+            onPress={() => setFilledExpanded(v => !v)}
+          >
+            <Text style={styles.filledToggleLabel}>Filled ({filledRequests.length})</Text>
+            <Text style={[styles.filledChevron, filledExpanded && styles.filledChevronOpen]}>›</Text>
+          </Pressable>
+        )}
+        {filledRequests.length > 0 && filledExpanded && (
+          <View style={styles.card}>
+            {filledRequests.map((req, idx) => (
+              <React.Fragment key={req.id}>
+                {idx > 0 && <View style={styles.rowDivider} />}
+                <FilledRequestRow request={req} />
+              </React.Fragment>
+            ))}
+          </View>
         )}
 
         <Text style={styles.spareNote}>Spares are charged ${SPARE_FEE}/game</Text>
@@ -481,33 +478,29 @@ function PlayerSubsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Upcoming games ── */}
+        {availableEvents.length > 0 && <Text style={styles.sectionLabel}>Upcoming games</Text>}
         {availableEvents.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Upcoming games</Text>
-            <View style={styles.card}>
-              {availableEvents.map((event, idx) => (
-                <React.Fragment key={event.id}>
-                  {idx > 0 && <View style={styles.rowDivider} />}
-                  <PlayerEventRow event={event} onRequest={() => setRequestTarget(event)} />
-                </React.Fragment>
-              ))}
-            </View>
-          </>
+          <View style={styles.card}>
+            {availableEvents.map((event, idx) => (
+              <React.Fragment key={event.id}>
+                {idx > 0 && <View style={styles.rowDivider} />}
+                <PlayerEventRow event={event} onRequest={() => setRequestTarget(event)} />
+              </React.Fragment>
+            ))}
+          </View>
         )}
 
         {/* ── Player's own requests ── */}
+        {ownRequests.length > 0 && <Text style={styles.sectionLabel}>Your requests</Text>}
         {ownRequests.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Your requests</Text>
-            <View style={styles.card}>
-              {ownRequests.map((req, idx) => (
-                <React.Fragment key={req.id}>
-                  {idx > 0 && <View style={styles.rowDivider} />}
-                  <PlayerOwnRequestRow request={req} />
-                </React.Fragment>
-              ))}
-            </View>
-          </>
+          <View style={styles.card}>
+            {ownRequests.map((req, idx) => (
+              <React.Fragment key={req.id}>
+                {idx > 0 && <View style={styles.rowDivider} />}
+                <PlayerOwnRequestRow request={req} />
+              </React.Fragment>
+            ))}
+          </View>
         )}
 
         {availableEvents.length === 0 && ownRequests.length === 0 && (

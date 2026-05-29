@@ -63,40 +63,41 @@ export default function AuthScreen() {
 
         {/* ── Sign-in card ── */}
         <View style={styles.card}>
-          {!sent ? (
-            <>
-              <Text style={styles.cardLabel}>Sign in</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="your@email.com"
-                placeholderTextColor={navy[500]}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
-              />
-              {error !== null && (
-                <Text style={styles.errorText}>{error}</Text>
-              )}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.sendBtn,
-                  (!isValidEmail || loading) && styles.sendBtnDisabled,
-                  pressed && isValidEmail && !loading && { opacity: 0.85 },
-                ]}
-                onPress={handleSend}
-                disabled={!isValidEmail || loading}
-              >
-                {loading
-                  ? <ActivityIndicator color={TEAM.on} size="small" />
-                  : <Text style={styles.sendBtnText}>Send me a link</Text>
-                }
-              </Pressable>
-            </>
-          ) : (
+          {!sent && <Text style={styles.cardLabel}>Sign in</Text>}
+          {!sent && (
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="your@email.com"
+              placeholderTextColor={navy[500]}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+            />
+          )}
+          {!sent && error !== null && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
+          {!sent && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.sendBtn,
+                (!isValidEmail || loading) && styles.sendBtnDisabled,
+                pressed && isValidEmail && !loading && { opacity: 0.85 },
+              ]}
+              onPress={handleSend}
+              disabled={!isValidEmail || loading}
+            >
+              {loading
+                ? <ActivityIndicator color={TEAM.on} size="small" />
+                : <Text style={styles.sendBtnText}>Send me a link</Text>
+              }
+            </Pressable>
+          )}
+          {sent && (
             <View style={styles.sentState}>
               <Text style={styles.sentIcon}>✉️</Text>
               <Text style={styles.sentTitle}>Check your email</Text>
