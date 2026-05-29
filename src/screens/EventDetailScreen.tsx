@@ -414,6 +414,13 @@ function EventSummary({ event, fallbackTitle, score }: {
           <ResultPill us={score.us} them={score.them} />
         </View>
       )}
+
+      {event?.notes ? (
+        <View style={styles.notesBlock}>
+          <Text style={styles.notesLabel}>NOTES</Text>
+          <Text style={styles.notesText}>{event.notes}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -837,6 +844,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[10], paddingVertical: 4, borderRadius: radius.pill,
   },
   resultPillText: { fontFamily: fonts.uiSemiBold, fontSize: 13 },
+
+  // Notes block
+  notesBlock: {
+    marginTop: spacing[14],
+    backgroundColor: navy[700],
+    borderRadius: radius.m,
+    padding: spacing[14],
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  notesLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: navy[400],
+    marginBottom: spacing[6],
+  },
+  notesText: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    lineHeight: 20,
+    color: navy[300],
+  },
 
   // "Enter score" / "Edit score" row
   scoreActionRow: {

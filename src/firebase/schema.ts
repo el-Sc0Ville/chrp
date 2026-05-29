@@ -32,6 +32,7 @@ export interface Event {
   recurring: boolean;
   scoreUs?: number;
   scoreThem?: number;
+  notes?: string;
   createdBy: string;
   createdAt: Timestamp;
 }

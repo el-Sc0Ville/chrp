@@ -93,10 +93,12 @@ export default function CreateEventScreen() {
         time.getHours(), time.getMinutes(), 0, 0,
       );
       const end = new Date(start.getTime() + 90 * 60 * 1000);
+      const notesValue = notes.trim();
       await addDoc(collection(db, 'teams', TEAM_ID, 'events'), {
         type:      eventType,
         title:     eventName.trim(),
         venue:     venue.trim(),
+        ...(notesValue ? { notes: notesValue } : {}),
         startsAt:  Timestamp.fromDate(start),
         endsAt:    Timestamp.fromDate(end),
         recurring,
