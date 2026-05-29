@@ -64,6 +64,24 @@ export interface AnnouncementReply {
   createdAt: Timestamp;
 }
 
+// /teams/{teamId}/subRequests/{requestId}
+export interface SubRequest {
+  id: string;
+  eventId: string;
+  requestedBy: string;
+  requestedByName: string;
+  reason?: string;
+  status: 'pending' | 'filled' | 'cancelled';
+  filledBy?: string;
+  createdAt: Timestamp;
+  opponent: string;
+  gameWeekday: string;
+  gameDay: string;
+  gameMonth: string;
+  gameVenue: string;
+  gameTime: string;
+}
+
 // /teams/{teamId}/dues/{userId}
 export interface DuesRecord {
   userId: string;

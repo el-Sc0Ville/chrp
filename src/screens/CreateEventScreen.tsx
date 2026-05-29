@@ -11,10 +11,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { db } from '../firebase';
+import { useUserContext } from '../context/UserContext';
 
-const TEAM = teams.trashdogs;
+const TEAM    = teams.trashdogs;
+const TEAM_ID = 'trashdogs';
 
 type CreateEventNavProp = NativeStackNavigationProp<RootStackParamList>;
 type EventType = 'game' | 'practice' | 'social';
@@ -62,6 +66,7 @@ function formatTime(d: Date): string {
 export default function CreateEventScreen() {
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation<CreateEventNavProp>();
+  const { user }   = useUserContext();
 
   // Form state
   const [eventType,   setEventType]   = useState<EventType>('game');
@@ -71,12 +76,39 @@ export default function CreateEventScreen() {
   const [venue,       setVenue]       = useState('');
   const [notes,       setNotes]       = useState('');
   const [recurring,   setRecurring]   = useState(false);
+  const [saving,      setSaving]      = useState(false);
 
   // Picker visibility
   const [showDate,    setShowDate]    = useState(false);
   const [showTime,    setShowTime]    = useState(false);
 
   const isFormValid = eventName.trim().length > 0;
+
+  const handleSave = async () => {
+    if (!isFormValid || saving) return;
+    setSaving(true);
+    try {
+      const start = new Date(
+        date.getFullYear(), date.getMonth(), date.getDate(),
+        time.getHours(), time.getMinutes(), 0, 0,
+      );
+      const end = new Date(start.getTime() + 90 * 60 * 1000);
+      await addDoc(collection(db, 'teams', TEAM_ID, 'events'), {
+        type:      eventType,
+        title:     eventName.trim(),
+        venue:     venue.trim(),
+        startsAt:  Timestamp.fromDate(start),
+        endsAt:    Timestamp.fromDate(end),
+        recurring,
+        createdBy: user?.uid ?? 'anon',
+        createdAt: serverTimestamp(),
+      });
+      navigation.goBack();
+    } catch (err) {
+      console.error('[CreateEvent] write failed:', err);
+      setSaving(false);
+    }
+  };
 
   function onDateChange(event: DateTimePickerEvent, selected?: Date) {
     if (Platform.OS === 'android') setShowDate(false);
@@ -113,12 +145,12 @@ export default function CreateEventScreen() {
         <Text style={styles.navTitle}>New event</Text>
 
         <Pressable
-          onPress={isFormValid ? () => navigation.goBack() : undefined}
+          onPress={handleSave}
           style={[styles.navSide, styles.navSideRight]}
           hitSlop={12}
         >
-          <Text style={[styles.saveText, !isFormValid && styles.saveTextDisabled]}>
-            Save & notify
+          <Text style={[styles.saveText, (!isFormValid || saving) && styles.saveTextDisabled]}>
+            {saving ? 'Saving…' : 'Save & notify'}
           </Text>
         </Pressable>
       </View>
@@ -286,15 +318,15 @@ export default function CreateEventScreen() {
           {/* Save button + info row */}
           <View style={styles.saveSection}>
             <Pressable
-              onPress={isFormValid ? () => navigation.goBack() : undefined}
+              onPress={handleSave}
               style={({ pressed }) => [
                 styles.saveBtn,
-                !isFormValid && styles.saveBtnDisabled,
-                pressed && isFormValid && { opacity: 0.85 },
+                (!isFormValid || saving) && styles.saveBtnDisabled,
+                pressed && isFormValid && !saving && { opacity: 0.85 },
               ]}
             >
-              <Text style={[styles.saveBtnText, !isFormValid && styles.saveBtnTextDisabled]}>
-                Save &amp; notify team
+              <Text style={[styles.saveBtnText, (!isFormValid || saving) && styles.saveBtnTextDisabled]}>
+                {saving ? 'Saving…' : 'Save & notify team'}
               </Text>
             </Pressable>
             <Text style={styles.infoText}>

@@ -11,7 +11,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { useScores, scoreResult, type Score } from '../context/ScoreContext';
@@ -76,6 +76,17 @@ function ManagerEventDetail() {
   const { scores, setScore } = useScores();
   const score = scores[eventId];
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
+
+  const handleSaveScore = async (s: Score) => {
+    setScore(eventId, s);
+    try {
+      await updateDoc(doc(db, 'teams', TEAM_ID, 'events', eventId), {
+        scoreUs: s.us, scoreThem: s.them,
+      });
+    } catch (err) {
+      console.error('[EventDetail] score write failed:', err);
+    }
+  };
 
   // TODO Phase 2b: get teamId from user profile
   const { events } = useEvents(TEAM_ID);
@@ -175,7 +186,7 @@ function ManagerEventDetail() {
       <ScoreSheet
         visible={scoreSheetVisible}
         initial={score}
-        onSave={(s) => setScore(eventId, s)}
+        onSave={handleSaveScore}
         onClose={() => setScoreSheetVisible(false)}
       />
       <AvailEditSheet

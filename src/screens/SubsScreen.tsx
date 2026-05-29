@@ -8,10 +8,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { addDoc, collection, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
+import { useSubRequests } from '../firebase/hooks/useSubRequests';
+import type { SubRequest as FirestoreSubRequest } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
+const TEAM    = teams.trashdogs;
+const TEAM_ID = 'trashdogs';
 const SPARE_FEE = 20; // $ per game
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -112,6 +117,23 @@ const PLAYER_OWN_SEED: SubRequest[] = [
   },
 ];
 
+// ─── Firestore → display mapper ───────────────────────────────────────────────
+
+function toDisplaySubRequest(r: FirestoreSubRequest): SubRequest {
+  const parts    = r.requestedByName.trim().split(' ');
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : r.requestedByName.slice(0, 2).toUpperCase();
+  return {
+    id: r.id,
+    playerId: r.requestedBy, playerName: r.requestedByName,
+    playerInitials: initials, playerJersey: 0,
+    gameWeekday: r.gameWeekday, gameDay: r.gameDay, gameMonth: r.gameMonth,
+    opponent: r.opponent, venue: r.gameVenue, gameTime: r.gameTime,
+    reason: r.reason, status: r.status, filledBy: r.filledBy,
+  };
+}
+
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function SubsScreen() {
@@ -126,7 +148,8 @@ export default function SubsScreen() {
 function ManagerSubsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [requests,       setRequests]       = useState<SubRequest[]>(SUB_REQUESTS_SEED);
+  const { subRequests: firestoreRequests } = useSubRequests(TEAM_ID);
+  const requests     = firestoreRequests.map(toDisplaySubRequest);
   const [findSubTarget,  setFindSubTarget]  = useState<SubRequest | null>(null);
   const [invitedSpares,  setInvitedSpares]  = useState<Set<string>>(new Set());
   const [filledExpanded, setFilledExpanded] = useState(false);
@@ -142,11 +165,18 @@ function ManagerSubsScreen() {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const handleInvite = (spare: Spare) => {
+  const handleInvite = async (spare: Spare) => {
     if (!findSubTarget) return;
     const key = `${findSubTarget.id}:${spare.id}`;
     setInvitedSpares(prev => new Set([...prev, key]));
     showToast(`Invite sent to ${spare.name.split(' ')[0]}`);
+    try {
+      await updateDoc(doc(db, 'teams', TEAM_ID, 'subRequests', findSubTarget.id), {
+        status: 'filled', filledBy: spare.name,
+      });
+    } catch (err) {
+      console.error('[SubsScreen] invite write failed:', err);
+    }
   };
 
   const isInvited = (spare: Spare) =>
@@ -377,7 +407,11 @@ function FindSubSheet({
 function PlayerSubsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [ownRequests,    setOwnRequests]    = useState<SubRequest[]>(PLAYER_OWN_SEED);
+  const { user } = useUserContext();
+  const { subRequests: firestoreRequests } = useSubRequests(TEAM_ID);
+  const ownRequests = firestoreRequests
+    .filter(r => r.requestedBy === (user?.uid ?? ''))
+    .map(toDisplaySubRequest);
   const [requestTarget,  setRequestTarget]  = useState<UpcomingEvent | null>(null);
   const [noteText,       setNoteText]       = useState('');
   const [toast,          setToast]          = useState<string | null>(null);
@@ -385,7 +419,7 @@ function PlayerSubsScreen() {
 
   // Events the player hasn't submitted a request for yet
   const availableEvents = PLAYER_UPCOMING.filter(
-    e => !ownRequests.some(r => r.opponent === e.opponent),
+    e => !firestoreRequests.some(r => r.eventId === e.id && r.requestedBy === (user?.uid ?? '')),
   );
 
   const showToast = (msg: string) => {
@@ -394,24 +428,30 @@ function PlayerSubsScreen() {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     if (!requestTarget) return;
-    const newReq: SubRequest = {
-      id: `sr-${Date.now()}`,
-      playerId: 'r1', playerName: 'Pat Normandin', playerInitials: 'PN', playerJersey: 17,
-      gameWeekday: requestTarget.weekday,
-      gameDay:     requestTarget.day,
-      gameMonth:   requestTarget.month,
-      opponent:    requestTarget.opponent,
-      venue:       requestTarget.venue,
-      gameTime:    requestTarget.time,
-      reason:      noteText.trim() || undefined,
-      status:      'pending',
-    };
-    setOwnRequests(prev => [newReq, ...prev]);
+    const reason = noteText.trim() || undefined;
     setNoteText('');
     setRequestTarget(null);
     showToast('Request sent to your manager');
+    try {
+      await addDoc(collection(db, 'teams', TEAM_ID, 'subRequests'), {
+        eventId:         requestTarget.id,
+        requestedBy:     user?.uid ?? 'anon',
+        requestedByName: user?.displayName ?? 'Player',
+        reason:          reason ?? null,
+        status:          'pending',
+        createdAt:       serverTimestamp(),
+        opponent:        requestTarget.opponent,
+        gameWeekday:     requestTarget.weekday,
+        gameDay:         requestTarget.day,
+        gameMonth:       requestTarget.month,
+        gameVenue:       requestTarget.venue,
+        gameTime:        requestTarget.time,
+      });
+    } catch (err) {
+      console.error('[SubsScreen] sub request write failed:', err);
+    }
   };
 
   return (

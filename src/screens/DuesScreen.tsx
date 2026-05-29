@@ -7,7 +7,7 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
@@ -77,7 +77,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
     await updateDoc(doc(db, 'teams', TEAM_ID, 'dues', id), {
       status: 'paid',
       amountPaid: seasonDues,
-      lastPaymentAt: Timestamp.now(),
+      lastPaymentAt: serverTimestamp(),
     });
     setActionPlayer(null);
     showToast('Marked as paid');
