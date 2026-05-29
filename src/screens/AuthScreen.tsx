@@ -2,11 +2,13 @@
 
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet, Image,
+  View, Text, TextInput, Pressable, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { useAssets } from 'expo-asset';
+import { SvgUri } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navy, teams, status, fonts, ink, spacing, radius } from '../theme';
+import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { sendMagicLink } from '../firebase/auth';
@@ -15,9 +17,13 @@ import { seedDatabase } from '../firebase/seed';
 
 const TEAM = teams.trashdogs;
 
+// TODO: copy chrp-icon-1024.png, chrp-wordmark.svg, chrp-monogram.svg to assets/ folder
+const WORDMARK = require('../../assets/chrp-wordmark.svg');
+
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { setMockUser } = useUserContext();
+  const [wordmarkAssets] = useAssets([WORDMARK]);
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
   const [seedStatus,  setSeedStatus]  = useState<'idle' | 'seeding' | 'done' | 'error'>('idle');
@@ -53,13 +59,14 @@ export default function AuthScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Wordmark ── */}
-        {/* TODO: copy chrp-icon-1024.png, chrp-wordmark.svg, chrp-monogram.svg to assets/ folder */}
         <View style={styles.wordmarkArea}>
-          <Image
-            source={require('../../assets/chrp-wordmark.png')}
-            style={styles.wordmarkImage}
-            resizeMode="contain"
-          />
+          {wordmarkAssets?.[0]?.localUri && (
+            <SvgUri
+              width={200}
+              height={60}
+              uri={wordmarkAssets[0].localUri}
+            />
+          )}
           <Text style={styles.tagline}>Your team. One tap away.</Text>
         </View>
 
@@ -232,12 +239,6 @@ const styles = StyleSheet.create({
   wordmarkArea: {
     alignItems: 'center',
     marginBottom: spacing[40],
-  },
-  wordmarkImage: {
-    width: 160,
-    height: 56,
-    marginBottom: spacing[12],
-    tintColor: ink,
   },
   tagline: {
     fontFamily: fonts.ui,
