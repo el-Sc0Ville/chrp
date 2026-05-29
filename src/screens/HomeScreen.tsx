@@ -35,6 +35,7 @@ const AVAIL: AvailCounts = { in: 7, out: 2, maybe: 1, noResp: 3 };
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  console.log('HOMESCREEN MOUNTED');
   const { isManager } = useUserContext();
   return isManager ? <ManagerHomeScreen /> : <PlayerHomeScreen />;
 }

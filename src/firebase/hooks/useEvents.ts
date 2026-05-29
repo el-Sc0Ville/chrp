@@ -15,6 +15,7 @@ export function useEvents(teamId: string): UseEventsResult {
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('useEvents called with teamId:', teamId);
     const ref = collection(db, 'teams', teamId, 'events');
     const q   = query(ref, orderBy('startsAt', 'asc'));
 
