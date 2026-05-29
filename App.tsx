@@ -21,6 +21,11 @@ import {
   GeistMono_500Medium,
   GeistMono_600SemiBold,
 } from '@expo-google-fonts/geist-mono';
+import {
+  ChakraPetch_500Medium,
+  ChakraPetch_600SemiBold,
+  ChakraPetch_700Bold,
+} from '@expo-google-fonts/chakra-petch';
 
 import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
@@ -41,11 +46,14 @@ export default function App() {
     GeistMono_400Regular,
     GeistMono_500Medium,
     GeistMono_600SemiBold,
+    ChakraPetch_500Medium,
+    ChakraPetch_600SemiBold,
+    ChakraPetch_700Bold,
   });
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, backgroundColor: navy[800], alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: navy[900], alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#6979F0" />
       </View>
     );

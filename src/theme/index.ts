@@ -16,6 +16,9 @@ export const fonts = {
   mono: 'GeistMono_400Regular',
   monoMedium: 'GeistMono_500Medium',
   monoBold: 'GeistMono_600SemiBold',
+  wordmark: 'ChakraPetch_700Bold',
+  wordmarkSemi: 'ChakraPetch_600SemiBold',
+  wordmarkMedium: 'ChakraPetch_500Medium',
 } as const;
 
 // Fallback font families for system font usage
@@ -36,11 +39,28 @@ export const navy = {
   400: '#5F6B85',
   500: '#364056',
   600: '#1F2A40',
-  700: '#131B2E',
-  800: '#0B1220',
-  900: '#050810',
+  700: '#111A2E',
+  800: '#0A1120',
+  900: '#070B14',
   1000: '#000000',
 } as const;
+
+// ─── Signal ramp — "electric blue" ───────────────────────────────────────────
+
+export const signal = {
+  300: '#8FB0FF',
+  400: '#5B8BFF',
+  500: '#2F6BFF',
+} as const;
+
+// ─── Brand accent colours ─────────────────────────────────────────────────────
+
+export const citrus = '#FFC53D'; // notification/badge
+
+// ─── Semantic text colours ────────────────────────────────────────────────────
+
+export const ink   = '#E7ECF5'; // primary text
+export const muted = '#8595B0'; // secondary/placeholder text
 
 // ─── Ice ramp — "frost" ───────────────────────────────────────────────────────
 
@@ -252,5 +272,5 @@ export function teamColors(key: TeamKey = 'trashdogs'): TeamColors {
 }
 
 // Default export — everything bundled
-const theme = { fonts, navy, ice, teams, status, dark, type, spacing, radius, teamColors };
+const theme = { fonts, navy, signal, citrus, ink, muted, ice, teams, status, dark, type, spacing, radius, teamColors };
 export default theme;

@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  View, Text, TextInput, Pressable, StyleSheet, Image,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navy, teams, status, fonts, spacing, radius } from '../theme';
+import { navy, teams, status, fonts, ink, spacing, radius } from '../theme';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { sendMagicLink } from '../firebase/auth';
@@ -53,11 +53,13 @@ export default function AuthScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Wordmark ── */}
+        {/* TODO: copy chrp-icon-1024.png, chrp-wordmark.svg, chrp-monogram.svg to assets/ folder */}
         <View style={styles.wordmarkArea}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoLetter}>C</Text>
-          </View>
-          <Text style={styles.wordmark}>Chrp</Text>
+          <Image
+            source={require('../../assets/chrp-wordmark.png')}
+            style={styles.wordmarkImage}
+            resizeMode="contain"
+          />
           <Text style={styles.tagline}>Your team. One tap away.</Text>
         </View>
 
@@ -217,7 +219,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: navy[800],
+    backgroundColor: navy[900],
   },
   scroll: {
     flexGrow: 1,
@@ -231,25 +233,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing[40],
   },
-  logoMark: {
-    width: 56, height: 56, borderRadius: 16,
-    backgroundColor: TEAM[500],
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: spacing[14],
-    shadowColor: TEAM[500],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45, shadowRadius: 16, elevation: 8,
-  },
-  logoLetter: {
-    fontFamily: fonts.display,
-    fontSize: 28, fontWeight: '700',
-    color: TEAM.on, letterSpacing: -0.5,
-  },
-  wordmark: {
-    fontFamily: fonts.display,
-    fontSize: 38, fontWeight: '700',
-    letterSpacing: -1.0, color: '#FFFFFF',
-    marginBottom: spacing[6],
+  wordmarkImage: {
+    width: 160,
+    height: 56,
+    marginBottom: spacing[12],
+    tintColor: ink,
   },
   tagline: {
     fontFamily: fonts.ui,
