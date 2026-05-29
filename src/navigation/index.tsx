@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import RosterScreen from '../screens/RosterScreen';
+import GamedayScreen from '../screens/GamedayScreen';
 import DuesScreen from '../screens/DuesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
@@ -88,6 +89,25 @@ function RosterIcon({ active }: { active: boolean }) {
   );
 }
 
+function GamedayIcon({ active }: { active: boolean }) {
+  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
+  return (
+    <View style={{ width: 24, height: 24, alignItems: 'center' }}>
+      {/* Pin head with inner dot */}
+      <View style={{
+        width: 14, height: 14, borderRadius: 7,
+        borderWidth: 1.5, borderColor: color,
+        marginTop: 1,
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
+      </View>
+      {/* Pin stem */}
+      <View style={{ width: 1.5, height: 7, backgroundColor: color, borderBottomLeftRadius: 1, borderBottomRightRadius: 1 }} />
+    </View>
+  );
+}
+
 function DuesIcon({ active }: { active: boolean }) {
   const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
   return (
@@ -162,6 +182,7 @@ function ChrpTabBar({ state, descriptors, navigation }: any) {
               {route.name === 'Schedule' && <CalendarIcon active={isFocused} />}
               {route.name === 'Home' && <HomeIcon active={isFocused} />}
               {route.name === 'Roster' && <RosterIcon active={isFocused} />}
+              {route.name === 'Gameday' && <GamedayIcon active={isFocused} />}
               {route.name === 'Dues' && <DuesIcon active={isFocused} />}
               {route.name === 'Profile' && <ProfileIcon active={isFocused} />}
             </View>
@@ -223,6 +244,7 @@ function TabsNavigator() {
       <Tab.Screen name="Schedule" component={ScheduleScreen} />
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Roster" component={RosterScreen} />
+      <Tab.Screen name="Gameday" component={GamedayScreen} />
       <Tab.Screen name="Dues" component={DuesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
