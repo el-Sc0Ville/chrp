@@ -352,7 +352,11 @@ function PlayerHomeScreen() {
   };
 
   const handleRespond = async (r: Response) => {
-    if (!r || !nextEvent) return;
+    console.log('TOGGLE TAPPED', r, '— nextEvent:', nextEvent?.id ?? 'null');
+    if (!r || !nextEvent) {
+      console.warn('[HomeScreen] handleRespond bailed — r:', r, 'nextEvent:', nextEvent?.id ?? 'null');
+      return;
+    }
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
     // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
     const responseRef = doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid);
@@ -640,7 +644,7 @@ function InOutMaybeToggle({ response, onRespond }: {
           <Pressable
             key={opt.id}
             style={styles.toggleSegment}
-            onPress={() => onRespond(opt.id)}
+            onPress={() => { console.log('TOGGLE TAPPED', opt.id); onRespond(opt.id); }}
             android_ripple={{ color: 'rgba(255,255,255,0.1)', borderless: true }}
           >
             <View style={[
@@ -866,7 +870,6 @@ const styles = StyleSheet.create({
     backgroundColor: navy[700],
     borderWidth: 0.5,
     borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
-    overflow: 'hidden',
   },
   metaRow: {
     flexDirection: 'row',
