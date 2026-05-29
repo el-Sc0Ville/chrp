@@ -19,7 +19,7 @@ export function useAnnouncements(teamId: string): UseAnnouncementsResult {
     const q   = query(ref, orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(
       q,
-      snap => { setAnnouncements(snap.docs.map(d => d.data() as Announcement)); setLoading(false); setError(null); },
+      snap => { setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Announcement)); setLoading(false); setError(null); },
       err  => { setError(err.message); setLoading(false); },
     );
     return unsub;

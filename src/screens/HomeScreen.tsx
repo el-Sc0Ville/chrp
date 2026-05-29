@@ -74,6 +74,7 @@ function ManagerHomeScreen() {
   const managerResponse: Response = (responses[uid] as Response) ?? null;
 
   const handleManagerRespond = async (r: Response) => {
+    console.log('Manager respond uid:', user?.uid);
     if (!r || !nextEvent) return;
     const responseRef = doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid);
     try {

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { doc, setDoc, updateDoc, deleteDoc, collection, Timestamp } from 'firebase/firestore';
+import { doc, addDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
@@ -100,14 +100,12 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
       });
       showToast('Announcement updated');
     } else {
-      const newRef = doc(collection(db, 'teams', TEAM_ID, 'announcements'));
-      await setDoc(newRef, {
-        id: newRef.id,
+      await addDoc(collection(db, 'teams', TEAM_ID, 'announcements'), {
         authorId: user?.uid ?? 'anon',
         authorName: user?.displayName ?? 'Manager',
         body,
         pinned: isPinned,
-        createdAt: Timestamp.now(),
+        createdAt: serverTimestamp(),
       });
       showToast('Sent to all players');
     }
