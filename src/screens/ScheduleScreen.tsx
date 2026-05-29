@@ -346,27 +346,29 @@ export default function ScheduleScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {loading && <ScheduleSkeleton />}
-        {!loading && upcoming.length === 0 && <EmptyState onAdd={goToCreateEvent} />}
-        {!loading && upcoming.length > 0 && (
-          <Text style={styles.sectionLabel}>Upcoming</Text>
-        )}
-        {!loading && upcoming.map(event => (
-          <EventRow
-            key={event.id}
-            event={event}
-            onPress={() =>
-              navigation.navigate('EventDetail', {
-                eventId: event.id,
-                title: event.title,
-              })
-            }
+        <View>
+          {loading && <ScheduleSkeleton />}
+          {!loading && upcoming.length === 0 && <EmptyState onAdd={goToCreateEvent} />}
+          {!loading && upcoming.length > 0 && (
+            <Text style={styles.sectionLabel}>Upcoming</Text>
+          )}
+          {!loading && upcoming.map(event => (
+            <EventRow
+              key={event.id}
+              event={event}
+              onPress={() =>
+                navigation.navigate('EventDetail', {
+                  eventId: event.id,
+                  title: event.title,
+                })
+              }
+            />
+          ))}
+          <PastSection
+            events={past}
+            onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })}
           />
-        ))}
-        <PastSection
-          events={past}
-          onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })}
-        />
+        </View>
       </ScrollView>
     </View>
   );

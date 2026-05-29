@@ -23,7 +23,7 @@ export function useEvents(teamId: string): UseEventsResult {
       q,
       snap => {
         console.log('useEvents: snapshot fired, docs count:', snap.docs.length);
-        setEvents(snap.docs.map(d => d.data() as Event));
+        setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Event));
         setLoading(false);
         setError(null);
       },
