@@ -13,6 +13,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import AnnouncementThreadScreen from '../screens/AnnouncementThreadScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
 import CreateEventScreen from '../screens/CreateEventScreen';
+import SubsScreen from '../screens/SubsScreen';
 import { navy, teams, fonts } from '../theme';
 
 export type RootStackParamList = {
@@ -22,6 +23,7 @@ export type RootStackParamList = {
   AnnouncementThread: { announcementId: string };
   EventDetail: { eventId: string; title: string };
   CreateEvent: undefined;
+  Subs: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -208,6 +210,7 @@ export default function AppNavigator() {
         <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />
         <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
         <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
+        <Stack.Screen name="Subs"               component={SubsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

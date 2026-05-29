@@ -17,10 +17,11 @@ const TEAM = teams.trashdogs;
 
 type SubTab = 'roster' | 'announcements' | 'dues';
 
-const SUB_TABS: { id: SubTab; label: string }[] = [
+const SUB_TABS: { id: SubTab | 'subs'; label: string; navigate?: string }[] = [
   { id: 'roster',        label: 'Roster' },
   { id: 'announcements', label: 'Posts'  },
   { id: 'dues',          label: 'Dues'   },
+  { id: 'subs',          label: 'Subs',  navigate: 'Subs' },
 ];
 
 export default function TeamScreen() {
@@ -54,7 +55,13 @@ export default function TeamScreen() {
             <Pressable
               key={tab.id}
               style={[styles.subTab, active && styles.subTabActive]}
-              onPress={() => setActiveTab(tab.id)}
+              onPress={() => {
+                if (tab.navigate) {
+                  navigation.navigate(tab.navigate);
+                } else {
+                  setActiveTab(tab.id as SubTab);
+                }
+              }}
             >
               <Text style={[styles.subTabText, active && styles.subTabTextActive]}>
                 {tab.label}

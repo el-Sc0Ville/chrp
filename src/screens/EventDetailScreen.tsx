@@ -161,7 +161,10 @@ function PlayerEventDetail() {
           <Pressable style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}>
             <Text style={styles.ghostBtnText}>Add to calendar</Text>
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}>
+          <Pressable
+            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+            onPress={() => navigation.navigate('Subs')}
+          >
             <Text style={styles.ghostBtnText}>Need a sub?</Text>
           </Pressable>
         </View>
