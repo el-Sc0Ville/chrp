@@ -1,5 +1,6 @@
 // Announcements screen — B-12 Manager Announcements / Player Announcements.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
+// Accepts embedded={true} when rendered inside TeamScreen (no header, no safe area top).
 
 const IS_MANAGER = true;
 
@@ -9,6 +10,7 @@ import {
   Modal, KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 
 const TEAM = teams.trashdogs;
@@ -83,16 +85,19 @@ function sortAnnouncements(list: Announcement[]): Announcement[] {
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
-export default function AnnouncementsScreen() {
-  return IS_MANAGER ? <ManagerView /> : <PlayerView />;
+export default function AnnouncementsScreen({ embedded }: { embedded?: boolean }) {
+  return IS_MANAGER
+    ? <ManagerView embedded={embedded} />
+    : <PlayerView  embedded={embedded} />;
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║  B-12 · Manager View                                                     ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function ManagerView() {
+function ManagerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [announcements, setAnnouncements] = useState<Announcement[]>(SEED);
   const [postVisible, setPostVisible]     = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
@@ -154,19 +159,37 @@ function ManagerView() {
     setPostVisible(true);
   };
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+  const goToThread = (id: string) => navigation.navigate('AnnouncementThread', { announcementId: id });
 
-      {/* ── Header ── */}
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Announcements</Text>
-        <Pressable
-          style={({ pressed }) => [styles.postBtn, pressed && { opacity: 0.75 }]}
-          onPress={openPost}
-        >
-          <Text style={styles.postBtnText}>Post</Text>
-        </Pressable>
-      </View>
+  const paddingTop = embedded ? 0 : insets.top;
+
+  return (
+    <View style={[styles.container, { paddingTop }]}>
+
+      {/* ── Header (hidden when embedded) ── */}
+      {!embedded && (
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Announcements</Text>
+          <Pressable
+            style={({ pressed }) => [styles.postBtn, pressed && { opacity: 0.75 }]}
+            onPress={openPost}
+          >
+            <Text style={styles.postBtnText}>Post</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── Post button row (embedded — shows inline above scroll) ── */}
+      {embedded && (
+        <View style={styles.embeddedPostRow}>
+          <Pressable
+            style={({ pressed }) => [styles.postBtn, pressed && { opacity: 0.75 }]}
+            onPress={openPost}
+          >
+            <Text style={styles.postBtnText}>Post</Text>
+          </Pressable>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -182,6 +205,7 @@ function ManagerView() {
             announcement={item}
             showSeenBy
             style={idx === 0 ? undefined : styles.cardGap}
+            onPress={() => goToThread(item.id)}
             onLongPress={item.authorId === CURRENT_USER_ID ? () => setActionItem(item) : undefined}
           />
         ))}
@@ -224,20 +248,28 @@ function ManagerView() {
 // ║  C-12 · Player View                                                      ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function PlayerView() {
+function PlayerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  // ann1, ann2 are unread; ann3, ann4 are already read
+  const navigation = useNavigation<any>();
   const [readIds, setReadIds] = useState<Set<string>>(new Set(['ann3', 'ann4']));
 
   const markRead = (id: string) => setReadIds(prev => new Set([...prev, id]));
+  const goToThread = (id: string) => {
+    markRead(id);
+    navigation.navigate('AnnouncementThread', { announcementId: id });
+  };
+
+  const paddingTop = embedded ? 0 : insets.top;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop }]}>
 
-      {/* ── Header ── */}
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Announcements</Text>
-      </View>
+      {/* ── Header (hidden when embedded) ── */}
+      {!embedded && (
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Announcements</Text>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -254,7 +286,7 @@ function PlayerView() {
             showSeenBy={false}
             unread={!readIds.has(item.id)}
             style={idx === 0 ? undefined : styles.cardGap}
-            onPress={() => markRead(item.id)}
+            onPress={() => goToThread(item.id)}
           />
         ))}
       </ScrollView>
@@ -498,6 +530,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: TEAM.on,
+  },
+
+  // Embedded-mode post button row (no title, just the button flush right)
+  embeddedPostRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing[16],
+    paddingBottom: spacing[10],
   },
 
   // ── Scroll ────────────────────────────────────────────────────────────────

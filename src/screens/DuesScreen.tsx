@@ -44,15 +44,17 @@ const DUES_DATA: DuesPlayer[] = [
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
-export default function DuesScreen() {
-  return IS_MANAGER ? <ManagerDuesScreen /> : <PlayerDuesScreen />;
+export default function DuesScreen({ embedded }: { embedded?: boolean }) {
+  return IS_MANAGER
+    ? <ManagerDuesScreen embedded={embedded} />
+    : <PlayerDuesScreen  embedded={embedded} />;
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║  B-09 · Manager Dues                                                     ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function ManagerDuesScreen() {
+function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const [players, setPlayers] = useState<DuesPlayer[]>(DUES_DATA);
   const [seasonDues, setSeasonDues] = useState(SEASON_DUES);
@@ -85,18 +87,30 @@ function ManagerDuesScreen() {
   const progress   = total > 0 ? collected / total : 0;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
 
       {/* ── Header ── */}
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Dues</Text>
-        <Pressable
-          style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.65 }]}
-          onPress={() => setSetAmountVisible(true)}
-        >
-          <Text style={styles.ghostBtnText}>Set amount</Text>
-        </Pressable>
-      </View>
+      {!embedded && (
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Dues</Text>
+          <Pressable
+            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.65 }]}
+            onPress={() => setSetAmountVisible(true)}
+          >
+            <Text style={styles.ghostBtnText}>Set amount</Text>
+          </Pressable>
+        </View>
+      )}
+      {embedded && (
+        <View style={styles.embeddedHeaderRow}>
+          <Pressable
+            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.65 }]}
+            onPress={() => setSetAmountVisible(true)}
+          >
+            <Text style={styles.ghostBtnText}>Set amount</Text>
+          </Pressable>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -198,7 +212,7 @@ const PAYMENT_HISTORY = [
   { id: 'ph2', label: 'Summer 2024 season dues',    date: 'Apr 6, 2024',  amount: 500 },
 ];
 
-function PlayerDuesScreen() {
+function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -212,12 +226,14 @@ function PlayerDuesScreen() {
   const dueDate = 'Jun 15, 2025';
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
 
-      {/* ── Header ── */}
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Dues</Text>
-      </View>
+      {/* ── Header (hidden when embedded) ── */}
+      {!embedded && (
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Dues</Text>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -459,6 +475,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[20],
     paddingTop: spacing[16],
     paddingBottom: spacing[14],
+  },
+  embeddedHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing[16],
+    paddingBottom: spacing[10],
   },
   pageTitle: {
     ...T.headingXXL,

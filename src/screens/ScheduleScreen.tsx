@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, ice, status, fonts, type as T, spacing, radius } from '../theme';
+import AvatarPill from '../components/AvatarPill';
 
 const IS_MANAGER = true;
 const TEAM = teams.trashdogs;
@@ -270,7 +271,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function ScheduleHeader({ onAdd }: { onAdd: () => void }) {
+function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: () => void }) {
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
@@ -279,15 +280,18 @@ function ScheduleHeader({ onAdd }: { onAdd: () => void }) {
       </View>
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Schedule</Text>
-        {IS_MANAGER && (
-          <TouchableOpacity
-            style={styles.addBtn}
-            activeOpacity={0.75}
-            onPress={onAdd}
-          >
-            <Text style={styles.addBtnText}>+</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerRight}>
+          {IS_MANAGER && (
+            <TouchableOpacity
+              style={styles.addBtn}
+              activeOpacity={0.75}
+              onPress={onAdd}
+            >
+              <Text style={styles.addBtnText}>+</Text>
+            </TouchableOpacity>
+          )}
+          <AvatarPill onPress={onProfile} />
+        </View>
       </View>
     </View>
   );
@@ -299,10 +303,11 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const goToCreateEvent = () => navigation.navigate('CreateEvent');
+  const goToProfile     = () => navigation.navigate('Profile');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScheduleHeader onAdd={goToCreateEvent} />
+      <ScheduleHeader onAdd={goToCreateEvent} onProfile={goToProfile} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -373,6 +378,11 @@ const styles = StyleSheet.create({
   pageTitle: {
     ...T.headingXXL,
     color: '#FFFFFF',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[10],
   },
   addBtn: {
     width: 34,

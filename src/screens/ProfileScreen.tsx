@@ -1,6 +1,8 @@
 // Profile screen — current user's own profile and settings.
-// No IS_MANAGER toggle — this screen is identical for both roles.
+// Flip IS_MANAGER to preview manager vs player view.
 // Replace hardcoded user constants with Firebase auth when backend is wired.
+
+const IS_MANAGER = true;
 
 import React, { useState, useRef } from 'react';
 import {
@@ -115,6 +117,9 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* ── Player balance card (player view only) ── */}
+        {!IS_MANAGER && <PlayerBalanceCard />}
+
         {/* ── Hero card ── */}
         <View style={styles.heroCard}>
 
@@ -249,6 +254,34 @@ export default function ProfileScreen() {
   );
 }
 
+// ─── Player balance card ──────────────────────────────────────────────────────
+
+function PlayerBalanceCard() {
+  return (
+    <View style={styles.balanceCard}>
+      <View style={styles.balanceCardTop}>
+        <View>
+          <Text style={styles.balanceCardLabel}>Season dues</Text>
+          <Text style={styles.balanceCardAmount}>$500</Text>
+        </View>
+        <View style={styles.balancePill}>
+          <Text style={styles.balancePillText}>Paid</Text>
+        </View>
+      </View>
+      <View style={styles.balanceCardMeta}>
+        <View style={styles.balanceMetaItem}>
+          <Text style={styles.balanceMetaLabel}>Due date</Text>
+          <Text style={styles.balanceMetaValue}>Jun 15, 2025</Text>
+        </View>
+        <View style={styles.balanceMetaItem}>
+          <Text style={styles.balanceMetaLabel}>Season</Text>
+          <Text style={styles.balanceMetaValue}>Summer 2025</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Toggle row ───────────────────────────────────────────────────────────────
 
 function ToggleRow({
@@ -339,6 +372,69 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     paddingTop: spacing[4],
+  },
+
+  // ── Player balance card ───────────────────────────────────────────────────
+  balanceCard: {
+    marginHorizontal: spacing[16],
+    marginBottom: spacing[16],
+    backgroundColor: navy[700],
+    borderRadius: radius.l,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: spacing[16],
+  },
+  balanceCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: spacing[12],
+  },
+  balanceCardLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: navy[400],
+    marginBottom: spacing[4],
+  },
+  balanceCardAmount: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    letterSpacing: -0.8,
+    color: '#FFFFFF',
+  },
+  balancePill: {
+    paddingHorizontal: spacing[10],
+    paddingVertical: spacing[4],
+    borderRadius: radius.s,
+    backgroundColor: 'rgba(52,199,89,0.14)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(52,199,89,0.30)',
+  },
+  balancePillText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 12,
+    color: '#34C759',
+  },
+  balanceCardMeta: {
+    flexDirection: 'row',
+    gap: spacing[28],
+  },
+  balanceMetaItem: {
+    gap: spacing[2],
+  },
+  balanceMetaLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
+    color: navy[400],
+  },
+  balanceMetaValue: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 13,
+    color: navy[200],
   },
 
   // ── Hero card ─────────────────────────────────────────────────────────────

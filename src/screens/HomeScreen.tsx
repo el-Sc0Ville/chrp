@@ -3,6 +3,7 @@
 // Replace with Firebase auth role check when backend is connected.
 
 const IS_MANAGER = true;
+const IS_GAME_DAY = true;
 
 import React, { useState } from 'react';
 import {
@@ -12,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
+import AvatarPill from '../components/AvatarPill';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
@@ -36,6 +38,9 @@ function ManagerHomeScreen() {
   const hasEvent = true;
 
   const goToCreateEvent = () => navigation.navigate('CreateEvent');
+  const goToProfile     = () => navigation.navigate('Profile');
+  const goToGameday     = () => navigation.navigate('Gameday');
+  const goToTeam        = () => navigation.navigate('Team');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -43,18 +48,21 @@ function ManagerHomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <ManagerPageHeader hasEvent={hasEvent} onAdd={goToCreateEvent} />
+        <ManagerPageHeader hasEvent={hasEvent} onAdd={goToCreateEvent} onProfile={goToProfile} />
 
         {/* Region 1: hero or empty state */}
         <View style={styles.heroWrapper}>
-          {hasEvent ? <ManagerHeroCard /> : <ManagerEmptyCard />}
+          {hasEvent
+            ? <ManagerHeroCard onGameday={IS_GAME_DAY ? goToGameday : undefined} />
+            : <ManagerEmptyCard />
+          }
         </View>
 
         {/* Region 2: quick actions (between card and announcements) */}
         {hasEvent && <ManagerQuickActions noRespCount={AVAIL.noResp} onAdd={goToCreateEvent} />}
 
         {/* Region 3: announcements */}
-        <AnnouncementsSection hasEvent={hasEvent} />
+        <AnnouncementsSection hasEvent={hasEvent} onViewAll={goToTeam} />
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
@@ -62,9 +70,15 @@ function ManagerHomeScreen() {
   );
 }
 
-// ─── Manager header — team switcher + title + "+" add-event button ────────────
+// ─── Manager header — team switcher + title + "+" add-event button + avatar ──
 
-function ManagerPageHeader({ hasEvent, onAdd }: { hasEvent: boolean; onAdd: () => void }) {
+function ManagerPageHeader({
+  hasEvent, onAdd, onProfile,
+}: {
+  hasEvent: boolean;
+  onAdd: () => void;
+  onProfile: () => void;
+}) {
   return (
     <View style={styles.header}>
       <View>
@@ -78,21 +92,23 @@ function ManagerPageHeader({ hasEvent, onAdd }: { hasEvent: boolean; onAdd: () =
         </Text>
       </View>
 
-      {/* Add-event shortcut — filled pill, manager-primary action */}
-      <Pressable
-        style={styles.addEventBtn}
-        onPress={onAdd}
-        android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
-      >
-        <Text style={styles.addEventBtnText}>+</Text>
-      </Pressable>
+      <View style={styles.headerButtons}>
+        <Pressable
+          style={styles.addEventBtn}
+          onPress={onAdd}
+          android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
+        >
+          <Text style={styles.addEventBtnText}>+</Text>
+        </Pressable>
+        <AvatarPill onPress={onProfile} />
+      </View>
     </View>
   );
 }
 
 // ─── Manager hero card — event details + availability summary bar ─────────────
 
-function ManagerHeroCard() {
+function ManagerHeroCard({ onGameday }: { onGameday?: () => void }) {
   return (
     <View style={styles.heroCard}>
       {/* Meta row */}
@@ -101,15 +117,14 @@ function ManagerHeroCard() {
           <View style={styles.gamePill}>
             <Text style={styles.gamePillText}>Game</Text>
           </View>
-          <Text style={styles.metaSubtext}>In 2 days</Text>
+          <Text style={styles.metaSubtext}>{IS_GAME_DAY ? 'Tonight' : 'In 2 days'}</Text>
         </View>
-        {/* Responded tally instead of player "in" count */}
         <Text style={styles.respondedTally}>13 / 16 responded</Text>
       </View>
 
       {/* Day + time */}
       <View style={styles.daytimeRow}>
-        <Text style={styles.dayText}>Friday</Text>
+        <Text style={styles.dayText}>{IS_GAME_DAY ? 'Today' : 'Friday'}</Text>
         <Text style={styles.timeText}>7:30 pm</Text>
       </View>
 
@@ -132,6 +147,13 @@ function ManagerHeroCard() {
 
       {/* Availability summary — 4 chips in a row */}
       <AvailabilityBar avail={AVAIL} />
+
+      {/* Game day shortcut */}
+      {onGameday && (
+        <Pressable style={styles.gamedayLink} onPress={onGameday}>
+          <Text style={styles.gamedayLinkText}>Who's here →</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -211,7 +233,6 @@ function AvailabilityBar({ avail }: { avail: AvailCounts }) {
 function ManagerQuickActions({ noRespCount, onAdd }: { noRespCount: number; onAdd: () => void }) {
   return (
     <View style={styles.quickActions}>
-      {/* "Remind" only shown when there are non-responders */}
       {noRespCount > 0 && (
         <Pressable
           style={styles.remindBtn}
@@ -256,8 +277,13 @@ function ManagerEmptyCard() {
 
 function PlayerHomeScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [response, setResponse] = useState<Response>('in');
   const hasEvent = true;
+
+  const goToProfile = () => navigation.navigate('Profile');
+  const goToGameday = () => navigation.navigate('Gameday');
+  const goToTeam    = () => navigation.navigate('Team');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -265,17 +291,21 @@ function PlayerHomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <PlayerPageHeader hasEvent={hasEvent} />
+        <PlayerPageHeader hasEvent={hasEvent} onProfile={goToProfile} />
 
         <View style={styles.heroWrapper}>
           {hasEvent ? (
-            <PlayerHeroCard response={response} onRespond={setResponse} />
+            <PlayerHeroCard
+              response={response}
+              onRespond={setResponse}
+              onGameday={IS_GAME_DAY ? goToGameday : undefined}
+            />
           ) : (
             <PlayerEmptyCard />
           )}
         </View>
 
-        <AnnouncementsSection hasEvent={hasEvent} />
+        <AnnouncementsSection hasEvent={hasEvent} onViewAll={goToTeam} />
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
@@ -283,7 +313,7 @@ function PlayerHomeScreen() {
   );
 }
 
-function PlayerPageHeader({ hasEvent }: { hasEvent: boolean }) {
+function PlayerPageHeader({ hasEvent, onProfile }: { hasEvent: boolean; onProfile: () => void }) {
   return (
     <View style={styles.header}>
       <View>
@@ -296,16 +326,17 @@ function PlayerPageHeader({ hasEvent }: { hasEvent: boolean }) {
           {hasEvent ? 'Next up' : 'No games yet'}
         </Text>
       </View>
-      <View style={styles.avatarChip}>
-        <Text style={styles.avatarText}>JM</Text>
+      <View style={styles.avatarOffset}>
+        <AvatarPill onPress={onProfile} />
       </View>
     </View>
   );
 }
 
-function PlayerHeroCard({ response, onRespond }: {
+function PlayerHeroCard({ response, onRespond, onGameday }: {
   response: Response;
   onRespond: (r: Response) => void;
+  onGameday?: () => void;
 }) {
   return (
     <View style={styles.heroCard}>
@@ -314,7 +345,7 @@ function PlayerHeroCard({ response, onRespond }: {
           <View style={styles.gamePill}>
             <Text style={styles.gamePillText}>Game</Text>
           </View>
-          <Text style={styles.metaSubtext}>In 2 days</Text>
+          <Text style={styles.metaSubtext}>{IS_GAME_DAY ? 'Tonight' : 'In 2 days'}</Text>
         </View>
         <View style={styles.inCount}>
           <View style={styles.inCountDot} />
@@ -323,7 +354,7 @@ function PlayerHeroCard({ response, onRespond }: {
       </View>
 
       <View style={styles.daytimeRow}>
-        <Text style={styles.dayText}>Friday</Text>
+        <Text style={styles.dayText}>{IS_GAME_DAY ? 'Today' : 'Friday'}</Text>
         <Text style={styles.timeText}>7:30 pm</Text>
       </View>
 
@@ -342,6 +373,12 @@ function PlayerHeroCard({ response, onRespond }: {
       </View>
 
       <InOutMaybeToggle response={response} onRespond={onRespond} />
+
+      {onGameday && (
+        <Pressable style={styles.gamedayLink} onPress={onGameday}>
+          <Text style={styles.gamedayLinkText}>Who's here →</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -434,7 +471,7 @@ function InOutMaybeToggle({ response, onRespond }: {
 // ║  Shared components                                                       ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function AnnouncementsSection({ hasEvent }: { hasEvent: boolean }) {
+function AnnouncementsSection({ hasEvent, onViewAll }: { hasEvent: boolean; onViewAll: () => void }) {
   const ann = hasEvent
     ? { title: 'Jerseys — wear white on Friday', meta: 'Pat N. · 2h ago' }
     : { title: 'Welcome to Trashdogs — first game posts soon', meta: 'Pat N. · yesterday' };
@@ -443,11 +480,11 @@ function AnnouncementsSection({ hasEvent }: { hasEvent: boolean }) {
     <View style={styles.announcements}>
       <View style={styles.announcementsHeader}>
         <Text style={styles.announcementsLabel}>From your manager</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={onViewAll}>
           <Text style={styles.announcementsAll}>All →</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.announcementCard} activeOpacity={0.75}>
+      <TouchableOpacity style={styles.announcementCard} activeOpacity={0.75} onPress={onViewAll}>
         <View style={styles.announcementIcon}>
           <Text>📣</Text>
         </View>
@@ -520,7 +557,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Manager header right: filled "+" button
+  // Manager header right: "+" button + avatar pill
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[10],
+    marginTop: 22,
+  },
   addEventBtn: {
     width: 34,
     height: 34,
@@ -528,7 +571,6 @@ const styles = StyleSheet.create({
     backgroundColor: TEAM[500],
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 22,
     shadowColor: TEAM[500],
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -544,23 +586,9 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
 
-  // Player header right: avatar chip
-  avatarChip: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: TEAM[700],
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Player header right: avatar pill (with top offset to match)
+  avatarOffset: {
     marginTop: 24,
-  },
-  avatarText: {
-    fontFamily: fonts.uiBold,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 
   // ── Hero card (shared shell) ─────────────────────────────────────────────
@@ -609,14 +637,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.65)',
   },
-  // Manager meta right: response tally
   respondedTally: {
     fontFamily: fonts.mono,
     fontSize: 10,
     letterSpacing: 0.8,
     color: 'rgba(255,255,255,0.55)',
   },
-  // Player meta right: "N in" with dot
   inCount: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -756,6 +782,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 15,
+  },
+
+  // ── Gameday link ──────────────────────────────────────────────────────────
+  gamedayLink: {
+    marginTop: spacing[12],
+    alignSelf: 'flex-end',
+  },
+  gamedayLinkText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 13,
+    fontWeight: '600',
+    color: TEAM[300],
   },
 
   // ── Quick actions (B-01) ─────────────────────────────────────────────────

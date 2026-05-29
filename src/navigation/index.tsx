@@ -6,18 +6,20 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/HomeScreen';
-import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
-import RosterScreen from '../screens/RosterScreen';
+import TeamScreen from '../screens/TeamScreen';
 import GamedayScreen from '../screens/GamedayScreen';
-import DuesScreen from '../screens/DuesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import AnnouncementThreadScreen from '../screens/AnnouncementThreadScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
 import CreateEventScreen from '../screens/CreateEventScreen';
 import { navy, teams, fonts } from '../theme';
 
 export type RootStackParamList = {
   Tabs: undefined;
+  Gameday: undefined;
+  Profile: undefined;
+  AnnouncementThread: { announcementId: string };
   EventDetail: { eventId: string; title: string };
   CreateEvent: undefined;
 };
@@ -31,7 +33,6 @@ function CalendarIcon({ active }: { active: boolean }) {
   const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
   return (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Calendar outline */}
       <View style={{
         width: 18, height: 16, borderRadius: 2.5,
         borderWidth: 1.5, borderColor: color,
@@ -67,99 +68,26 @@ function HomeIcon({ active }: { active: boolean }) {
   );
 }
 
-function RosterIcon({ active }: { active: boolean }) {
+function TeamIcon({ active }: { active: boolean }) {
   const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
   return (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Left person head */}
       <View style={{
-        width: 11, height: 11, borderRadius: 5.5,
+        width: 9, height: 9, borderRadius: 4.5,
         borderWidth: 1.5, borderColor: color,
-        position: 'absolute', top: 1, left: 2,
+        position: 'absolute', top: 1, left: 3,
       }} />
+      {/* Right person head */}
       <View style={{
-        width: 11, height: 11, borderRadius: 5.5,
+        width: 9, height: 9, borderRadius: 4.5,
         borderWidth: 1.5, borderColor: color,
-        position: 'absolute', top: 1, right: 2,
+        position: 'absolute', top: 1, right: 3,
       }} />
+      {/* Shared body arc */}
       <View style={{
-        position: 'absolute', bottom: 1, left: 0, right: 0,
-        height: 8, borderTopLeftRadius: 6, borderTopRightRadius: 6,
-        borderWidth: 1.5, borderColor: color, borderBottomWidth: 0,
-      }} />
-    </View>
-  );
-}
-
-function AnnouncementsIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
-  return (
-    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Speech bubble body */}
-      <View style={{
-        position: 'absolute', top: 2, left: 3, right: 3, bottom: 6,
-        borderRadius: 5, borderWidth: 1.5, borderColor: color,
-      }} />
-      {/* Tail — two angled lines meeting at a point bottom-left */}
-      <View style={{
-        position: 'absolute', bottom: 3, left: 5,
-        width: 6, height: 1.5, borderRadius: 1, backgroundColor: color,
-        transform: [{ rotate: '35deg' }],
-      }} />
-      <View style={{
-        position: 'absolute', bottom: 3, left: 5,
-        width: 6, height: 1.5, borderRadius: 1, backgroundColor: color,
-        transform: [{ rotate: '-10deg' }],
-      }} />
-    </View>
-  );
-}
-
-function GamedayIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
-  return (
-    <View style={{ width: 24, height: 24, alignItems: 'center' }}>
-      {/* Pin head with inner dot */}
-      <View style={{
-        width: 14, height: 14, borderRadius: 7,
-        borderWidth: 1.5, borderColor: color,
-        marginTop: 1,
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-      </View>
-      {/* Pin stem */}
-      <View style={{ width: 1.5, height: 7, backgroundColor: color, borderBottomLeftRadius: 1, borderBottomRightRadius: 1 }} />
-    </View>
-  );
-}
-
-function DuesIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
-  return (
-    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: 20, height: 20, borderRadius: 10,
-        borderWidth: 1.5, borderColor: color,
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Text style={{ color, fontSize: 11, fontFamily: fonts.uiBold, lineHeight: 14 }}>$</Text>
-      </View>
-    </View>
-  );
-}
-
-function ProfileIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
-  return (
-    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: 10, height: 10, borderRadius: 5,
-        borderWidth: 1.5, borderColor: color,
-        position: 'absolute', top: 1,
-      }} />
-      <View style={{
-        position: 'absolute', bottom: 0, left: 1, right: 1,
-        height: 8, borderTopLeftRadius: 7, borderTopRightRadius: 7,
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: 9, borderTopLeftRadius: 6, borderTopRightRadius: 6,
         borderWidth: 1.5, borderColor: color, borderBottomWidth: 0,
       }} />
     </View>
@@ -205,12 +133,8 @@ function ChrpTabBar({ state, descriptors, navigation }: any) {
           >
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
               {route.name === 'Schedule' && <CalendarIcon active={isFocused} />}
-              {route.name === 'Home' && <HomeIcon active={isFocused} />}
-              {route.name === 'Announcements' && <AnnouncementsIcon active={isFocused} />}
-              {route.name === 'Roster' && <RosterIcon active={isFocused} />}
-              {route.name === 'Gameday' && <GamedayIcon active={isFocused} />}
-              {route.name === 'Dues' && <DuesIcon active={isFocused} />}
-              {route.name === 'Profile' && <ProfileIcon active={isFocused} />}
+              {route.name === 'Home'     && <HomeIcon     active={isFocused} />}
+              {route.name === 'Team'     && <TeamIcon     active={isFocused} />}
             </View>
             <Text style={[styles.tabLabel, { color: labelColor, fontWeight: isFocused ? '600' : '500' }]}>
               {String(label)}
@@ -268,16 +192,8 @@ function TabsNavigator() {
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Schedule" component={ScheduleScreen} />
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen
-        name="Announcements"
-        component={AnnouncementsScreen}
-        options={{ tabBarLabel: 'Posts' }}
-      />
-      <Tab.Screen name="Roster" component={RosterScreen} />
-      <Tab.Screen name="Gameday" component={GamedayScreen} />
-      <Tab.Screen name="Dues" component={DuesScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Home"     component={HomeScreen} />
+      <Tab.Screen name="Team"     component={TeamScreen} />
     </Tab.Navigator>
   );
 }
@@ -286,9 +202,12 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Tabs" component={TabsNavigator} />
-        <Stack.Screen name="EventDetail" component={EventDetailScreen} />
-        <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+        <Stack.Screen name="Tabs"               component={TabsNavigator} />
+        <Stack.Screen name="Gameday"            component={GamedayScreen} />
+        <Stack.Screen name="Profile"            component={ProfileScreen} />
+        <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />
+        <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
+        <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

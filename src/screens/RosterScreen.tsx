@@ -39,15 +39,17 @@ const ROSTER_DATA: RosterPlayer[] = [
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
-export default function RosterScreen() {
-  return IS_MANAGER ? <ManagerRosterScreen /> : <PlayerRosterScreen />;
+export default function RosterScreen({ embedded }: { embedded?: boolean }) {
+  return IS_MANAGER
+    ? <ManagerRosterScreen embedded={embedded} />
+    : <PlayerRosterScreen  embedded={embedded} />;
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║  B-07 · Manager Roster                                                   ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function ManagerRosterScreen() {
+function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const [roster, setRoster] = useState<RosterPlayer[]>(ROSTER_DATA);
   const [inviteVisible, setInviteVisible] = useState(false);
@@ -73,8 +75,8 @@ function ManagerRosterScreen() {
   const managerCount = roster.filter(p => p.role === 'manager').length;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <RosterHeader isManager onInvite={() => setInviteVisible(true)} />
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
+      {!embedded && <RosterHeader isManager onInvite={() => setInviteVisible(true)} />}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -116,15 +118,15 @@ function ManagerRosterScreen() {
 // ║  C-07 · Player Roster                                                    ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function PlayerRosterScreen() {
+function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
 
   const managerCount = ROSTER_DATA.filter(p => p.role === 'manager').length;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <RosterHeader isManager={false} />
+    <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
+      {!embedded && <RosterHeader isManager={false} />}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
