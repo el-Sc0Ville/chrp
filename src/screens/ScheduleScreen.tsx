@@ -14,6 +14,7 @@ import AvatarPill from '../components/AvatarPill';
 import { useScores, scoreLabel, scoreResult, type Score } from '../context/ScoreContext';
 import { useUserContext } from '../context/UserContext';
 import { useEvents } from '../firebase/hooks/useEvents';
+import { useResponses } from '../firebase/hooks/useResponses';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
@@ -185,6 +186,9 @@ function ScoreBadge({ score, win }: { score: string; win?: boolean }) {
 
 function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void }) {
   const { isManager } = useUserContext();
+  const { responses } = useResponses(TEAM_ID, event.id);
+  const inCount  = Object.values(responses).filter(r => r === 'in').length;
+  const outCount = Object.values(responses).filter(r => r === 'out').length;
   return (
     <Pressable
       onPress={onPress}
@@ -199,7 +203,7 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
         </Text>
       </View>
       {isManager
-        ? <ManagerPill inCount={event.in} outCount={event.out} />
+        ? <ManagerPill inCount={inCount} outCount={outCount} />
         : <PlayerPill response={event.playerResponse} />
       }
     </Pressable>

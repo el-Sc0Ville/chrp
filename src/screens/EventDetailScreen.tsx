@@ -185,7 +185,7 @@ function ManagerEventDetail() {
 
       <ScoreSheet
         visible={scoreSheetVisible}
-        initial={score}
+        initial={score ?? (event?.scoreUs !== undefined && event?.scoreThem !== undefined ? { us: event.scoreUs, them: event.scoreThem } : undefined)}
         onSave={handleSaveScore}
         onClose={() => setScoreSheetVisible(false)}
       />
@@ -375,6 +375,12 @@ function EventSummary({ event, fallbackTitle, score }: {
   const dateStr   = event ? formatEventDate(event.startsAt) : '';
   const timeStr   = event ? formatEventTime(event.startsAt) : '';
 
+  const displayScore: Score | undefined = score ?? (
+    event?.scoreUs !== undefined && event?.scoreThem !== undefined
+      ? { us: event.scoreUs, them: event.scoreThem }
+      : undefined
+  );
+
   return (
     <View style={styles.eventSummary}>
       <View style={styles.teamPill}>
@@ -404,14 +410,14 @@ function EventSummary({ event, fallbackTitle, score }: {
         <Text style={styles.venueText}>{venue}</Text>
       </Pressable>
 
-      {score && (
+      {displayScore && (
         <View style={styles.scoreBlock}>
           <View style={styles.scoreNumbers}>
-            <Text style={styles.scoreNum}>{score.us}</Text>
+            <Text style={styles.scoreNum}>{displayScore.us}</Text>
             <Text style={styles.scoreSep}>–</Text>
-            <Text style={styles.scoreNum}>{score.them}</Text>
+            <Text style={styles.scoreNum}>{displayScore.them}</Text>
           </View>
-          <ResultPill us={score.us} them={score.them} />
+          <ResultPill us={displayScore.us} them={displayScore.them} />
         </View>
       )}
 

@@ -434,8 +434,10 @@ function PlayerSubsScreen() {
     setNoteText('');
     setRequestTarget(null);
     showToast('Request sent to your manager');
+    const path = `teams/${TEAM_ID}/subRequests`;
+    console.log('Writing sub request to:', path);
     try {
-      await addDoc(collection(db, 'teams', TEAM_ID, 'subRequests'), {
+      const result = await addDoc(collection(db, 'teams', TEAM_ID, 'subRequests'), {
         eventId:         requestTarget.id,
         requestedBy:     user?.uid ?? 'anon',
         requestedByName: user?.displayName ?? 'Player',
@@ -449,6 +451,7 @@ function PlayerSubsScreen() {
         gameVenue:       requestTarget.venue,
         gameTime:        requestTarget.time,
       });
+      console.log('Sub request write result:', result);
     } catch (err) {
       console.error('[SubsScreen] sub request write failed:', err);
     }
