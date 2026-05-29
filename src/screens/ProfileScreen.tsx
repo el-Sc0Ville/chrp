@@ -8,7 +8,7 @@ import {
   Switch, Alert, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { navy, ice, teams, status, fonts, type as T, spacing, radius } from '../theme';
 
 const TEAM = teams.trashdogs;
 
@@ -199,6 +199,7 @@ export default function ProfileScreen() {
           <ToggleRow
             icon="🔔"
             label="Notifications"
+            subtitle="All Chrp alerts — events, announcements, gameday"
             value={notifications}
             onValueChange={setNotifications}
           />
@@ -206,6 +207,7 @@ export default function ProfileScreen() {
           <ToggleRow
             icon="📅"
             label="Availability reminders"
+            subtitle="Nudges when you haven't responded to an upcoming event"
             value={availReminders}
             onValueChange={setAvailReminders}
           />
@@ -213,6 +215,7 @@ export default function ProfileScreen() {
           <ToggleRow
             icon="📍"
             label="Location for Gameday"
+            subtitle="Shows your arrival status to your manager on game day"
             value={location}
             onValueChange={handleLocationToggle}
           />
@@ -251,11 +254,13 @@ export default function ProfileScreen() {
 function ToggleRow({
   icon,
   label,
+  subtitle,
   value,
   onValueChange,
 }: {
   icon: string;
   label: string;
+  subtitle?: string;
   value: boolean;
   onValueChange: (v: boolean) => void;
 }) {
@@ -263,7 +268,10 @@ function ToggleRow({
     <View style={styles.toggleRow}>
       <View style={styles.toggleLeft}>
         <Text style={styles.toggleIcon}>{icon}</Text>
-        <Text style={styles.toggleLabel}>{label}</Text>
+        <View>
+          <Text style={styles.toggleLabel}>{label}</Text>
+          {subtitle && <Text style={styles.toggleSubtitle}>{subtitle}</Text>}
+        </View>
       </View>
       <Switch
         value={value}
@@ -527,7 +535,7 @@ const styles = StyleSheet.create({
   },
   toggleLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing[12],
     flex: 1,
   },
@@ -535,12 +543,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     width: 26,
     textAlign: 'center',
+    marginTop: 2,
   },
   toggleLabel: {
     fontFamily: fonts.uiMedium,
     fontSize: 15,
     fontWeight: '500',
     color: navy[100],
+  },
+  toggleSubtitle: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    lineHeight: 16,
+    color: ice[400],
+    marginTop: 2,
   },
   rowDivider: {
     height: 0.5,
