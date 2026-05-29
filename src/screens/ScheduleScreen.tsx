@@ -187,6 +187,7 @@ function ScoreBadge({ score, win }: { score: string; win?: boolean }) {
 function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void }) {
   const { isManager } = useUserContext();
   const { responses } = useResponses(TEAM_ID, event.id);
+  console.log('EventRow responses:', event.id, responses);
   const inCount  = Object.values(responses).filter(r => r === 'in').length;
   const outCount = Object.values(responses).filter(r => r === 'out').length;
   return (
