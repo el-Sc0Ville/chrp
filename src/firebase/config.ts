@@ -1,7 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import messaging from '@react-native-firebase/messaging';
+
+// TODO: FCM push notifications require Expo Notifications + a custom dev build — not available in Expo Go
 
 const firebaseConfig = {
   apiKey:            process.env.FIREBASE_API_KEY,
@@ -14,6 +15,5 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const db        = getFirestore(app);
-export const auth      = getAuth(app);
-export { messaging };
+export const db   = getFirestore(app);
+export const auth = getAuth(app);
