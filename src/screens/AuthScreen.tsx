@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import { sendMagicLink, type User } from '../firebase/auth';
 import { useUserContext } from '../context/UserContext';
+import { seedDatabase } from '../firebase/seed';
 
 const TEAM = teams.trashdogs;
 
@@ -19,6 +20,7 @@ export default function AuthScreen() {
   const { setMockUser } = useUserContext();
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
+  const [seedStatus,  setSeedStatus]  = useState<'idle' | 'seeding' | 'done' | 'error'>('idle');
   const [sent,        setSent]        = useState(false);
   const [error,       setError]       = useState<string | null>(null);
   const [showInvite,  setShowInvite]  = useState(false);
@@ -166,6 +168,26 @@ export default function AuthScreen() {
                 <Text style={styles.devBtnText}>Enter as Player (dev)</Text>
               </Pressable>
             </View>
+            <Pressable
+              style={({ pressed }) => [styles.devBtn, styles.devSeedBtn, pressed && { opacity: 0.7 }]}
+              disabled={seedStatus === 'seeding'}
+              onPress={async () => {
+                setSeedStatus('seeding');
+                try {
+                  await seedDatabase();
+                  setSeedStatus('done');
+                } catch {
+                  setSeedStatus('error');
+                }
+              }}
+            >
+              <Text style={styles.devBtnText}>
+                {seedStatus === 'idle'    && 'Seed database (dev)'}
+                {seedStatus === 'seeding' && 'Seeding…'}
+                {seedStatus === 'done'    && 'Done! ✓'}
+                {seedStatus === 'error'   && 'Error — check console'}
+              </Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -352,6 +374,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.l, borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
+  },
+  devSeedBtn: {
+    flex: 0, alignSelf: 'stretch', marginTop: spacing[6],
   },
   devBtnText: {
     fontFamily: fonts.uiMedium, fontSize: 12, fontWeight: '500',
