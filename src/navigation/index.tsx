@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import RosterScreen from '../screens/RosterScreen';
+import DuesScreen from '../screens/DuesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
 import CreateEventScreen from '../screens/CreateEventScreen';
@@ -87,6 +88,21 @@ function RosterIcon({ active }: { active: boolean }) {
   );
 }
 
+function DuesIcon({ active }: { active: boolean }) {
+  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
+  return (
+    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{
+        width: 20, height: 20, borderRadius: 10,
+        borderWidth: 1.5, borderColor: color,
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Text style={{ color, fontSize: 11, fontFamily: fonts.uiBold, lineHeight: 14 }}>$</Text>
+      </View>
+    </View>
+  );
+}
+
 function ProfileIcon({ active }: { active: boolean }) {
   const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
   return (
@@ -146,6 +162,7 @@ function ChrpTabBar({ state, descriptors, navigation }: any) {
               {route.name === 'Schedule' && <CalendarIcon active={isFocused} />}
               {route.name === 'Home' && <HomeIcon active={isFocused} />}
               {route.name === 'Roster' && <RosterIcon active={isFocused} />}
+              {route.name === 'Dues' && <DuesIcon active={isFocused} />}
               {route.name === 'Profile' && <ProfileIcon active={isFocused} />}
             </View>
             <Text style={[styles.tabLabel, { color: labelColor, fontWeight: isFocused ? '600' : '500' }]}>
@@ -206,6 +223,7 @@ function TabsNavigator() {
       <Tab.Screen name="Schedule" component={ScheduleScreen} />
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Roster" component={RosterScreen} />
+      <Tab.Screen name="Dues" component={DuesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
