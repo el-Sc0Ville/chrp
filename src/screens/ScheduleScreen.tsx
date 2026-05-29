@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, ice, status, fonts, type as T, spacing, radius } from '../theme';
 import AvatarPill from '../components/AvatarPill';
+import { useScores, scoreLabel, scoreResult, type Score } from '../context/ScoreContext';
 
 const IS_MANAGER = true;
 const TEAM = teams.trashdogs;
@@ -98,8 +99,6 @@ const PAST: PastEvent[] = [
     kind: 'game',
     title: 'vs Verdant FC',
     venue: 'Arena Nord',
-    score: 'W 4–2',
-    win: true,
   },
   {
     id: 'p2',
@@ -107,6 +106,13 @@ const PAST: PastEvent[] = [
     kind: 'practice',
     title: 'Team Practice',
     venue: 'Inner Ice Complex',
+  },
+  {
+    id: 'p3',
+    weekday: 'SAT', day: '10', month: 'MAY',
+    kind: 'game',
+    title: 'vs Ice Kings',
+    venue: 'The Barn — Rink 2',
   },
 ];
 
@@ -220,22 +226,30 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
   );
 }
 
-function PastEventRow({ event }: { event: PastEvent }) {
+function PastEventRow({ event, score, onPress }: { event: PastEvent; score?: Score; onPress: () => void }) {
+  const displayScore = score
+    ? { text: scoreLabel(score.us, score.them), win: scoreResult(score.us, score.them) === 'win' }
+    : event.score ? { text: event.score, win: event.win } : null;
+
   return (
-    <View style={[styles.eventRow, { opacity: 0.6 }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.eventRow, { opacity: pressed ? 0.45 : 0.6 }]}
+    >
       <DateChip weekday={event.weekday} day={event.day} month={event.month} muted />
       <View style={styles.eventInfo}>
         <KindTag kind={event.kind} muted />
         <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
         <Text style={styles.eventMeta} numberOfLines={1}>{event.venue}</Text>
       </View>
-      {event.score && <ScoreBadge score={event.score} win={event.win} />}
-    </View>
+      {displayScore && <ScoreBadge score={displayScore.text} win={displayScore.win} />}
+    </Pressable>
   );
 }
 
-function PastSection() {
+function PastSection({ onNavigate }: { onNavigate: (id: string, title: string) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const { scores } = useScores();
   return (
     <View style={styles.pastSection}>
       <Pressable
@@ -245,7 +259,14 @@ function PastSection() {
         <Text style={styles.pastHeaderTitle}>Past events</Text>
         <Text style={[styles.pastChevron, expanded && styles.pastChevronOpen]}>›</Text>
       </Pressable>
-      {expanded && PAST.map(e => <PastEventRow key={e.id} event={e} />)}
+      {expanded && PAST.map(e => (
+        <PastEventRow
+          key={e.id}
+          event={e}
+          score={scores[e.id]}
+          onPress={() => onNavigate(e.id, e.title)}
+        />
+      ))}
     </View>
   );
 }
@@ -332,7 +353,7 @@ export default function ScheduleScreen() {
             ))}
           </>
         )}
-        <PastSection />
+        <PastSection onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })} />
       </ScrollView>
     </View>
   );

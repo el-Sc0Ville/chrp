@@ -17,6 +17,7 @@ import SubsScreen from '../screens/SubsScreen';
 import NotificationCentreScreen from '../screens/NotificationCentreScreen';
 import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
+import { ScoreProvider } from '../context/ScoreContext';
 import { navy, teams, fonts } from '../theme';
 
 export type RootStackParamList = {
@@ -24,7 +25,7 @@ export type RootStackParamList = {
   Gameday: undefined;
   Profile: undefined;
   AnnouncementThread: { announcementId: string };
-  EventDetail: { eventId: string; title: string };
+  EventDetail: { eventId: string; title: string; isPast?: boolean };
   CreateEvent: undefined;
   Subs: undefined;
   Notifications: undefined;
@@ -208,6 +209,7 @@ export default function AppNavigator() {
   return (
     <GameResponseProvider>
     <NotificationProvider>
+    <ScoreProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Tabs"               component={TabsNavigator} />
@@ -220,6 +222,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />
       </Stack.Navigator>
     </NavigationContainer>
+    </ScoreProvider>
     </NotificationProvider>
     </GameResponseProvider>
   );

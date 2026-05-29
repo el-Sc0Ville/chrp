@@ -8,7 +8,7 @@ const IS_GAME_DAY = true;
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Pressable,
+  StyleSheet, Pressable, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -148,10 +148,13 @@ function ManagerHeroCard({ onGameday }: { onGameday?: () => void }) {
       <Text style={styles.opponentText}>Ice Sharks</Text>
 
       {/* Venue pill */}
-      <View style={styles.venuePill}>
+      <Pressable
+        style={({ pressed }) => [styles.venuePill, pressed && { opacity: 0.7 }]}
+        onPress={() => Linking.openURL('https://maps.google.com/?q=' + encodeURIComponent('The Barn — Rink 2'))}
+      >
         <Text style={styles.venuePin}>📍</Text>
         <Text style={styles.venueText}>The Barn — Rink 2</Text>
-      </View>
+      </Pressable>
 
       {/* Divider */}
       <View style={styles.dividerRow}>

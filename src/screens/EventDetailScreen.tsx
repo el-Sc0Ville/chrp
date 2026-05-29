@@ -3,9 +3,10 @@
 
 const IS_MANAGER = true;
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
+  TextInput, KeyboardAvoidingView, Platform, Linking, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -13,6 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useGameResponse } from '../context/GameResponseContext';
+import { useScores, scoreResult, type Score } from '../context/ScoreContext';
 
 const TEAM = teams.trashdogs;
 
@@ -88,7 +90,10 @@ function ManagerEventDetail() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
-  const { title } = route.params;
+  const { title, eventId, isPast = false } = route.params;
+  const { scores, setScore } = useScores();
+  const score = scores[eventId];
+  const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -97,7 +102,20 @@ function ManagerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
-        <EventSummary title={title} />
+        <EventSummary title={title} score={score} />
+
+        {isPast && (
+          <View style={styles.scoreActionRow}>
+            <Pressable
+              style={({ pressed }) => [styles.enterScoreBtn, pressed && { opacity: 0.8 }]}
+              onPress={() => setScoreSheetVisible(true)}
+            >
+              <Text style={styles.enterScoreBtnText}>
+                {score ? 'Edit score' : '+ Enter score'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>
@@ -108,18 +126,27 @@ function ManagerEventDetail() {
             label="No response"
             dotColor={navy[400]}
             players={PLAYERS_NO_RESP}
-            showRemind
+            showRemind={!isPast}
           />
         </View>
 
-        <View style={styles.footer}>
-          <Pressable
-            style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.75 }]}
-          >
-            <Text style={styles.cancelBtnText}>Cancel event</Text>
-          </Pressable>
-        </View>
+        {!isPast && (
+          <View style={styles.footer}>
+            <Pressable
+              style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Text style={styles.cancelBtnText}>Cancel event</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
+
+      <ScoreSheet
+        visible={scoreSheetVisible}
+        initial={score}
+        onSave={(s) => setScore(eventId, s)}
+        onClose={() => setScoreSheetVisible(false)}
+      />
     </View>
   );
 }
@@ -132,11 +159,12 @@ function PlayerEventDetail() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
-  const { title } = route.params;
+  const { title, eventId, isPast = false } = route.params;
   const { responses, setResponse: setGameResponse } = useGameResponse();
-  const eventId = route.params.eventId;
   const response: PlayerResponse = responses[eventId] ?? null;
   const handleRespond = (r: NonNullable<PlayerResponse>) => setGameResponse(eventId, r);
+  const { scores } = useScores();
+  const score = scores[eventId];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -145,14 +173,17 @@ function PlayerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
-        <EventSummary title={title} />
+        <EventSummary title={title} score={score} />
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Are you in?</Text>
-          <InOutMaybeToggle response={response} onRespond={handleRespond} />
-        </View>
-
-        <View style={styles.sectionDivider} />
+        {!isPast && (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Are you in?</Text>
+              <InOutMaybeToggle response={response} onRespond={handleRespond} />
+            </View>
+            <View style={styles.sectionDivider} />
+          </>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>
@@ -161,17 +192,19 @@ function PlayerEventDetail() {
           <AvailGroup label="Maybe" dotColor={status.alert.pure}   players={PLAYERS_MAYBE} />
         </View>
 
-        <View style={styles.footer}>
-          <Pressable style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}>
-            <Text style={styles.ghostBtnText}>Add to calendar</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
-            onPress={() => navigation.navigate('Subs')}
-          >
-            <Text style={styles.ghostBtnText}>Need a sub?</Text>
-          </Pressable>
-        </View>
+        {!isPast && (
+          <View style={styles.footer}>
+            <Pressable style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}>
+              <Text style={styles.ghostBtnText}>Add to calendar</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+              onPress={() => navigation.navigate('Subs')}
+            >
+              <Text style={styles.ghostBtnText}>Need a sub?</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -205,7 +238,9 @@ function NavHeader({ onBack }: { onBack: () => void }) {
 
 // ─── Event summary block ──────────────────────────────────────────────────────
 
-function EventSummary({ title }: { title: string }) {
+const EVENT_VENUE = 'Arena Nord';
+
+function EventSummary({ title, score }: { title: string; score?: Score }) {
   return (
     <View style={styles.eventSummary}>
       <View style={styles.teamPill}>
@@ -225,10 +260,24 @@ function EventSummary({ title }: { title: string }) {
         <Text style={styles.timeText}>7:30 PM</Text>
       </View>
 
-      <View style={styles.venueRow}>
+      <Pressable
+        style={({ pressed }) => [styles.venueRow, pressed && { opacity: 0.7 }]}
+        onPress={() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(EVENT_VENUE)}`)}
+      >
         <PinIcon />
-        <Text style={styles.venueText}>Arena Nord</Text>
-      </View>
+        <Text style={styles.venueText}>{EVENT_VENUE}</Text>
+      </Pressable>
+
+      {score && (
+        <View style={styles.scoreBlock}>
+          <View style={styles.scoreNumbers}>
+            <Text style={styles.scoreNum}>{score.us}</Text>
+            <Text style={styles.scoreSep}>–</Text>
+            <Text style={styles.scoreNum}>{score.them}</Text>
+          </View>
+          <ResultPill us={score.us} them={score.them} />
+        </View>
+      )}
     </View>
   );
 }
@@ -242,6 +291,128 @@ function PinIcon() {
       }} />
       <View style={{ width: 1.5, height: 5, backgroundColor: navy[400], marginTop: -1 }} />
     </View>
+  );
+}
+
+// ─── Result pill ─────────────────────────────────────────────────────────────
+
+function ResultPill({ us, them }: { us: number; them: number }) {
+  const result = scoreResult(us, them);
+  const config = {
+    win:  { bg: status.success.subtle, text: status.success.pure, label: 'Win'  },
+    loss: { bg: status.error.subtle,   text: status.error.pure,   label: 'Loss' },
+    tie:  { bg: 'rgba(95,107,133,0.14)', text: navy[300],          label: 'Tie'  },
+  }[result];
+  return (
+    <View style={[styles.resultPill, { backgroundColor: config.bg }]}>
+      <Text style={[styles.resultPillText, { color: config.text }]}>{config.label}</Text>
+    </View>
+  );
+}
+
+// ─── Score entry sheet (manager only) ────────────────────────────────────────
+
+function ScoreSheet({
+  visible, initial, onSave, onClose,
+}: {
+  visible: boolean;
+  initial?: Score;
+  onSave: (s: Score) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [us,   setUs]   = useState('');
+  const [them, setThem] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      setUs(initial !== undefined ? String(initial.us) : '');
+      setThem(initial !== undefined ? String(initial.them) : '');
+    }
+  }, [visible]);
+
+  const usNum   = parseInt(us)   || 0;
+  const themNum = parseInt(them) || 0;
+  const hasValues = us !== '' && them !== '';
+
+  const result = usNum > themNum ? 'win' : usNum < themNum ? 'loss' : 'tie';
+  const resultConfig = {
+    win:  { bg: status.success.subtle, text: status.success.pure, label: 'Win'  },
+    loss: { bg: status.error.subtle,   text: status.error.pure,   label: 'Loss' },
+    tie:  { bg: 'rgba(95,107,133,0.14)', text: navy[300],          label: 'Tie'  },
+  }[result];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined}>
+          <Pressable
+            onPress={() => {}}
+            style={[styles.scoreSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+          >
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Enter score</Text>
+
+            <View style={styles.scoreInputRow}>
+              <View style={styles.scoreInputGroup}>
+                <TextInput
+                  style={styles.scoreInput}
+                  value={us}
+                  onChangeText={v => setUs(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="0"
+                  placeholderTextColor={navy[500]}
+                  textAlign="center"
+                  selectTextOnFocus
+                />
+                <Text style={styles.scoreInputLabel}>Us</Text>
+              </View>
+
+              <Text style={styles.scoreInputDash}>–</Text>
+
+              <View style={styles.scoreInputGroup}>
+                <TextInput
+                  style={styles.scoreInput}
+                  value={them}
+                  onChangeText={v => setThem(v.replace(/[^0-9]/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="0"
+                  placeholderTextColor={navy[500]}
+                  textAlign="center"
+                  selectTextOnFocus
+                />
+                <Text style={styles.scoreInputLabel}>Them</Text>
+              </View>
+            </View>
+
+            {hasValues && (
+              <View style={styles.resultAutoRow}>
+                <View style={[styles.resultAutoPill, { backgroundColor: resultConfig.bg }]}>
+                  <Text style={[styles.resultAutoPillText, { color: resultConfig.text }]}>
+                    {resultConfig.label}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveScoreBtn,
+                !hasValues && styles.saveScoreBtnDisabled,
+                pressed && hasValues && { opacity: 0.85 },
+              ]}
+              onPress={hasValues ? () => { onSave({ us: usNum, them: themNum }); onClose(); } : undefined}
+            >
+              <Text style={[styles.saveScoreBtnText, !hasValues && styles.saveScoreBtnTextDisabled]}>
+                Save score
+              </Text>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -418,8 +589,107 @@ const styles = StyleSheet.create({
   timeText: {
     fontFamily: fonts.mono, fontSize: 14, letterSpacing: 0.5, color: navy[100],
   },
-  venueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6] },
+  venueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[6], alignSelf: 'flex-start' },
   venueText: { fontFamily: fonts.uiMedium, fontSize: 14, color: navy[300] },
+
+  // Score display in event summary
+  scoreBlock: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[12], marginTop: spacing[16],
+  },
+  scoreNumbers: { flexDirection: 'row', alignItems: 'baseline', gap: spacing[8] },
+  scoreNum: {
+    fontFamily: fonts.monoBold, fontSize: 36, fontWeight: '700',
+    color: '#FFFFFF', lineHeight: 40,
+  },
+  scoreSep: {
+    fontFamily: fonts.mono, fontSize: 24, color: navy[400], lineHeight: 28,
+  },
+  resultPill: {
+    paddingHorizontal: spacing[10], paddingVertical: 4, borderRadius: radius.pill,
+  },
+  resultPillText: { fontFamily: fonts.uiSemiBold, fontSize: 13 },
+
+  // "Enter score" / "Edit score" row
+  scoreActionRow: {
+    paddingHorizontal: spacing[20], paddingTop: spacing[12], paddingBottom: spacing[4],
+  },
+  enterScoreBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[14], paddingVertical: spacing[6],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.50)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+  },
+  enterScoreBtnText: { fontFamily: fonts.uiSemiBold, fontSize: 13, color: TEAM[300] },
+
+  // Score entry sheet
+  sheetBackdrop: {
+    flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.60)',
+  },
+  scoreSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24], paddingTop: spacing[16],
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: navy[500],
+    alignSelf: 'center', marginBottom: spacing[20],
+  },
+  sheetTitle: {
+    fontFamily: fonts.display, fontSize: 20, fontWeight: '700',
+    letterSpacing: -0.3, color: '#FFFFFF',
+    textAlign: 'center', marginBottom: spacing[28],
+  },
+  scoreInputRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing[16], marginBottom: spacing[20],
+  },
+  scoreInputGroup: { alignItems: 'center', gap: spacing[6] },
+  scoreInput: {
+    width: 90, height: 72,
+    backgroundColor: navy[600],
+    borderRadius: radius.l,
+    borderWidth: 0.5, borderColor: navy[500],
+    fontFamily: fonts.monoBold, fontSize: 36, fontWeight: '700',
+    color: '#FFFFFF', textAlign: 'center',
+  },
+  scoreInputLabel: {
+    fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.0,
+    color: navy[400], textTransform: 'uppercase',
+  },
+  scoreInputDash: {
+    fontFamily: fonts.mono, fontSize: 28, color: navy[400], marginTop: -12,
+  },
+  resultAutoRow: {
+    alignItems: 'center', marginBottom: spacing[20],
+  },
+  resultAutoPill: {
+    paddingHorizontal: spacing[16], paddingVertical: spacing[6],
+    borderRadius: radius.pill,
+  },
+  resultAutoPillText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600',
+  },
+  saveScoreBtn: {
+    height: 52, borderRadius: radius.l,
+    backgroundColor: TEAM[500],
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing[4],
+    shadowColor: TEAM[500],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
+  },
+  saveScoreBtnDisabled: {
+    backgroundColor: navy[600], shadowOpacity: 0, elevation: 0,
+  },
+  saveScoreBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM.on,
+  },
+  saveScoreBtnTextDisabled: { color: navy[400] },
 
   // ── Section wrapper ───────────────────────────────────────────────────────
   section: {

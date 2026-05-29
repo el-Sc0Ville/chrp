@@ -213,7 +213,6 @@ function PlayerRow({
           </View>
           <View style={styles.rowBottom}>
             <RolePill role={player.role} />
-            <TrendDots trend={player.trend.slice(-3)} />
           </View>
         </View>
       </View>

@@ -6,7 +6,7 @@ const IS_MANAGER = true;
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Animated, StyleSheet,
+  View, Text, ScrollView, Pressable, Animated, Linking, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
@@ -109,7 +109,12 @@ export default function GamedayScreen() {
           <View style={styles.gameMetaRow}>
             <Text style={styles.gameTime}>{TONIGHT_GAME.time}</Text>
             <Text style={styles.gameMetaSep}>·</Text>
-            <Text style={styles.gameVenue}>📍 {TONIGHT_GAME.venue}</Text>
+            <Pressable
+              style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+              onPress={() => Linking.openURL('https://maps.google.com/?q=' + encodeURIComponent(TONIGHT_GAME.venue))}
+            >
+              <Text style={styles.gameVenue}>📍 {TONIGHT_GAME.venue}</Text>
+            </Pressable>
           </View>
         </View>
 

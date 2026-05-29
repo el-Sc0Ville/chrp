@@ -230,17 +230,21 @@ export default function CreateEventScreen() {
             <View style={styles.cardDivider} />
 
             {/* Venue */}
+            {/* TODO Phase 2: replace with Google Places Autocomplete for precise GPS coordinates */}
             <View style={styles.textFieldRow}>
               <Text style={styles.fieldLabel}>VENUE</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={venue}
-                onChangeText={setVenue}
-                placeholder="Arena name or address"
-                placeholderTextColor={navy[400]}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
+              <View style={styles.venueInputRow}>
+                <VenuePinIcon />
+                <TextInput
+                  style={[styles.fieldInput, { flex: 1 }]}
+                  value={venue}
+                  onChangeText={setVenue}
+                  placeholder="Arena name or address"
+                  placeholderTextColor={navy[400]}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </View>
             </View>
           </View>
 
@@ -299,6 +303,20 @@ export default function CreateEventScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+// ─── Venue pin icon ───────────────────────────────────────────────────────────
+
+function VenuePinIcon() {
+  return (
+    <View style={{ width: 12, height: 15, alignItems: 'center', marginTop: 2, flexShrink: 0 }}>
+      <View style={{
+        width: 10, height: 10, borderRadius: 5,
+        borderWidth: 1.5, borderColor: navy[400],
+      }} />
+      <View style={{ width: 1.5, height: 5, backgroundColor: navy[400], marginTop: -1 }} />
     </View>
   );
 }
@@ -462,6 +480,13 @@ const styles = StyleSheet.create({
     height: 0.5,
     backgroundColor: navy[600],
     marginLeft: spacing[16],
+  },
+
+  // ── Venue input row (pin icon + text input) ──────────────────────────────
+  venueInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[8],
   },
 
   // ── Text field row ───────────────────────────────────────────────────────
