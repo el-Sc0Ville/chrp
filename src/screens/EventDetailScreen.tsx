@@ -1,7 +1,7 @@
 // B-03 / C-03 · Event Detail
 // Flip IS_MANAGER to preview each role's view.
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
   TextInput, KeyboardAvoidingView, Platform, Linking, StyleSheet,
@@ -11,11 +11,19 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
-import { useGameResponse } from '../context/GameResponseContext';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { useScores, scoreResult, type Score } from '../context/ScoreContext';
+import { useEvents } from '../firebase/hooks/useEvents';
+import { useMembers } from '../firebase/hooks/useMembers';
+import { useResponses } from '../firebase/hooks/useResponses';
+import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
+
+// TODO Phase 2b: get teamId from user profile
+const TEAM_ID = 'trashdogs';
 
 type EventDetailRouteProp = RouteProp<RootStackParamList, 'EventDetail'>;
 type EventDetailNavProp   = NativeStackNavigationProp<RootStackParamList, 'EventDetail'>;
@@ -28,33 +36,6 @@ interface Player {
   jersey: number;
   respondedAt?: string;
 }
-
-// ─── Hardcoded roster data ────────────────────────────────────────────────────
-
-const PLAYERS_IN: Player[] = [
-  { id: 'p1', name: 'Jordan Mitchell', jersey: 17, respondedAt: '2h ago'  },
-  { id: 'p2', name: 'Sam Rivera',      jersey:  4, respondedAt: '3h ago'  },
-  { id: 'p3', name: 'Alex Chen',       jersey: 22, respondedAt: '5h ago'  },
-  { id: 'p4', name: 'Morgan Davis',    jersey:  9, respondedAt: '6h ago'  },
-  { id: 'p5', name: 'Taylor Brooks',   jersey: 11, respondedAt: '8h ago'  },
-  { id: 'p6', name: 'Casey Kim',       jersey: 33, respondedAt: '10h ago' },
-  { id: 'p7', name: 'Jamie Lee',       jersey:  7, respondedAt: '12h ago' },
-];
-
-const PLAYERS_OUT: Player[] = [
-  { id: 'p8', name: 'Robin Park', jersey: 15, respondedAt: '4h ago' },
-  { id: 'p9', name: 'Drew Walsh', jersey: 28, respondedAt: '7h ago' },
-];
-
-const PLAYERS_MAYBE: Player[] = [
-  { id: 'p10', name: 'Blake Torres', jersey: 6, respondedAt: '9h ago' },
-];
-
-const PLAYERS_NO_RESP: Player[] = [
-  { id: 'p11', name: 'Charlie Ross',   jersey: 19 },
-  { id: 'p12', name: 'Frankie Nguyen', jersey:  3 },
-  { id: 'p13', name: 'Riley Stone',    jersey: 44 },
-];
 
 // ─── Toggle config ────────────────────────────────────────────────────────────
 
@@ -91,18 +72,35 @@ function ManagerEventDetail() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
-  const { title, eventId, isPast = false } = route.params;
+  const { title: fallbackTitle, eventId, isPast = false } = route.params;
   const { scores, setScore } = useScores();
   const score = scores[eventId];
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
+  // TODO Phase 2b: get teamId from user profile
+  const { events } = useEvents(TEAM_ID);
+  const { members } = useMembers(TEAM_ID);
+  const { responses } = useResponses(TEAM_ID, eventId);
+  const event = events.find(e => e.id === eventId) ?? null;
+
   const [groups, setGroups] = useState<Record<GroupKey, Player[]>>({
-    in:     PLAYERS_IN,
-    out:    PLAYERS_OUT,
-    maybe:  PLAYERS_MAYBE,
-    noResp: PLAYERS_NO_RESP,
+    in: [], out: [], maybe: [], noResp: [],
   });
   const [editTarget, setEditTarget] = useState<{ player: Player; fromGroup: GroupKey } | null>(null);
+
+  useEffect(() => {
+    if (members.length === 0) return;
+    const g: Record<GroupKey, Player[]> = { in: [], out: [], maybe: [], noResp: [] };
+    members.forEach(m => {
+      const r = responses[m.userId];
+      const p: Player = { id: m.userId, name: m.displayName, jersey: m.jerseyNumber };
+      if      (r === 'in')    g.in.push(p);
+      else if (r === 'out')   g.out.push(p);
+      else if (r === 'maybe') g.maybe.push(p);
+      else                    g.noResp.push(p);
+    });
+    setGroups(g);
+  }, [members, responses]);
 
   const markAs = (toGroup: 'in' | 'out' | 'maybe') => {
     if (!editTarget) return;
@@ -123,7 +121,7 @@ function ManagerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
-        <EventSummary title={title} score={score} />
+        <EventSummary event={event} fallbackTitle={fallbackTitle} score={score} />
 
         {isPast && (
           <View style={styles.scoreActionRow}>
@@ -198,11 +196,30 @@ function PlayerEventDetail() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
-  const { title, eventId, isPast = false } = route.params;
-  const { responses, setResponse: setGameResponse } = useGameResponse();
-  const response: PlayerResponse = responses[eventId] ?? null;
+  const { title: fallbackTitle, eventId, isPast = false } = route.params;
+  const { user } = useUserContext();
   const { scores } = useScores();
   const score = scores[eventId];
+
+  // TODO Phase 2b: get teamId from user profile
+  const { events }                       = useEvents(TEAM_ID);
+  const { members }                      = useMembers(TEAM_ID);
+  const { responses: firestoreResponses } = useResponses(TEAM_ID, eventId);
+  const event = events.find(e => e.id === eventId) ?? null;
+
+  const uid      = user?.uid ?? 'anon';
+  const response: PlayerResponse = (firestoreResponses[uid] as PlayerResponse) ?? null;
+
+  const availGroups = useMemo(() => {
+    const g: Record<'in' | 'out' | 'maybe', Player[]> = { in: [], out: [], maybe: [] };
+    members.forEach(m => {
+      const r = firestoreResponses[m.userId];
+      if (r === 'in' || r === 'out' || r === 'maybe') {
+        g[r].push({ id: m.userId, name: m.displayName, jersey: m.jerseyNumber });
+      }
+    });
+    return g;
+  }, [members, firestoreResponses]);
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -214,9 +231,21 @@ function PlayerEventDetail() {
     toastTimerRef.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const handleRespond = (r: NonNullable<PlayerResponse>) => {
-    setGameResponse(eventId, r);
+  const handleRespond = async (r: NonNullable<PlayerResponse>) => {
+    if (!event) return;
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
+    const responseRef = doc(db, 'teams', TEAM_ID, 'events', event.id, 'responses', uid);
+    try {
+      await setDoc(responseRef, {
+        userId:       uid,
+        displayName:  user?.displayName ?? user?.email ?? 'Player',
+        response:     r,
+        respondedAt:  Timestamp.now(),
+        setByManager: false,
+      });
+    } catch (err) {
+      console.error('[EventDetail] response write failed:', err);
+    }
   };
 
   return (
@@ -226,7 +255,7 @@ function PlayerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
-        <EventSummary title={title} score={score} />
+        <EventSummary event={event} fallbackTitle={fallbackTitle} score={score} />
 
         {!isPast && (
           <>
@@ -240,9 +269,9 @@ function PlayerEventDetail() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>
-          <AvailGroup label="In"    dotColor={status.success.pure} players={PLAYERS_IN} />
-          <AvailGroup label="Out"   dotColor={status.error.pure}   players={PLAYERS_OUT} />
-          <AvailGroup label="Maybe" dotColor={status.alert.pure}   players={PLAYERS_MAYBE} />
+          <AvailGroup label="In"    dotColor={status.success.pure} players={availGroups.in} />
+          <AvailGroup label="Out"   dotColor={status.error.pure}   players={availGroups.out} />
+          <AvailGroup label="Maybe" dotColor={status.alert.pure}   players={availGroups.maybe} />
         </View>
 
         {!isPast && (
@@ -262,7 +291,7 @@ function PlayerEventDetail() {
 
       <SubRequestSheet
         visible={subSheetVisible}
-        gameName={title}
+        gameName={event?.title ?? fallbackTitle}
         onYes={() => {
           setSubSheetVisible(false);
           showToast('Request sent to manager');
@@ -311,9 +340,30 @@ function NavHeader({ onBack }: { onBack: () => void }) {
 
 // ─── Event summary block ──────────────────────────────────────────────────────
 
-const EVENT_VENUE = 'Arena Nord';
+function formatEventDate(ts: Timestamp): string {
+  const d = ts.toDate();
+  const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
 
-function EventSummary({ title, score }: { title: string; score?: Score }) {
+function formatEventTime(ts: Timestamp): string {
+  return ts.toDate().toLocaleTimeString('en-CA', {
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).toLowerCase();
+}
+
+function EventSummary({ event, fallbackTitle, score }: {
+  event: FirestoreEvent | null;
+  fallbackTitle: string;
+  score?: Score;
+}) {
+  const title     = event?.title   ?? fallbackTitle;
+  const typeBadge = (event?.type   ?? 'game').toUpperCase();
+  const venue     = event?.venue   ?? 'TBD';
+  const dateStr   = event ? formatEventDate(event.startsAt) : '';
+  const timeStr   = event ? formatEventTime(event.startsAt) : '';
+
   return (
     <View style={styles.eventSummary}>
       <View style={styles.teamPill}>
@@ -322,23 +372,25 @@ function EventSummary({ title, score }: { title: string; score?: Score }) {
       </View>
 
       <View style={styles.kindBadge}>
-        <Text style={styles.kindBadgeText}>GAME</Text>
+        <Text style={styles.kindBadgeText}>{typeBadge}</Text>
       </View>
 
       <Text style={styles.eventName} numberOfLines={2}>{title}</Text>
 
-      <View style={styles.dateTimeRow}>
-        <Text style={styles.dateText}>SAT, MAY 31</Text>
-        <Text style={styles.dateTimeSep}>·</Text>
-        <Text style={styles.timeText}>7:30 PM</Text>
-      </View>
+      {(dateStr || timeStr) && (
+        <View style={styles.dateTimeRow}>
+          {dateStr ? <Text style={styles.dateText}>{dateStr}</Text> : null}
+          {dateStr && timeStr ? <Text style={styles.dateTimeSep}>·</Text> : null}
+          {timeStr ? <Text style={styles.timeText}>{timeStr}</Text> : null}
+        </View>
+      )}
 
       <Pressable
         style={({ pressed }) => [styles.venueRow, pressed && { opacity: 0.7 }]}
-        onPress={() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(EVENT_VENUE)}`)}
+        onPress={() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(venue)}`)}
       >
         <PinIcon />
-        <Text style={styles.venueText}>{EVENT_VENUE}</Text>
+        <Text style={styles.venueText}>{venue}</Text>
       </Pressable>
 
       {score && (

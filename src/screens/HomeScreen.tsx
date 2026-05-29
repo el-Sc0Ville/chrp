@@ -1,6 +1,6 @@
 // Home tab — switches between B-01 (Manager) and C-01 (Player) based on role.
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Pressable, Linking, Modal,
@@ -16,6 +16,7 @@ import { db } from '../firebase';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useTeam } from '../firebase/hooks/useTeam';
 import { useResponses } from '../firebase/hooks/useResponses';
+import { useMembers } from '../firebase/hooks/useMembers';
 import type { Event as TeamEvent } from '../firebase/schema';
 
 type Response = 'in' | 'out' | 'maybe' | null;
@@ -23,14 +24,12 @@ type Response = 'in' | 'out' | 'maybe' | null;
 const TEAM_ID = 'trashdogs';
 const TEAM    = teams.trashdogs;
 
-// Placeholder availability counts — Phase 2: subscribe to responses subcollection
 interface AvailCounts {
   in: number;
   out: number;
   maybe: number;
   noResp: number;
 }
-const AVAIL: AvailCounts = { in: 7, out: 2, maybe: 1, noResp: 3 };
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
@@ -48,12 +47,47 @@ function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { unreadCount } = useNotifications();
+  const { user } = useUserContext();
 
   const { team }            = useTeam(TEAM_ID);
   const { events, loading } = useEvents(TEAM_ID);
+  const { members }         = useMembers(TEAM_ID);
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
+  const uid       = user?.uid ?? 'anon';
+
+  const { responses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
+
+  const avail = useMemo<AvailCounts>(() => {
+    const counts = { in: 0, out: 0, maybe: 0, noResp: 0 };
+    members.forEach(m => {
+      const r = responses[m.userId];
+      if      (r === 'in')    counts.in++;
+      else if (r === 'out')   counts.out++;
+      else if (r === 'maybe') counts.maybe++;
+      else                    counts.noResp++;
+    });
+    return counts;
+  }, [members, responses]);
+
+  const managerResponse: Response = (responses[uid] as Response) ?? null;
+
+  const handleManagerRespond = async (r: Response) => {
+    if (!r || !nextEvent) return;
+    const responseRef = doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid);
+    try {
+      await setDoc(responseRef, {
+        userId: uid,
+        displayName: user?.displayName ?? user?.email ?? 'Manager',
+        response: r,
+        respondedAt: Timestamp.now(),
+        setByManager: true,
+      });
+    } catch (err) {
+      console.error('[HomeScreen] manager response write failed:', err);
+    }
+  };
 
   const goToCreateEvent   = () => navigation.navigate('CreateEvent');
   const goToProfile       = () => navigation.navigate('Profile');
@@ -83,7 +117,9 @@ function ManagerHomeScreen() {
           ) : hasEvent ? (
             <ManagerHeroCard
               event={nextEvent!}
-              avail={AVAIL}
+              avail={avail}
+              response={managerResponse}
+              onRespond={handleManagerRespond}
               onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
             />
           ) : (
@@ -93,7 +129,7 @@ function ManagerHomeScreen() {
 
         {/* Region 2: quick actions */}
         {!loading && hasEvent && (
-          <ManagerQuickActions noRespCount={AVAIL.noResp} onAdd={goToCreateEvent} />
+          <ManagerQuickActions noRespCount={avail.noResp} onAdd={goToCreateEvent} />
         )}
 
         {/* Region 3: announcements */}
@@ -149,9 +185,11 @@ function ManagerPageHeader({
 
 // ─── Manager hero card ────────────────────────────────────────────────────────
 
-function ManagerHeroCard({ event, avail, onGameday }: {
+function ManagerHeroCard({ event, avail, response, onRespond, onGameday }: {
   event: TeamEvent;
   avail: AvailCounts;
+  response: Response;
+  onRespond: (r: Response) => void;
   onGameday?: () => void;
 }) {
   const { prefix, name } = parseTitleDisplay(event);
@@ -199,6 +237,14 @@ function ManagerHeroCard({ event, avail, onGameday }: {
 
       {/* Availability summary */}
       <AvailabilityBar avail={avail} />
+
+      {/* Manager's own availability toggle */}
+      <View style={[styles.dividerRow, { marginTop: spacing[12] }]}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerLabel}>Your status</Text>
+        <View style={styles.dividerLine} />
+      </View>
+      <InOutMaybeToggle response={response} onRespond={onRespond} />
 
       {/* Gameday shortcut */}
       {onGameday && (
@@ -341,6 +387,7 @@ function PlayerHomeScreen() {
   const uid = user?.uid ?? 'anon';
   const { responses: firestoreResponses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
   const response: Response = (firestoreResponses[uid] as Response) ?? null;
+  const inCount = Object.values(firestoreResponses).filter(r => r === 'in').length;
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -402,6 +449,7 @@ function PlayerHomeScreen() {
             <PlayerHeroCard
               event={nextEvent!}
               response={response}
+              inCount={inCount}
               onRespond={handleRespond}
               onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
             />
@@ -468,9 +516,10 @@ function PlayerPageHeader({
   );
 }
 
-function PlayerHeroCard({ event, response, onRespond, onGameday }: {
+function PlayerHeroCard({ event, response, inCount, onRespond, onGameday }: {
   event: TeamEvent;
   response: Response;
+  inCount: number;
   onRespond: (r: Response) => void;
   onGameday?: () => void;
 }) {
@@ -486,7 +535,7 @@ function PlayerHeroCard({ event, response, onRespond, onGameday }: {
         </View>
         <View style={styles.inCount}>
           <View style={styles.inCountDot} />
-          <Text style={styles.inCountText}>{AVAIL.in} in</Text>
+          <Text style={styles.inCountText}>{inCount} in</Text>
         </View>
       </View>
 

@@ -7,15 +7,20 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import { useDues } from '../firebase/hooks/useDues';
+import type { DuesRecord } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
+const TEAM_ID = 'trashdogs';
 
-// Per-player season dues: $500 summer, $900 winter
+// Per-player season dues fallback
 const SEASON_DUES = 500;
 
-// ─── Shared player list (mirrors RosterScreen ROSTER_DATA) ───────────────────
+// ─── Display type ─────────────────────────────────────────────────────────────
 
 type DuesStatus = 'paid' | 'partial' | 'pending' | 'overdue';
 
@@ -25,21 +30,19 @@ interface DuesPlayer {
   initials: string;
   jersey: number;
   duesStatus: DuesStatus;
-  paidAmount: number; // actual dollars received so far
+  paidAmount: number;
 }
 
-const DUES_DATA: DuesPlayer[] = [
-  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, duesStatus: 'paid',    paidAmount: 500 },
-  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, duesStatus: 'paid',    paidAmount: 500 },
-  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, duesStatus: 'paid',    paidAmount: 500 },
-  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, duesStatus: 'overdue', paidAmount:   0 },
-  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, duesStatus: 'partial', paidAmount: 200 },
-  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, duesStatus: 'paid',    paidAmount: 500 },
-  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, duesStatus: 'overdue', paidAmount:   0 },
-  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, duesStatus: 'partial', paidAmount: 250 },
-  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, duesStatus: 'pending', paidAmount:   0 },
-  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, duesStatus: 'pending', paidAmount:   0 },
-];
+function toDuesPlayer(r: DuesRecord): DuesPlayer {
+  const parts = r.displayName.trim().split(' ');
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : r.displayName.slice(0, 2).toUpperCase();
+  return {
+    id: r.userId, name: r.displayName, initials,
+    jersey: 0, duesStatus: r.status, paidAmount: r.amountPaid,
+  };
+}
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
@@ -56,7 +59,8 @@ export default function DuesScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const [players, setPlayers] = useState<DuesPlayer[]>(DUES_DATA);
+  const { dues } = useDues(TEAM_ID);
+  const players = dues.map(toDuesPlayer);
   const [seasonDues, setSeasonDues] = useState(SEASON_DUES);
   const [setAmountVisible, setSetAmountVisible] = useState(false);
   const [actionPlayer, setActionPlayer] = useState<DuesPlayer | null>(null);
@@ -69,8 +73,12 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const markPaid = (id: string) => {
-    setPlayers(prev => prev.map(p => p.id === id ? { ...p, duesStatus: 'paid', paidAmount: seasonDues } : p));
+  const markPaid = async (id: string) => {
+    await updateDoc(doc(db, 'teams', TEAM_ID, 'dues', id), {
+      status: 'paid',
+      amountPaid: seasonDues,
+      lastPaymentAt: Timestamp.now(),
+    });
     setActionPlayer(null);
     showToast('Marked as paid');
   };
@@ -205,8 +213,6 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
 // ║  C-09 · Player Dues                                                      ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-const PLAYER_SELF = DUES_DATA[0]; // Pat Normandin
-
 const PAYMENT_HISTORY = [
   { id: 'ph1', label: 'Winter 2024/25 season dues', date: 'Sep 28, 2024', amount: 900 },
   { id: 'ph2', label: 'Summer 2024 season dues',    date: 'Apr 6, 2024',  amount: 500 },
@@ -214,6 +220,12 @@ const PAYMENT_HISTORY = [
 
 function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
+  const { user } = useUserContext();
+  const { dues } = useDues(TEAM_ID);
+  const uid = user?.uid ?? 'anon';
+  const selfRecord = dues.find(d => d.userId === uid);
+  const selfPlayer = selfRecord ? toDuesPlayer(selfRecord) : null;
+  const seasonDues = selfRecord?.seasonAmount ?? SEASON_DUES;
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -249,9 +261,9 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
           <View style={styles.balanceTop}>
             <View>
               <Text style={styles.balanceLabel}>Season dues</Text>
-              <Text style={styles.balanceAmount}>${SEASON_DUES}</Text>
+              <Text style={styles.balanceAmount}>${seasonDues}</Text>
             </View>
-            <StatusPill status={PLAYER_SELF.duesStatus} large />
+            <StatusPill status={selfPlayer?.duesStatus ?? 'pending'} large />
           </View>
 
           <View style={styles.balanceMeta}>

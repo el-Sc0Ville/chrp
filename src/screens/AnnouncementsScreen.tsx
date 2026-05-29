@@ -9,14 +9,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { doc, setDoc, updateDoc, deleteDoc, collection, Timestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
+import type { Announcement as FirestoreAnnouncement } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
-const CURRENT_USER_ID = 'r1'; // Pat Normandin — replace with auth uid in Phase 2
 const MAX_CHARS = 500;
+const TEAM_ID = 'trashdogs';
 
-interface Announcement {
+interface DisplayAnn {
   id: string;
   authorId: string;
   authorName: string;
@@ -28,54 +32,26 @@ interface Announcement {
   totalPlayers: number;
 }
 
-const SEED: Announcement[] = [
-  {
-    id: 'ann1',
-    authorId: 'r1',
-    authorName: 'Pat Normandin',
-    authorInitials: 'PN',
-    body: "⚠️ Heads up: ice time has moved to 9:45 pm this Sunday. Gate C is still our meeting point — see you out there.",
-    timestamp: '2 hours ago',
-    isPinned: true,
-    seenBy: 10,
-    totalPlayers: 12,
-  },
-  {
-    id: 'ann2',
-    authorId: 'r1',
-    authorName: 'Pat Normandin',
-    authorInitials: 'PN',
-    body: "New jerseys are in — see me before or after Sunday's game to pick yours up. Extra smalls and XLs still available.",
-    timestamp: '1 day ago',
-    isPinned: false,
-    seenBy: 8,
-    totalPlayers: 12,
-  },
-  {
-    id: 'ann3',
-    authorId: 'r2',
-    authorName: 'Marco Beauchamp',
-    authorInitials: 'MB',
-    body: "Friendly reminder to update your availability for the playoff rounds — we need a final headcount by Thursday noon.",
-    timestamp: '3 days ago',
-    isPinned: false,
-    seenBy: 11,
-    totalPlayers: 12,
-  },
-  {
-    id: 'ann4',
-    authorId: 'r1',
-    authorName: 'Pat Normandin',
-    authorInitials: 'PN',
-    body: "Great game last week everyone 🎉 Heading to Tavern on the Green after Sunday's game if you're in — first round's on me.",
-    timestamp: '5 days ago',
-    isPinned: false,
-    seenBy: 12,
-    totalPlayers: 12,
-  },
-];
+function toDisplayAnn(a: FirestoreAnnouncement): DisplayAnn {
+  const parts = a.authorName.trim().split(' ');
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : a.authorName.slice(0, 2).toUpperCase();
+  const diffMs    = Date.now() - a.createdAt.toDate().getTime();
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays  = Math.floor(diffMs / 86_400_000);
+  const timestamp = diffHours < 1 ? 'Just now'
+    : diffHours < 24 ? `${diffHours}h ago`
+    : diffDays === 1 ? '1 day ago'
+    : `${diffDays} days ago`;
+  return {
+    id: a.id, authorId: a.authorId, authorName: a.authorName,
+    authorInitials: initials, body: a.body, timestamp,
+    isPinned: a.pinned, seenBy: 0, totalPlayers: 12,
+  };
+}
 
-function sortAnnouncements(list: Announcement[]): Announcement[] {
+function sortAnnouncements(list: DisplayAnn[]): DisplayAnn[] {
   return [...list].sort((a, b) => {
     if (a.isPinned === b.isPinned) return 0;
     return a.isPinned ? -1 : 1;
@@ -98,11 +74,13 @@ export default function AnnouncementsScreen({ embedded }: { embedded?: boolean }
 function ManagerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [announcements, setAnnouncements] = useState<Announcement[]>(SEED);
-  const [postVisible, setPostVisible]     = useState(false);
-  const [editingId, setEditingId]         = useState<string | null>(null);
-  const [actionItem, setActionItem]       = useState<Announcement | null>(null);
-  const [toast, setToast]                 = useState<string | null>(null);
+  const { user } = useUserContext();
+  const { announcements: firestoreAnnouncements } = useAnnouncements(TEAM_ID);
+  const announcements = firestoreAnnouncements.map(toDisplayAnn);
+  const [postVisible, setPostVisible]   = useState(false);
+  const [editingId, setEditingId]       = useState<string | null>(null);
+  const [actionItem, setActionItem]     = useState<DisplayAnn | null>(null);
+  const [toast, setToast]               = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string) => {
@@ -115,25 +93,22 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     ? announcements.find(a => a.id === editingId) ?? null
     : null;
 
-  const handlePost = (body: string, isPinned: boolean) => {
+  const handlePost = async (body: string, isPinned: boolean) => {
     if (editingId) {
-      setAnnouncements(prev =>
-        prev.map(a => a.id === editingId ? { ...a, body, isPinned } : a),
-      );
+      await updateDoc(doc(db, 'teams', TEAM_ID, 'announcements', editingId), {
+        body, pinned: isPinned,
+      });
       showToast('Announcement updated');
     } else {
-      const next: Announcement = {
-        id: `ann${Date.now()}`,
-        authorId: CURRENT_USER_ID,
-        authorName: 'Pat Normandin',
-        authorInitials: 'PN',
+      const newRef = doc(collection(db, 'teams', TEAM_ID, 'announcements'));
+      await setDoc(newRef, {
+        id: newRef.id,
+        authorId: user?.uid ?? 'anon',
+        authorName: user?.displayName ?? 'Manager',
         body,
-        timestamp: 'Just now',
-        isPinned,
-        seenBy: 1,
-        totalPlayers: 12,
-      };
-      setAnnouncements(prev => [next, ...prev]);
+        pinned: isPinned,
+        createdAt: Timestamp.now(),
+      });
       showToast('Sent to all players');
     }
     setPostVisible(false);
@@ -147,9 +122,9 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     setPostVisible(true);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!actionItem) return;
-    setAnnouncements(prev => prev.filter(a => a.id !== actionItem.id));
+    await deleteDoc(doc(db, 'teams', TEAM_ID, 'announcements', actionItem.id));
     setActionItem(null);
     showToast('Announcement deleted');
   };
@@ -206,7 +181,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
             showSeenBy
             style={idx === 0 ? undefined : styles.cardGap}
             onPress={() => goToThread(item.id)}
-            onLongPress={item.authorId === CURRENT_USER_ID ? () => setActionItem(item) : undefined}
+            onLongPress={item.authorId === user?.uid ? () => setActionItem(item) : undefined}
           />
         ))}
       </ScrollView>
@@ -251,7 +226,9 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 function PlayerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [readIds, setReadIds] = useState<Set<string>>(new Set(['ann3', 'ann4']));
+  const { announcements: firestoreAnnouncements } = useAnnouncements(TEAM_ID);
+  const announcements = firestoreAnnouncements.map(toDisplayAnn);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set<string>());
 
   const markRead = (id: string) => setReadIds(prev => new Set([...prev, id]));
   const goToThread = (id: string) => {
@@ -279,7 +256,7 @@ function PlayerView({ embedded }: { embedded?: boolean }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {sortAnnouncements(SEED).map((item, idx) => (
+        {sortAnnouncements(announcements).map((item, idx) => (
           <AnnouncementCard
             key={item.id}
             announcement={item}
@@ -308,7 +285,7 @@ function AnnouncementCard({
   onPress,
   onLongPress,
 }: {
-  announcement: Announcement;
+  announcement: DisplayAnn;
   showSeenBy: boolean;
   unread?: boolean;
   style?: object;
@@ -454,7 +431,7 @@ function PostSheet({
 function ActionSheet({
   announcement, onEdit, onDelete, onClose,
 }: {
-  announcement: Announcement;
+  announcement: DisplayAnn;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
