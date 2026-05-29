@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import TeamScreen from '../screens/TeamScreen';
@@ -18,9 +19,11 @@ import NotificationCentreScreen from '../screens/NotificationCentreScreen';
 import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
-import { navy, teams, fonts } from '../theme';
+import { navy, teams, fonts, spacing } from '../theme';
+import { onAuthStateChanged, type User } from '../firebase/auth';
 
 export type RootStackParamList = {
+  Auth: undefined;
   Tabs: undefined;
   Gameday: undefined;
   Profile: undefined;
@@ -188,7 +191,36 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     letterSpacing: 0.3,
   },
+
+  // ── Loading screen ────────────────────────────────────────────────────────
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: navy[800],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingWordmark: {
+    fontFamily: fonts.display,
+    fontSize: 32, fontWeight: '700',
+    letterSpacing: -0.8, color: '#FFFFFF',
+  },
 });
+
+// ─── Loading screen ────────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.loadingScreen, { paddingTop: insets.top }]}>
+      <Text style={styles.loadingWordmark}>Chrp</Text>
+      <ActivityIndicator
+        color={teams.trashdogs[300]}
+        size="small"
+        style={{ marginTop: spacing[16] }}
+      />
+    </View>
+  );
+}
 
 // ─── Navigators ───────────────────────────────────────────────────────────────
 
@@ -206,20 +238,35 @@ function TabsNavigator() {
 }
 
 export default function AppNavigator() {
+  // undefined = resolving, null = signed out, User = signed in
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+
+  useEffect(() => {
+    return onAuthStateChanged(u => setUser(u));
+  }, []);
+
+  if (user === undefined) return <LoadingScreen />;
+
   return (
     <GameResponseProvider>
     <NotificationProvider>
     <ScoreProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Tabs"               component={TabsNavigator} />
-        <Stack.Screen name="Gameday"            component={GamedayScreen} />
-        <Stack.Screen name="Profile"            component={ProfileScreen} />
-        <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />
-        <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
-        <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
-        <Stack.Screen name="Subs"               component={SubsScreen} />
-        <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />
+        {user ? (
+          <>
+            <Stack.Screen name="Tabs"               component={TabsNavigator} />
+            <Stack.Screen name="Gameday"            component={GamedayScreen} />
+            <Stack.Screen name="Profile"            component={ProfileScreen} />
+            <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />
+            <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
+            <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
+            <Stack.Screen name="Subs"               component={SubsScreen} />
+            <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />
+          </>
+        ) : (
+          <Stack.Screen name="Auth" component={AuthScreen} />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
     </ScoreProvider>
