@@ -11,11 +11,11 @@ import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
 import { useNotifications } from '../context/NotificationContext';
-import { useGameResponse } from '../context/GameResponseContext';
 import { useUserContext } from '../context/UserContext';
 import { db } from '../firebase';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useTeam } from '../firebase/hooks/useTeam';
+import { useResponses } from '../firebase/hooks/useResponses';
 import type { Event as TeamEvent } from '../firebase/schema';
 
 type Response = 'in' | 'out' | 'maybe' | null;
@@ -328,7 +328,6 @@ function PlayerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { unreadCount } = useNotifications();
-  const { responses, setResponse: setGameResponse } = useGameResponse();
   const { user } = useUserContext();
 
   const { team }            = useTeam(TEAM_ID);
@@ -336,7 +335,11 @@ function PlayerHomeScreen() {
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
-  const response: Response = responses[nextEvent?.id ?? 'home_game'] ?? null;
+
+  // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
+  const uid = user?.uid ?? 'anon';
+  const { responses: firestoreResponses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
+  const response: Response = (firestoreResponses[uid] as Response) ?? null;
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -350,22 +353,22 @@ function PlayerHomeScreen() {
 
   const handleRespond = async (r: Response) => {
     if (!r || !nextEvent) return;
-    setGameResponse(nextEvent.id, r);
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
-    // TODO Phase 2b: replace mockUser.id with real Firebase Auth uid
-    const uid = user?.uid ?? 'anon';
+    // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
+    const responseRef = doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid);
+    console.log('[HomeScreen] writing response', r, 'to', responseRef.path);
     try {
-      await setDoc(
-        doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid),
-        {
-          userId:       uid,
-          displayName:  user?.email ?? 'Player',
-          response:     r,
-          respondedAt:  Timestamp.now(),
-          setByManager: false,
-        },
-      );
-    } catch { /* write fails silently in dev */ }
+      await setDoc(responseRef, {
+        userId:       uid,
+        displayName:  user?.email ?? 'Player',
+        response:     r,
+        respondedAt:  Timestamp.now(),
+        setByManager: false,
+      });
+      console.log('[HomeScreen] response write succeeded');
+    } catch (err) {
+      console.error('[HomeScreen] response write failed:', err);
+    }
   };
 
   const goToProfile       = () => navigation.navigate('Profile');
