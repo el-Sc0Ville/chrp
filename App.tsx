@@ -26,6 +26,7 @@ import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
 
 export default function App() {
+  console.log('APP STARTED');
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_300Light,
     SpaceGrotesk_400Regular,

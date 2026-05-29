@@ -158,6 +158,7 @@ export default function AuthScreen() {
               <Pressable
                 style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
                 onPress={async () => {
+                  console.log('MANAGER BUTTON PRESSED');
                   const { user } = await signInAnonymously(auth);
                   setMockUser(user, true);
                 }}
