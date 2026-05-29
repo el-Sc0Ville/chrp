@@ -14,6 +14,9 @@ import AnnouncementThreadScreen from '../screens/AnnouncementThreadScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
 import CreateEventScreen from '../screens/CreateEventScreen';
 import SubsScreen from '../screens/SubsScreen';
+import NotificationCentreScreen from '../screens/NotificationCentreScreen';
+import { GameResponseProvider } from '../context/GameResponseContext';
+import { NotificationProvider } from '../context/NotificationContext';
 import { navy, teams, fonts } from '../theme';
 
 export type RootStackParamList = {
@@ -24,6 +27,7 @@ export type RootStackParamList = {
   EventDetail: { eventId: string; title: string };
   CreateEvent: undefined;
   Subs: undefined;
+  Notifications: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -202,6 +206,8 @@ function TabsNavigator() {
 
 export default function AppNavigator() {
   return (
+    <GameResponseProvider>
+    <NotificationProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Tabs"               component={TabsNavigator} />
@@ -211,7 +217,10 @@ export default function AppNavigator() {
         <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
         <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
         <Stack.Screen name="Subs"               component={SubsScreen} />
+        <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />
       </Stack.Navigator>
     </NavigationContainer>
+    </NotificationProvider>
+    </GameResponseProvider>
   );
 }

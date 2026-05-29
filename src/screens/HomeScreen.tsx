@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
+import { useNotifications } from '../context/NotificationContext';
+import { useGameResponse } from '../context/GameResponseContext';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
@@ -35,12 +37,14 @@ export default function HomeScreen() {
 function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { unreadCount } = useNotifications();
   const hasEvent = true;
 
-  const goToCreateEvent = () => navigation.navigate('CreateEvent');
-  const goToProfile     = () => navigation.navigate('Profile');
-  const goToGameday     = () => navigation.navigate('Gameday');
-  const goToTeam        = () => navigation.navigate('Team');
+  const goToCreateEvent  = () => navigation.navigate('CreateEvent');
+  const goToProfile      = () => navigation.navigate('Profile');
+  const goToGameday      = () => navigation.navigate('Gameday');
+  const goToTeam         = () => navigation.navigate('Team');
+  const goToNotifications = () => navigation.navigate('Notifications');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -48,7 +52,13 @@ function ManagerHomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <ManagerPageHeader hasEvent={hasEvent} onAdd={goToCreateEvent} onProfile={goToProfile} />
+        <ManagerPageHeader
+          hasEvent={hasEvent}
+          onAdd={goToCreateEvent}
+          onProfile={goToProfile}
+          onNotifications={goToNotifications}
+          unreadCount={unreadCount}
+        />
 
         {/* Region 1: hero or empty state */}
         <View style={styles.heroWrapper}>
@@ -73,23 +83,28 @@ function ManagerHomeScreen() {
 // ─── Manager header — team switcher + title + "+" add-event button + avatar ──
 
 function ManagerPageHeader({
-  hasEvent, onAdd, onProfile,
+  hasEvent, onAdd, onProfile, onNotifications, unreadCount,
 }: {
   hasEvent: boolean;
   onAdd: () => void;
   onProfile: () => void;
+  onNotifications: () => void;
+  unreadCount: number;
 }) {
   return (
     <View style={styles.header}>
-      <View>
-        <View style={styles.teamPill}>
-          <View style={styles.teamDot} />
-          <Text style={styles.teamPillText}>Trashdogs</Text>
-          <Text style={styles.teamPillChevron}>›</Text>
+      <View style={styles.headerLeft}>
+        <BellButton onPress={onNotifications} unreadCount={unreadCount} />
+        <View>
+          <View style={styles.teamPill}>
+            <View style={styles.teamDot} />
+            <Text style={styles.teamPillText}>Trashdogs</Text>
+            <Text style={styles.teamPillChevron}>›</Text>
+          </View>
+          <Text style={styles.pageTitle}>
+            {hasEvent ? 'Next up' : 'No games yet'}
+          </Text>
         </View>
-        <Text style={styles.pageTitle}>
-          {hasEvent ? 'Next up' : 'No games yet'}
-        </Text>
       </View>
 
       <View style={styles.headerButtons}>
@@ -278,12 +293,16 @@ function ManagerEmptyCard() {
 function PlayerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [response, setResponse] = useState<Response>('in');
+  const { unreadCount } = useNotifications();
+  const { responses, setResponse: setGameResponse } = useGameResponse();
+  const response: Response = responses['home_game'] ?? null;
+  const handleRespond = (r: Response) => setGameResponse('home_game', r);
   const hasEvent = true;
 
-  const goToProfile = () => navigation.navigate('Profile');
-  const goToGameday = () => navigation.navigate('Gameday');
-  const goToTeam    = () => navigation.navigate('Team');
+  const goToProfile       = () => navigation.navigate('Profile');
+  const goToGameday       = () => navigation.navigate('Gameday');
+  const goToTeam          = () => navigation.navigate('Team');
+  const goToNotifications = () => navigation.navigate('Notifications');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -291,13 +310,18 @@ function PlayerHomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <PlayerPageHeader hasEvent={hasEvent} onProfile={goToProfile} />
+        <PlayerPageHeader
+          hasEvent={hasEvent}
+          onProfile={goToProfile}
+          onNotifications={goToNotifications}
+          unreadCount={unreadCount}
+        />
 
         <View style={styles.heroWrapper}>
           {hasEvent ? (
             <PlayerHeroCard
               response={response}
-              onRespond={setResponse}
+              onRespond={handleRespond}
               onGameday={IS_GAME_DAY ? goToGameday : undefined}
             />
           ) : (
@@ -313,18 +337,28 @@ function PlayerHomeScreen() {
   );
 }
 
-function PlayerPageHeader({ hasEvent, onProfile }: { hasEvent: boolean; onProfile: () => void }) {
+function PlayerPageHeader({
+  hasEvent, onProfile, onNotifications, unreadCount,
+}: {
+  hasEvent: boolean;
+  onProfile: () => void;
+  onNotifications: () => void;
+  unreadCount: number;
+}) {
   return (
     <View style={styles.header}>
-      <View>
-        <View style={styles.teamPill}>
-          <View style={styles.teamDot} />
-          <Text style={styles.teamPillText}>Trashdogs</Text>
-          <Text style={styles.teamPillChevron}>›</Text>
+      <View style={styles.headerLeft}>
+        <BellButton onPress={onNotifications} unreadCount={unreadCount} />
+        <View>
+          <View style={styles.teamPill}>
+            <View style={styles.teamDot} />
+            <Text style={styles.teamPillText}>Trashdogs</Text>
+            <Text style={styles.teamPillChevron}>›</Text>
+          </View>
+          <Text style={styles.pageTitle}>
+            {hasEvent ? 'Next up' : 'No games yet'}
+          </Text>
         </View>
-        <Text style={styles.pageTitle}>
-          {hasEvent ? 'Next up' : 'No games yet'}
-        </Text>
       </View>
       <View style={styles.avatarOffset}>
         <AvatarPill onPress={onProfile} />
@@ -393,6 +427,54 @@ function PlayerEmptyCard() {
       <Text style={styles.emptyBody}>
         Ask your manager to add a game — you'll get a notification the moment it's posted.
       </Text>
+    </View>
+  );
+}
+
+// ─── Bell button ─────────────────────────────────────────────────────────────
+
+function BellButton({ onPress, unreadCount }: { onPress: () => void; unreadCount: number }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.6 }]}
+      onPress={onPress}
+    >
+      <BellIcon />
+      {unreadCount > 0 && (
+        <View style={styles.bellBadge}>
+          <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function BellIcon() {
+  const color = 'rgba(229,234,242,0.75)';
+  return (
+    <View style={{ width: 22, height: 24 }}>
+      {/* stem */}
+      <View style={{
+        position: 'absolute', top: 0, left: 10,
+        width: 2, height: 4, backgroundColor: color, borderRadius: 1,
+      }} />
+      {/* dome */}
+      <View style={{
+        position: 'absolute', top: 3, left: 2,
+        width: 18, height: 13,
+        borderTopLeftRadius: 9, borderTopRightRadius: 9,
+        borderWidth: 1.5, borderColor: color, borderBottomWidth: 0,
+      }} />
+      {/* rim */}
+      <View style={{
+        position: 'absolute', top: 15, left: 1,
+        width: 20, height: 2, backgroundColor: color, borderRadius: 1,
+      }} />
+      {/* clapper */}
+      <View style={{
+        position: 'absolute', bottom: 0, left: 9,
+        width: 4, height: 4, borderRadius: 2, backgroundColor: color,
+      }} />
     </View>
   );
 }
@@ -555,6 +637,44 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.5,
     color: '#FFFFFF',
+  },
+
+  // Left side: bell + title stack
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[10],
+    flex: 1,
+  },
+
+  // Bell button
+  bellBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: navy[800],
+  },
+  bellBadgeText: {
+    fontFamily: fonts.mono,
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 10,
   },
 
   // Manager header right: "+" button + avatar pill

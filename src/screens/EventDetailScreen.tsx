@@ -12,6 +12,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useGameResponse } from '../context/GameResponseContext';
 
 const TEAM = teams.trashdogs;
 
@@ -132,7 +133,10 @@ function PlayerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title } = route.params;
-  const [response, setResponse] = useState<PlayerResponse>('in');
+  const { responses, setResponse: setGameResponse } = useGameResponse();
+  const eventId = route.params.eventId;
+  const response: PlayerResponse = responses[eventId] ?? null;
+  const handleRespond = (r: NonNullable<PlayerResponse>) => setGameResponse(eventId, r);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -145,7 +149,7 @@ function PlayerEventDetail() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Are you in?</Text>
-          <InOutMaybeToggle response={response} onRespond={setResponse} />
+          <InOutMaybeToggle response={response} onRespond={handleRespond} />
         </View>
 
         <View style={styles.sectionDivider} />
