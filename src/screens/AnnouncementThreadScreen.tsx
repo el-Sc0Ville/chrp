@@ -1,138 +1,103 @@
 // Announcement thread — original post + flat reply list + reply input.
-// TODO Phase 2: wire replies to Firestore subcollection.
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TextInput, Pressable,
   KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { doc, collection, addDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore';
+import { db } from '../firebase';
+import { navy, teams, fonts, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
+import { useReplies } from '../firebase/hooks/useReplies';
+import type { Announcement, AnnouncementReply } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
+const TEAM    = teams.trashdogs;
+const TEAM_ID = 'trashdogs';
 
-// ─── Announcement data (mirrors AnnouncementsScreen SEED) ────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface Post {
-  id: string;
-  authorName: string;
-  authorInitials: string;
-  body: string;
-  timestamp: string;
-  isPinned: boolean;
+function formatTimestamp(createdAt: Timestamp | null | undefined): string {
+  if (!createdAt) return 'Just now';
+  const diffMs    = Date.now() - createdAt.toDate().getTime();
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays  = Math.floor(diffMs / 86_400_000);
+  return diffHours < 1  ? 'Just now'
+    : diffHours < 24    ? `${diffHours}h ago`
+    : diffDays === 1    ? '1 day ago'
+    : `${diffDays} days ago`;
 }
 
-const POSTS: Record<string, Post> = {
-  ann1: {
-    id: 'ann1',
-    authorName: 'Pat Normandin',
-    authorInitials: 'PN',
-    body: "⚠️ Heads up: ice time has moved to 9:45 pm this Sunday. Gate C is still our meeting point — see you out there.",
-    timestamp: '2 hours ago',
-    isPinned: true,
-  },
-  ann2: {
-    id: 'ann2',
-    authorName: 'Pat Normandin',
-    authorInitials: 'PN',
-    body: "New jerseys are in — see me before or after Sunday's game to pick yours up. Extra smalls and XLs still available.",
-    timestamp: '1 day ago',
-    isPinned: false,
-  },
-  ann3: {
-    id: 'ann3',
-    authorName: 'Marco Beauchamp',
-    authorInitials: 'MB',
-    body: "Friendly reminder to update your availability for the playoff rounds — we need a final headcount by Thursday noon.",
-    timestamp: '3 days ago',
-    isPinned: false,
-  },
-  ann4: {
-    id: 'ann4',
-    authorName: 'Pat Normandin',
-    authorInitials: 'PN',
-    body: "Great game last week everyone 🎉 Heading to Tavern on the Green after Sunday's game if you're in — first round's on me.",
-    timestamp: '5 days ago',
-    isPinned: false,
-  },
-};
-
-// ─── Hardcoded replies ────────────────────────────────────────────────────────
-
-interface Reply {
-  id: string;
-  authorName: string;
-  authorInitials: string;
-  body: string;
-  timestamp: string;
+function getInitials(name: string): string {
+  const parts = name.trim().split(' ');
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
 }
-
-const SEED_REPLIES: Record<string, Reply[]> = {
-  ann1: [
-    { id: 'r1a', authorName: 'Marco Beauchamp',  authorInitials: 'MB', body: "Got it. Does that change the warm-up time too?",             timestamp: '1 hour ago' },
-    { id: 'r1b', authorName: 'Sophie Tremblay',  authorInitials: 'ST', body: "Thanks for the heads up! 👍",                               timestamp: '45 min ago' },
-    { id: 'r1c', authorName: 'Jake Kowalski',    authorInitials: 'JK', body: "Will we still use the same entrance?",                      timestamp: '20 min ago' },
-  ],
-  ann2: [
-    { id: 'r2a', authorName: 'Tyler MacPherson', authorInitials: 'TM', body: "Can we pick them up before the game on Sunday?",            timestamp: '20 hours ago' },
-    { id: 'r2b', authorName: 'Nina Petrov',      authorInitials: 'NP', body: "I'm a medium — saving you the trouble of guessing 😄",      timestamp: '18 hours ago' },
-  ],
-  ann3: [
-    { id: 'r3a', authorName: 'Lena Bergström',   authorInitials: 'LB', body: "Done! I put myself down for all three rounds.",             timestamp: '2 days ago' },
-    { id: 'r3b', authorName: 'Chris Fontaine',   authorInitials: 'CF', body: "Updated. Good luck to us all 🏒",                           timestamp: '2 days ago' },
-  ],
-  ann4: [
-    { id: 'r4a', authorName: 'Marco Beauchamp',  authorInitials: 'MB', body: "🙌 Count me in!",                                           timestamp: '4 days ago' },
-    { id: 'r4b', authorName: 'Sam Delacroix',    authorInitials: 'SD', body: "I'll be there. Great game though!",                         timestamp: '4 days ago' },
-    { id: 'r4c', authorName: 'Tyler MacPherson', authorInitials: 'TM', body: "On my way after ice time. See you all there.",              timestamp: '4 days ago' },
-  ],
-};
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AnnouncementThreadScreen() {
-  const insets  = useSafeAreaInsets();
-  const route   = useRoute<any>();
+  const insets     = useSafeAreaInsets();
+  const route      = useRoute<any>();
   const navigation = useNavigation<any>();
+  const { user }   = useUserContext();
+
   const { announcementId } = route.params as { announcementId: string };
 
-  const post    = POSTS[announcementId];
-  const [replies, setReplies] = useState<Reply[]>(SEED_REPLIES[announcementId] ?? []);
-  const [draft,  setDraft]    = useState('');
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [draft,        setDraft]        = useState('');
+  const [sending,      setSending]      = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const sendReply = () => {
+  const { replies } = useReplies(TEAM_ID, announcementId);
+
+  useEffect(() => {
+    const ref = doc(db, 'teams', TEAM_ID, 'announcements', announcementId);
+    const unsub = onSnapshot(ref, snap => {
+      if (snap.exists()) setAnnouncement({ id: snap.id, ...snap.data() } as Announcement);
+    });
+    return unsub;
+  }, [announcementId]);
+
+  const sendReply = async () => {
     const text = draft.trim();
-    if (!text) return;
-    const next: Reply = {
-      id: `new-${Date.now()}`,
-      authorName: 'Pat Normandin',
-      authorInitials: 'PN',
-      body: text,
-      timestamp: 'Just now',
-    };
-    setReplies(prev => [...prev, next]);
+    if (!text || sending) return;
+    setSending(true);
     setDraft('');
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      await addDoc(
+        collection(db, 'teams', TEAM_ID, 'announcements', announcementId, 'replies'),
+        {
+          authorId:   user?.uid ?? 'anon',
+          authorName: user?.displayName ?? 'Player',
+          body:       text,
+          createdAt:  serverTimestamp(),
+        },
+      );
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+    } catch (err) {
+      console.error('[AnnouncementThread] reply write failed:', err);
+    } finally {
+      setSending(false);
+    }
   };
 
-  if (!post) return null;
+  // Show a minimal shell while the document loads (avoids blank screen)
+  if (!announcement) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <NavHeader onBack={() => navigation.goBack()} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-
-      {/* ── Nav header ── */}
-      <View style={styles.navHeader}>
-        <Pressable
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backBtnText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.navTitle} numberOfLines={1}>Thread</Text>
-        <View style={styles.backBtn} />
-      </View>
+      <NavHeader onBack={() => navigation.goBack()} />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -152,21 +117,21 @@ export default function AnnouncementThreadScreen() {
 
           {/* ── Original post ── */}
           <View style={styles.originalCard}>
-            {post.isPinned && (
+            {announcement.pinned && (
               <View style={styles.pinnedBanner}>
                 <Text style={styles.pinnedBannerText}>📌  Pinned</Text>
               </View>
             )}
             <View style={styles.cardHeader}>
               <View style={styles.authorAvatar}>
-                <Text style={styles.authorAvatarText}>{post.authorInitials}</Text>
+                <Text style={styles.authorAvatarText}>{getInitials(announcement.authorName)}</Text>
               </View>
               <View style={styles.authorMeta}>
-                <Text style={styles.authorName}>{post.authorName}</Text>
-                <Text style={styles.cardTimestamp}>{post.timestamp}</Text>
+                <Text style={styles.authorName}>{announcement.authorName}</Text>
+                <Text style={styles.cardTimestamp}>{formatTimestamp(announcement.createdAt)}</Text>
               </View>
             </View>
-            <Text style={styles.cardBody}>{post.body}</Text>
+            <Text style={styles.cardBody}>{announcement.body}</Text>
           </View>
 
           {/* ── Thread label ── */}
@@ -199,7 +164,7 @@ export default function AnnouncementThreadScreen() {
             returnKeyType="default"
           />
           <Pressable
-            style={[styles.sendBtn, !draft.trim() && styles.sendBtnDisabled]}
+            style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled]}
             onPress={sendReply}
           >
             <Text style={styles.sendBtnText}>↑</Text>
@@ -210,18 +175,33 @@ export default function AnnouncementThreadScreen() {
   );
 }
 
-// ─── Reply row ────────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ReplyRow({ reply }: { reply: Reply }) {
+function NavHeader({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={styles.navHeader}>
+      <Pressable
+        style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+        onPress={onBack}
+      >
+        <Text style={styles.backBtnText}>‹ Back</Text>
+      </Pressable>
+      <Text style={styles.navTitle} numberOfLines={1}>Thread</Text>
+      <View style={styles.backBtn} />
+    </View>
+  );
+}
+
+function ReplyRow({ reply }: { reply: AnnouncementReply }) {
   return (
     <View style={styles.replyRow}>
       <View style={styles.replyAvatar}>
-        <Text style={styles.replyAvatarText}>{reply.authorInitials}</Text>
+        <Text style={styles.replyAvatarText}>{getInitials(reply.authorName)}</Text>
       </View>
       <View style={styles.replyContent}>
         <View style={styles.replyMeta}>
           <Text style={styles.replyAuthor}>{reply.authorName}</Text>
-          <Text style={styles.replyTimestamp}>{reply.timestamp}</Text>
+          <Text style={styles.replyTimestamp}>{formatTimestamp(reply.createdAt)}</Text>
         </View>
         <Text style={styles.replyBody}>{reply.body}</Text>
       </View>
