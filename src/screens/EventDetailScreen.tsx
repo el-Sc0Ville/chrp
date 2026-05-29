@@ -14,7 +14,7 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
-import { useScores, scoreResult, type Score } from '../context/ScoreContext';
+import { scoreResult, type Score } from '../context/ScoreContext';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useResponses } from '../firebase/hooks/useResponses';
@@ -73,12 +73,9 @@ function ManagerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
-  const { scores, setScore } = useScores();
-  const score = scores[eventId];
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
   const handleSaveScore = async (s: Score) => {
-    setScore(eventId, s);
     try {
       await updateDoc(doc(db, 'teams', TEAM_ID, 'events', eventId), {
         scoreUs: s.us, scoreThem: s.them,
@@ -132,7 +129,7 @@ function ManagerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
-        <EventSummary event={event} fallbackTitle={fallbackTitle} score={score} />
+        <EventSummary event={event} fallbackTitle={fallbackTitle} />
 
         {isPast && (
           <View style={styles.scoreActionRow}>
@@ -141,7 +138,7 @@ function ManagerEventDetail() {
               onPress={() => setScoreSheetVisible(true)}
             >
               <Text style={styles.enterScoreBtnText}>
-                {score ? 'Edit score' : '+ Enter score'}
+                {event?.scoreUs !== undefined ? 'Edit score' : '+ Enter score'}
               </Text>
             </Pressable>
           </View>
@@ -185,7 +182,7 @@ function ManagerEventDetail() {
 
       <ScoreSheet
         visible={scoreSheetVisible}
-        initial={score ?? (event?.scoreUs !== undefined && event?.scoreThem !== undefined ? { us: event.scoreUs, them: event.scoreThem } : undefined)}
+        initial={event?.scoreUs !== undefined && event?.scoreThem !== undefined ? { us: event.scoreUs, them: event.scoreThem } : undefined}
         onSave={handleSaveScore}
         onClose={() => setScoreSheetVisible(false)}
       />
@@ -209,8 +206,6 @@ function PlayerEventDetail() {
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
   const { user } = useUserContext();
-  const { scores } = useScores();
-  const score = scores[eventId];
 
   // TODO Phase 2b: get teamId from user profile
   const { events }                       = useEvents(TEAM_ID);
@@ -266,7 +261,7 @@ function PlayerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
-        <EventSummary event={event} fallbackTitle={fallbackTitle} score={score} />
+        <EventSummary event={event} fallbackTitle={fallbackTitle} />
 
         {!isPast && (
           <View style={styles.section}>
@@ -362,10 +357,9 @@ function formatEventTime(ts: Timestamp): string {
   }).toLowerCase();
 }
 
-function EventSummary({ event, fallbackTitle, score }: {
+function EventSummary({ event, fallbackTitle }: {
   event: FirestoreEvent | null;
   fallbackTitle: string;
-  score?: Score;
 }) {
   const title     = event?.title   ?? fallbackTitle;
   const typeBadge = (event?.type   ?? 'game').toUpperCase();
@@ -373,11 +367,9 @@ function EventSummary({ event, fallbackTitle, score }: {
   const dateStr   = event ? formatEventDate(event.startsAt) : '';
   const timeStr   = event ? formatEventTime(event.startsAt) : '';
 
-  const displayScore: Score | undefined = score ?? (
-    event?.scoreUs !== undefined && event?.scoreThem !== undefined
-      ? { us: event.scoreUs, them: event.scoreThem }
-      : undefined
-  );
+  const displayScore = event?.scoreUs !== undefined && event?.scoreThem !== undefined
+    ? { us: event.scoreUs, them: event.scoreThem }
+    : undefined;
 
   return (
     <View style={styles.eventSummary}>

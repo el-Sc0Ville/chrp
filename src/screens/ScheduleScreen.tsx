@@ -185,11 +185,11 @@ function ScoreBadge({ score, win }: { score: string; win?: boolean }) {
 }
 
 function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void }) {
-  const { isManager } = useUserContext();
+  const { isManager, user } = useUserContext();
   const { responses } = useResponses(TEAM_ID, event.id);
-  console.log('EventRow responses:', event.id, responses);
-  const inCount  = Object.values(responses).filter(r => r === 'in').length;
-  const outCount = Object.values(responses).filter(r => r === 'out').length;
+  const inCount    = Object.values(responses).filter(r => r === 'in').length;
+  const outCount   = Object.values(responses).filter(r => r === 'out').length;
+  const myResponse = (responses[user?.uid ?? ''] as PlayerResponse) ?? null;
   return (
     <Pressable
       onPress={onPress}
@@ -205,7 +205,7 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
       </View>
       {isManager
         ? <ManagerPill inCount={inCount} outCount={outCount} />
-        : <PlayerPill response={event.playerResponse} />
+        : <PlayerPill response={myResponse} />
       }
     </Pressable>
   );
