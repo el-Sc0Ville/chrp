@@ -7,13 +7,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
-import { sendMagicLink, type User } from '../firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '../firebase/config';
+import { sendMagicLink } from '../firebase/auth';
 import { useUserContext } from '../context/UserContext';
 import { seedDatabase } from '../firebase/seed';
 
 const TEAM = teams.trashdogs;
-
-const DEV_MOCK_USER = { uid: 'dev', email: 'dev@chrp.app' } as User;
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
@@ -157,13 +157,19 @@ export default function AuthScreen() {
             <View style={styles.devRow}>
               <Pressable
                 style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => setMockUser(DEV_MOCK_USER, true)}
+                onPress={async () => {
+                  const { user } = await signInAnonymously(auth);
+                  setMockUser(user, true);
+                }}
               >
                 <Text style={styles.devBtnText}>Enter as Manager (dev)</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => setMockUser(DEV_MOCK_USER, false)}
+                onPress={async () => {
+                  const { user } = await signInAnonymously(auth);
+                  setMockUser(user, false);
+                }}
               >
                 <Text style={styles.devBtnText}>Enter as Player (dev)</Text>
               </Pressable>
