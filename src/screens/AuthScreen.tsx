@@ -163,7 +163,7 @@ export default function AuthScreen() {
                     console.log('Attempting anonymous sign in...');
                     const result = await signInAnonymously(auth);
                     console.log('Anonymous sign in SUCCESS, uid:', result.user.uid);
-                    const mockUser = { ...result.user, uid: 'u1', displayName: 'Jake Morrison' };
+                    const mockUser = { ...result.user, uid: 'u3', displayName: 'Pat Normandin' };
                     setMockUser(mockUser as typeof result.user, true);
                     console.log('setMockUser called');
                   } catch (e) {

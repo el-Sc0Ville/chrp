@@ -37,13 +37,16 @@ function toDisplayAnn(a: FirestoreAnnouncement): DisplayAnn {
   const initials = parts.length >= 2
     ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
     : a.authorName.slice(0, 2).toUpperCase();
-  const diffMs    = Date.now() - a.createdAt.toDate().getTime();
-  const diffHours = Math.floor(diffMs / 3_600_000);
-  const diffDays  = Math.floor(diffMs / 86_400_000);
-  const timestamp = diffHours < 1 ? 'Just now'
-    : diffHours < 24 ? `${diffHours}h ago`
-    : diffDays === 1 ? '1 day ago'
-    : `${diffDays} days ago`;
+  let timestamp = 'Just now';
+  if (a.createdAt) {
+    const diffMs    = Date.now() - a.createdAt.toDate().getTime();
+    const diffHours = Math.floor(diffMs / 3_600_000);
+    const diffDays  = Math.floor(diffMs / 86_400_000);
+    timestamp = diffHours < 1 ? 'Just now'
+      : diffHours < 24 ? `${diffHours}h ago`
+      : diffDays === 1 ? '1 day ago'
+      : `${diffDays} days ago`;
+  }
   return {
     id: a.id, authorId: a.authorId, authorName: a.authorName,
     authorInitials: initials, body: a.body, timestamp,
