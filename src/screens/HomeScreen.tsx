@@ -1,8 +1,4 @@
 // Home tab — switches between B-01 (Manager) and C-01 (Player) based on role.
-// Temporary scaffolding: flip IS_MANAGER to preview each view.
-// Replace with Firebase auth role check when backend is connected.
-
-const IS_GAME_DAY = true;
 
 import React, { useState, useRef } from 'react';
 import {
@@ -11,18 +7,30 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
 import { useNotifications } from '../context/NotificationContext';
 import { useGameResponse } from '../context/GameResponseContext';
 import { useUserContext } from '../context/UserContext';
+import { db } from '../firebase';
+import { useEvents } from '../firebase/hooks/useEvents';
+import { useTeam } from '../firebase/hooks/useTeam';
+import type { Event as TeamEvent } from '../firebase/schema';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
-const TEAM = teams.trashdogs;
+const TEAM_ID = 'trashdogs';
+const TEAM    = teams.trashdogs;
 
-// Placeholder availability counts for B-01
-const AVAIL = { in: 7, out: 2, maybe: 1, noResp: 3 } as const;
+// Placeholder availability counts — Phase 2: subscribe to responses subcollection
+interface AvailCounts {
+  in: number;
+  out: number;
+  maybe: number;
+  noResp: number;
+}
+const AVAIL: AvailCounts = { in: 7, out: 2, maybe: 1, noResp: 3 };
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
@@ -39,12 +47,17 @@ function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { unreadCount } = useNotifications();
-  const hasEvent = true;
 
-  const goToCreateEvent  = () => navigation.navigate('CreateEvent');
-  const goToProfile      = () => navigation.navigate('Profile');
-  const goToGameday      = () => navigation.navigate('Gameday');
-  const goToTeam         = () => navigation.navigate('Team');
+  const { team }            = useTeam(TEAM_ID);
+  const { events, loading } = useEvents(TEAM_ID);
+
+  const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
+  const hasEvent  = nextEvent !== null;
+
+  const goToCreateEvent   = () => navigation.navigate('CreateEvent');
+  const goToProfile       = () => navigation.navigate('Profile');
+  const goToGameday       = () => navigation.navigate('Gameday');
+  const goToTeam          = () => navigation.navigate('Team');
   const goToNotifications = () => navigation.navigate('Notifications');
 
   return (
@@ -54,6 +67,7 @@ function ManagerHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ManagerPageHeader
+          teamName={team?.name ?? 'Trashdogs'}
           hasEvent={hasEvent}
           onAdd={goToCreateEvent}
           onProfile={goToProfile}
@@ -63,14 +77,23 @@ function ManagerHomeScreen() {
 
         {/* Region 1: hero or empty state */}
         <View style={styles.heroWrapper}>
-          {hasEvent
-            ? <ManagerHeroCard onGameday={IS_GAME_DAY ? goToGameday : undefined} />
-            : <ManagerEmptyCard />
-          }
+          {loading ? (
+            <HeroSkeleton />
+          ) : hasEvent ? (
+            <ManagerHeroCard
+              event={nextEvent!}
+              avail={AVAIL}
+              onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
+            />
+          ) : (
+            <ManagerEmptyCard />
+          )}
         </View>
 
-        {/* Region 2: quick actions (between card and announcements) */}
-        {hasEvent && <ManagerQuickActions noRespCount={AVAIL.noResp} onAdd={goToCreateEvent} />}
+        {/* Region 2: quick actions */}
+        {!loading && hasEvent && (
+          <ManagerQuickActions noRespCount={AVAIL.noResp} onAdd={goToCreateEvent} />
+        )}
 
         {/* Region 3: announcements */}
         <AnnouncementsSection hasEvent={hasEvent} onViewAll={goToTeam} />
@@ -81,11 +104,12 @@ function ManagerHomeScreen() {
   );
 }
 
-// ─── Manager header — team switcher + title + "+" add-event button + avatar ──
+// ─── Manager header ───────────────────────────────────────────────────────────
 
 function ManagerPageHeader({
-  hasEvent, onAdd, onProfile, onNotifications, unreadCount,
+  teamName, hasEvent, onAdd, onProfile, onNotifications, unreadCount,
 }: {
+  teamName: string;
   hasEvent: boolean;
   onAdd: () => void;
   onProfile: () => void;
@@ -99,7 +123,7 @@ function ManagerPageHeader({
         <View>
           <View style={styles.teamPill}>
             <View style={styles.teamDot} />
-            <Text style={styles.teamPillText}>Trashdogs</Text>
+            <Text style={styles.teamPillText}>{teamName}</Text>
             <Text style={styles.teamPillChevron}>›</Text>
           </View>
           <Text style={styles.pageTitle}>
@@ -122,39 +146,47 @@ function ManagerPageHeader({
   );
 }
 
-// ─── Manager hero card — event details + availability summary bar ─────────────
+// ─── Manager hero card ────────────────────────────────────────────────────────
 
-function ManagerHeroCard({ onGameday }: { onGameday?: () => void }) {
+function ManagerHeroCard({ event, avail, onGameday }: {
+  event: TeamEvent;
+  avail: AvailCounts;
+  onGameday?: () => void;
+}) {
+  const { prefix, name } = parseTitleDisplay(event);
+  const responded = avail.in + avail.out + avail.maybe;
+  const total     = responded + avail.noResp;
+
   return (
     <View style={styles.heroCard}>
       {/* Meta row */}
       <View style={styles.metaRow}>
         <View style={styles.metaLeft}>
           <View style={styles.gamePill}>
-            <Text style={styles.gamePillText}>Game</Text>
+            <Text style={styles.gamePillText}>{EVENT_TYPE_LABEL[event.type]}</Text>
           </View>
-          <Text style={styles.metaSubtext}>{IS_GAME_DAY ? 'Tonight' : 'In 2 days'}</Text>
+          <Text style={styles.metaSubtext}>{formatRelativeDay(event.startsAt)}</Text>
         </View>
-        <Text style={styles.respondedTally}>13 / 16 responded</Text>
+        <Text style={styles.respondedTally}>{responded} / {total} responded</Text>
       </View>
 
       {/* Day + time */}
       <View style={styles.daytimeRow}>
-        <Text style={styles.dayText}>{IS_GAME_DAY ? 'Today' : 'Friday'}</Text>
-        <Text style={styles.timeText}>7:30 pm</Text>
+        <Text style={styles.dayText}>{formatDay(event.startsAt)}</Text>
+        <Text style={styles.timeText}>{formatTime(event.startsAt)}</Text>
       </View>
 
-      {/* Opponent */}
-      <Text style={styles.vsLabel}>vs.</Text>
-      <Text style={styles.opponentText}>Ice Sharks</Text>
+      {/* Opponent / title */}
+      {prefix ? <Text style={styles.vsLabel}>{prefix}</Text> : null}
+      <Text style={styles.opponentText}>{name}</Text>
 
       {/* Venue pill */}
       <Pressable
         style={({ pressed }) => [styles.venuePill, pressed && { opacity: 0.7 }]}
-        onPress={() => Linking.openURL('https://maps.google.com/?q=' + encodeURIComponent('The Barn — Rink 2'))}
+        onPress={() => Linking.openURL('https://maps.google.com/?q=' + encodeURIComponent(event.venue))}
       >
         <Text style={styles.venuePin}>📍</Text>
-        <Text style={styles.venueText}>The Barn — Rink 2</Text>
+        <Text style={styles.venueText}>{event.venue}</Text>
       </Pressable>
 
       {/* Divider */}
@@ -164,10 +196,10 @@ function ManagerHeroCard({ onGameday }: { onGameday?: () => void }) {
         <View style={styles.dividerLine} />
       </View>
 
-      {/* Availability summary — 4 chips in a row */}
-      <AvailabilityBar avail={AVAIL} />
+      {/* Availability summary */}
+      <AvailabilityBar avail={avail} />
 
-      {/* Game day shortcut */}
+      {/* Gameday shortcut */}
       {onGameday && (
         <Pressable style={styles.gamedayLink} onPress={onGameday}>
           <Text style={styles.gamedayLinkText}>Who's here →</Text>
@@ -177,9 +209,7 @@ function ManagerHeroCard({ onGameday }: { onGameday?: () => void }) {
   );
 }
 
-// ─── Availability bar — four status chips in a horizontal row ─────────────────
-
-type AvailCounts = typeof AVAIL;
+// ─── Availability bar ─────────────────────────────────────────────────────────
 
 const AVAIL_CHIPS: {
   key: keyof AvailCounts;
@@ -299,8 +329,14 @@ function PlayerHomeScreen() {
   const navigation = useNavigation<any>();
   const { unreadCount } = useNotifications();
   const { responses, setResponse: setGameResponse } = useGameResponse();
-  const response: Response = responses['home_game'] ?? null;
-  const hasEvent = true;
+  const { user } = useUserContext();
+
+  const { team }            = useTeam(TEAM_ID);
+  const { events, loading } = useEvents(TEAM_ID);
+
+  const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
+  const hasEvent  = nextEvent !== null;
+  const response: Response = responses[nextEvent?.id ?? 'home_game'] ?? null;
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -312,9 +348,24 @@ function PlayerHomeScreen() {
     toastTimerRef.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const handleRespond = (r: Response) => {
-    setGameResponse('home_game', r);
+  const handleRespond = async (r: Response) => {
+    if (!r || !nextEvent) return;
+    setGameResponse(nextEvent.id, r);
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
+    // TODO Phase 2b: replace mockUser.id with real Firebase Auth uid
+    const uid = user?.uid ?? 'anon';
+    try {
+      await setDoc(
+        doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid),
+        {
+          userId:       uid,
+          displayName:  user?.email ?? 'Player',
+          response:     r,
+          respondedAt:  Timestamp.now(),
+          setByManager: false,
+        },
+      );
+    } catch { /* write fails silently in dev */ }
   };
 
   const goToProfile       = () => navigation.navigate('Profile');
@@ -329,6 +380,7 @@ function PlayerHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <PlayerPageHeader
+          teamName={team?.name ?? 'Trashdogs'}
           hasEvent={hasEvent}
           onProfile={goToProfile}
           onNotifications={goToNotifications}
@@ -336,11 +388,14 @@ function PlayerHomeScreen() {
         />
 
         <View style={styles.heroWrapper}>
-          {hasEvent ? (
+          {loading ? (
+            <HeroSkeleton />
+          ) : hasEvent ? (
             <PlayerHeroCard
+              event={nextEvent!}
               response={response}
               onRespond={handleRespond}
-              onGameday={IS_GAME_DAY ? goToGameday : undefined}
+              onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
             />
           ) : (
             <PlayerEmptyCard />
@@ -354,7 +409,7 @@ function PlayerHomeScreen() {
 
       <SubRequestSheet
         visible={subSheetVisible}
-        gameName="vs. Ice Sharks"
+        gameName={nextEvent?.title ?? ''}
         onYes={() => {
           setSubSheetVisible(false);
           showToast('Request sent to manager');
@@ -375,8 +430,9 @@ function PlayerHomeScreen() {
 }
 
 function PlayerPageHeader({
-  hasEvent, onProfile, onNotifications, unreadCount,
+  teamName, hasEvent, onProfile, onNotifications, unreadCount,
 }: {
+  teamName: string;
   hasEvent: boolean;
   onProfile: () => void;
   onNotifications: () => void;
@@ -389,7 +445,7 @@ function PlayerPageHeader({
         <View>
           <View style={styles.teamPill}>
             <View style={styles.teamDot} />
-            <Text style={styles.teamPillText}>Trashdogs</Text>
+            <Text style={styles.teamPillText}>{teamName}</Text>
             <Text style={styles.teamPillChevron}>›</Text>
           </View>
           <Text style={styles.pageTitle}>
@@ -404,37 +460,39 @@ function PlayerPageHeader({
   );
 }
 
-function PlayerHeroCard({ response, onRespond, onGameday }: {
+function PlayerHeroCard({ event, response, onRespond, onGameday }: {
+  event: TeamEvent;
   response: Response;
   onRespond: (r: Response) => void;
   onGameday?: () => void;
 }) {
+  const { prefix, name } = parseTitleDisplay(event);
   return (
     <View style={styles.heroCard}>
       <View style={styles.metaRow}>
         <View style={styles.metaLeft}>
           <View style={styles.gamePill}>
-            <Text style={styles.gamePillText}>Game</Text>
+            <Text style={styles.gamePillText}>{EVENT_TYPE_LABEL[event.type]}</Text>
           </View>
-          <Text style={styles.metaSubtext}>{IS_GAME_DAY ? 'Tonight' : 'In 2 days'}</Text>
+          <Text style={styles.metaSubtext}>{formatRelativeDay(event.startsAt)}</Text>
         </View>
         <View style={styles.inCount}>
           <View style={styles.inCountDot} />
-          <Text style={styles.inCountText}>10 in</Text>
+          <Text style={styles.inCountText}>{AVAIL.in} in</Text>
         </View>
       </View>
 
       <View style={styles.daytimeRow}>
-        <Text style={styles.dayText}>{IS_GAME_DAY ? 'Today' : 'Friday'}</Text>
-        <Text style={styles.timeText}>7:30 pm</Text>
+        <Text style={styles.dayText}>{formatDay(event.startsAt)}</Text>
+        <Text style={styles.timeText}>{formatTime(event.startsAt)}</Text>
       </View>
 
-      <Text style={styles.vsLabel}>vs.</Text>
-      <Text style={styles.opponentText}>Ice Sharks</Text>
+      {prefix ? <Text style={styles.vsLabel}>{prefix}</Text> : null}
+      <Text style={styles.opponentText}>{name}</Text>
 
       <View style={styles.venuePill}>
         <Text style={styles.venuePin}>📍</Text>
-        <Text style={styles.venueText}>The Barn — Rink 2</Text>
+        <Text style={styles.venueText}>{event.venue}</Text>
       </View>
 
       <View style={styles.dividerRow}>
@@ -464,6 +522,20 @@ function PlayerEmptyCard() {
       <Text style={styles.emptyBody}>
         Ask your manager to add a game — you'll get a notification the moment it's posted.
       </Text>
+    </View>
+  );
+}
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function HeroSkeleton() {
+  return (
+    <View style={[styles.heroCard, { minHeight: 280 }]}>
+      <View style={[styles.skeletonLine, { width: '40%', height: 20, marginBottom: spacing[16] }]} />
+      <View style={[styles.skeletonLine, { width: '55%', height: 26, marginBottom: spacing[8]  }]} />
+      <View style={[styles.skeletonLine, { width: '70%', height: 42, marginBottom: spacing[12] }]} />
+      <View style={[styles.skeletonLine, { width: '45%', height: 28, marginBottom: spacing[20] }]} />
+      <View style={[styles.skeletonLine, { width: '100%', height: 48 }]} />
     </View>
   );
 }
@@ -674,7 +746,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
 
-  // ── Header (shared shell, different right element per role) ──────────────
+  // ── Header (shared shell) ─────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -716,16 +788,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     color: '#FFFFFF',
   },
-
-  // Left side: bell + title stack
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing[10],
     flex: 1,
   },
-
-  // Bell button
   bellBtn: {
     width: 36,
     height: 36,
@@ -754,8 +822,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 10,
   },
-
-  // Manager header right: "+" button + avatar pill
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -783,13 +849,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: -1,
   },
-
-  // Player header right: avatar pill (with top offset to match)
   avatarOffset: {
     marginTop: 24,
   },
 
-  // ── Hero card (shared shell) ─────────────────────────────────────────────
+  // ── Hero card ─────────────────────────────────────────────────────────────
   heroWrapper: {
     paddingHorizontal: spacing[16],
   },
@@ -860,8 +924,6 @@ const styles = StyleSheet.create({
     color: '#7AE6B1',
     fontWeight: '600',
   },
-
-  // Day / time
   daytimeRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -884,8 +946,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     lineHeight: 22,
   },
-
-  // Opponent
   vsLabel: {
     fontFamily: fonts.displayRegular,
     fontSize: 17,
@@ -904,8 +964,6 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     marginBottom: 12,
   },
-
-  // Venue
   venuePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -926,8 +984,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'rgba(255,255,255,0.90)',
   },
-
-  // Divider
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -948,7 +1004,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ── Availability bar (B-01) ──────────────────────────────────────────────
+  // ── Availability bar ──────────────────────────────────────────────────────
   availRow: {
     flexDirection: 'row',
     gap: 6,
@@ -994,7 +1050,7 @@ const styles = StyleSheet.create({
     color: TEAM[300],
   },
 
-  // ── Quick actions (B-01) ─────────────────────────────────────────────────
+  // ── Quick actions ─────────────────────────────────────────────────────────
   quickActions: {
     paddingHorizontal: spacing[16],
     paddingTop: spacing[12],
@@ -1034,7 +1090,7 @@ const styles = StyleSheet.create({
     color: TEAM.on,
   },
 
-  // ── Player toggle (C-01) ─────────────────────────────────────────────────
+  // ── Player toggle ─────────────────────────────────────────────────────────
   toggleContainer: {
     flexDirection: 'row',
     height: 56,
@@ -1078,7 +1134,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ── Empty state (shared layout, different copy per role) ─────────────────
+  // ── Empty state ───────────────────────────────────────────────────────────
   emptyCard: {
     borderRadius: radius.xxl,
     padding: spacing[40],
@@ -1120,7 +1176,13 @@ const styles = StyleSheet.create({
     maxWidth: 240,
   },
 
-  // ── Announcements (shared) ───────────────────────────────────────────────
+  // ── Loading skeleton ──────────────────────────────────────────────────────
+  skeletonLine: {
+    backgroundColor: navy[600],
+    borderRadius: radius.s,
+  },
+
+  // ── Announcements ─────────────────────────────────────────────────────────
   announcements: {
     paddingHorizontal: spacing[20],
     paddingTop: spacing[24],
@@ -1248,7 +1310,54 @@ const styles = StyleSheet.create({
   toastText: { fontFamily: fonts.uiSemiBold, fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
 });
 
-// ─── Utility ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  game: 'Game', practice: 'Practice', social: 'Social',
+};
+
+function isEventToday(ts: Timestamp): boolean {
+  const d = ts.toDate();
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() &&
+         d.getMonth()    === n.getMonth()    &&
+         d.getDate()     === n.getDate();
+}
+
+function formatDay(ts: Timestamp): string {
+  const d     = ts.toDate();
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const evDay = new Date(d.getFullYear(),   d.getMonth(),   d.getDate());
+  const diff  = Math.round((evDay.getTime() - today.getTime()) / 86_400_000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return d.toLocaleDateString('en-CA', { weekday: 'long' });
+}
+
+function formatRelativeDay(ts: Timestamp): string {
+  const d     = ts.toDate();
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const evDay = new Date(d.getFullYear(),   d.getMonth(),   d.getDate());
+  const diff  = Math.round((evDay.getTime() - today.getTime()) / 86_400_000);
+  if (diff === 0) return 'Tonight';
+  if (diff === 1) return 'Tomorrow';
+  return `In ${diff} days`;
+}
+
+function formatTime(ts: Timestamp): string {
+  return ts.toDate().toLocaleTimeString('en-CA', {
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).toLowerCase();
+}
+
+function parseTitleDisplay(event: TeamEvent): { prefix: string; name: string } {
+  if (event.type !== 'game') return { prefix: '', name: event.title };
+  if (event.title.startsWith('vs '))  return { prefix: 'vs.', name: event.title.slice(3) };
+  if (event.title.startsWith('@ '))   return { prefix: '@',   name: event.title.slice(2) };
+  return { prefix: '', name: event.title };
+}
 
 function hexToRgbVals(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16);
