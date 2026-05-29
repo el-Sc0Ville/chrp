@@ -10,6 +10,7 @@ import {
   Switch, Alert, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { navy, ice, teams, status, fonts, type as T, spacing, radius } from '../theme';
 
 const TEAM = teams.trashdogs;
@@ -24,6 +25,7 @@ const USER_INITIALS    = 'PN';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
 
   // Editable profile fields
   const [name, setName]             = useState(INITIAL_NAME);
@@ -97,15 +99,25 @@ export default function ProfileScreen() {
     >
       {/* ── Page header ── */}
       <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Profile</Text>
-        {isDirty && (
+        <View style={styles.pageHeaderRow}>
           <Pressable
-            style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.7 }]}
-            onPress={handleSave}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+            onPress={() => navigation.goBack()}
+            hitSlop={12}
           >
-            <Text style={styles.saveBtnText}>Save</Text>
+            <Text style={styles.backChevron}>‹</Text>
+            <Text style={styles.backBtnText}>Back</Text>
           </Pressable>
-        )}
+          {isDirty && (
+            <Pressable
+              style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.7 }]}
+              onPress={handleSave}
+            >
+              <Text style={styles.saveBtnText}>Save</Text>
+            </Pressable>
+          )}
+        </View>
+        <Text style={styles.pageTitle}>Profile</Text>
       </View>
 
       <ScrollView
@@ -301,7 +313,7 @@ function ToggleRow({
     <View style={styles.toggleRow}>
       <View style={styles.toggleLeft}>
         <Text style={styles.toggleIcon}>{icon}</Text>
-        <View>
+        <View style={styles.toggleTextBlock}>
           <Text style={styles.toggleLabel}>{label}</Text>
           {subtitle && <Text style={styles.toggleSubtitle}>{subtitle}</Text>}
         </View>
@@ -342,13 +354,24 @@ const styles = StyleSheet.create({
 
   // ── Page header ───────────────────────────────────────────────────────────
   pageHeader: {
+    paddingHorizontal: spacing[20],
+    paddingTop: spacing[10],
+    paddingBottom: spacing[14],
+  },
+  pageHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[20],
-    paddingTop: spacing[16],
-    paddingBottom: spacing[14],
+    marginBottom: spacing[6],
   },
+  backBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start',
+  },
+  backChevron: {
+    fontFamily: fonts.display, fontSize: 26, lineHeight: 28,
+    color: TEAM[300], marginTop: -2,
+  },
+  backBtnText: { fontFamily: fonts.uiMedium, fontSize: 15, color: TEAM[300] },
   pageTitle: {
     ...T.headingXXL,
     color: '#FFFFFF',
@@ -640,6 +663,9 @@ const styles = StyleSheet.create({
     width: 26,
     textAlign: 'center',
     marginTop: 2,
+  },
+  toggleTextBlock: {
+    flex: 1,
   },
   toggleLabel: {
     fontFamily: fonts.uiMedium,
