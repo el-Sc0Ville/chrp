@@ -12,8 +12,8 @@ import { useNavigation } from '@react-navigation/native';
 import { navy, teams, ice, status, fonts, type as T, spacing, radius } from '../theme';
 import AvatarPill from '../components/AvatarPill';
 import { useScores, scoreLabel, scoreResult, type Score } from '../context/ScoreContext';
+import { useUserContext } from '../context/UserContext';
 
-const IS_MANAGER = true;
 const TEAM = teams.trashdogs;
 
 // ─── Data model ───────────────────────────────────────────────────────────────
@@ -205,6 +205,7 @@ function ScoreBadge({ score, win }: { score: string; win?: boolean }) {
 }
 
 function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void }) {
+  const { isManager } = useUserContext();
   return (
     <Pressable
       onPress={onPress}
@@ -218,7 +219,7 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
           {event.venue} · {event.time}
         </Text>
       </View>
-      {IS_MANAGER
+      {isManager
         ? <ManagerPill inCount={event.in} outCount={event.out} />
         : <PlayerPill response={event.playerResponse} />
       }
@@ -272,15 +273,16 @@ function PastSection({ onNavigate }: { onNavigate: (id: string, title: string) =
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
+  const { isManager } = useUserContext();
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No upcoming events</Text>
       <Text style={styles.emptySub}>
-        {IS_MANAGER
+        {isManager
           ? 'Schedule your first event and notify the team.'
           : "Your manager hasn't added any events yet."}
       </Text>
-      {IS_MANAGER && (
+      {isManager && (
         <Pressable
           onPress={onAdd}
           style={({ pressed }) => [styles.emptyAddBtn, pressed && { opacity: 0.8 }]}
@@ -293,6 +295,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: () => void }) {
+  const { isManager } = useUserContext();
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
@@ -302,7 +305,7 @@ function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: ()
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Schedule</Text>
         <View style={styles.headerRight}>
-          {IS_MANAGER && (
+          {isManager && (
             <TouchableOpacity
               style={styles.addBtn}
               activeOpacity={0.75}

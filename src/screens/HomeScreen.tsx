@@ -2,7 +2,6 @@
 // Temporary scaffolding: flip IS_MANAGER to preview each view.
 // Replace with Firebase auth role check when backend is connected.
 
-const IS_MANAGER = true;
 const IS_GAME_DAY = true;
 
 import React, { useState, useRef } from 'react';
@@ -16,6 +15,7 @@ import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
 import { useNotifications } from '../context/NotificationContext';
 import { useGameResponse } from '../context/GameResponseContext';
+import { useUserContext } from '../context/UserContext';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
@@ -27,7 +27,8 @@ const AVAIL = { in: 7, out: 2, maybe: 1, noResp: 3 } as const;
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  return IS_MANAGER ? <ManagerHomeScreen /> : <PlayerHomeScreen />;
+  const { isManager } = useUserContext();
+  return isManager ? <ManagerHomeScreen /> : <PlayerHomeScreen />;
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗

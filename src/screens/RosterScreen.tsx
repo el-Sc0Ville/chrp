@@ -1,14 +1,13 @@
 // Roster screen — B-07 Manager Roster / C-07 Player Roster.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 
-const IS_MANAGER = true;
-
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
 
 type PlayerRole = 'manager' | 'player';
 type TrendDot = 'in' | 'out' | 'maybe' | null;
@@ -40,7 +39,8 @@ const ROSTER_DATA: RosterPlayer[] = [
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function RosterScreen({ embedded }: { embedded?: boolean }) {
-  return IS_MANAGER
+  const { isManager } = useUserContext();
+  return isManager
     ? <ManagerRosterScreen embedded={embedded} />
     : <PlayerRosterScreen  embedded={embedded} />;
 }

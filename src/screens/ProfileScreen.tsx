@@ -2,8 +2,6 @@
 // Flip IS_MANAGER to preview manager vs player view.
 // Replace hardcoded user constants with Firebase auth when backend is wired.
 
-const IS_MANAGER = true;
-
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
@@ -12,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, ice, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 
@@ -24,6 +23,7 @@ const USER_INITIALS    = 'PN';
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
+  const { isManager } = useUserContext();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
@@ -130,7 +130,7 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Player balance card (player view only) ── */}
-        {!IS_MANAGER && <PlayerBalanceCard />}
+        {!isManager && <PlayerBalanceCard />}
 
         {/* ── Hero card ── */}
         <View style={styles.heroCard}>

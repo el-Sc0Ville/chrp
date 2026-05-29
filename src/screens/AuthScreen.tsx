@@ -7,12 +7,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
-import { sendMagicLink } from '../firebase/auth';
+import { sendMagicLink, type User } from '../firebase/auth';
+import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 
+const DEV_MOCK_USER = { uid: 'dev', email: 'dev@chrp.app' } as User;
+
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
+  const { setMockUser } = useUserContext();
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
   const [sent,        setSent]        = useState(false);
@@ -142,6 +146,26 @@ export default function AuthScreen() {
                 </Pressable>
               </View>
             )}
+          </View>
+        )}
+        {/* ── Dev bypass ── */}
+        {__DEV__ && (
+          <View style={styles.devArea}>
+            <Text style={styles.devLabel}>dev shortcuts</Text>
+            <View style={styles.devRow}>
+              <Pressable
+                style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => setMockUser(DEV_MOCK_USER, true)}
+              >
+                <Text style={styles.devBtnText}>Enter as Manager (dev)</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => setMockUser(DEV_MOCK_USER, false)}
+              >
+                <Text style={styles.devBtnText}>Enter as Player (dev)</Text>
+              </Pressable>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -304,6 +328,34 @@ const styles = StyleSheet.create({
   redeemBtnText: {
     fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600',
     color: TEAM.on,
+  },
+
+  // ── Dev bypass ───────────────────────────────────────────────────────────
+  devArea: {
+    alignItems: 'center',
+    marginTop: spacing[32],
+    paddingTop: spacing[20],
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    gap: spacing[10],
+  },
+  devLabel: {
+    fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 1.6,
+    textTransform: 'uppercase', color: navy[600],
+  },
+  devRow: {
+    flexDirection: 'row', gap: spacing[8],
+  },
+  devBtn: {
+    flex: 1,
+    paddingVertical: spacing[10], paddingHorizontal: spacing[8],
+    borderRadius: radius.l, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+  },
+  devBtnText: {
+    fontFamily: fonts.uiMedium, fontSize: 12, fontWeight: '500',
+    color: navy[400], textAlign: 'center',
   },
 });
 

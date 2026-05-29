@@ -1,8 +1,6 @@
 // B-03 / C-03 · Event Detail
 // Flip IS_MANAGER to preview each role's view.
 
-const IS_MANAGER = true;
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
@@ -14,6 +12,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useGameResponse } from '../context/GameResponseContext';
+import { useUserContext } from '../context/UserContext';
 import { useScores, scoreResult, type Score } from '../context/ScoreContext';
 
 const TEAM = teams.trashdogs;
@@ -80,7 +79,8 @@ const RESPONSE_ON: Record<NonNullable<PlayerResponse>, string> = {
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function EventDetailScreen() {
-  return IS_MANAGER ? <ManagerEventDetail /> : <PlayerEventDetail />;
+  const { isManager } = useUserContext();
+  return isManager ? <ManagerEventDetail /> : <PlayerEventDetail />;
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -289,6 +289,7 @@ function PlayerEventDetail() {
 // ─── Nav header ───────────────────────────────────────────────────────────────
 
 function NavHeader({ onBack }: { onBack: () => void }) {
+  const { isManager } = useUserContext();
   return (
     <View style={styles.navHeader}>
       <Pressable
@@ -299,7 +300,7 @@ function NavHeader({ onBack }: { onBack: () => void }) {
         <Text style={styles.backChevron}>‹</Text>
         <Text style={styles.backLabel}>Schedule</Text>
       </Pressable>
-      {IS_MANAGER && (
+      {isManager && (
         <Pressable hitSlop={12}>
           <Text style={styles.editLabel}>Edit</Text>
         </Pressable>

@@ -2,8 +2,6 @@
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 // Accepts embedded={true} when rendered inside TeamScreen (no header, no safe area top).
 
-const IS_MANAGER = true;
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput, Switch,
@@ -12,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 const CURRENT_USER_ID = 'r1'; // Pat Normandin — replace with auth uid in Phase 2
@@ -86,7 +85,8 @@ function sortAnnouncements(list: Announcement[]): Announcement[] {
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function AnnouncementsScreen({ embedded }: { embedded?: boolean }) {
-  return IS_MANAGER
+  const { isManager } = useUserContext();
+  return isManager
     ? <ManagerView embedded={embedded} />
     : <PlayerView  embedded={embedded} />;
 }

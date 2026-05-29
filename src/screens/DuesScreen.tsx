@@ -1,8 +1,6 @@
 // Dues screen — B-09 Manager Dues / Player Dues.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 
-const IS_MANAGER = true;
-
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, TextInput,
@@ -10,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 
@@ -45,7 +44,8 @@ const DUES_DATA: DuesPlayer[] = [
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function DuesScreen({ embedded }: { embedded?: boolean }) {
-  return IS_MANAGER
+  const { isManager } = useUserContext();
+  return isManager
     ? <ManagerDuesScreen embedded={embedded} />
     : <PlayerDuesScreen  embedded={embedded} />;
 }

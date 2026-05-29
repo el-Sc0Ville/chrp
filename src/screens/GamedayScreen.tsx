@@ -2,8 +2,6 @@
 // Same view for all users. IS_MANAGER gates only the "Message latecomers" button.
 // TODO Phase 2: replace hardcoded data with real geofence listener via expo-location.
 
-const IS_MANAGER = true;
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Animated, Linking, StyleSheet,
@@ -13,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 
@@ -57,6 +56,7 @@ const GAMEDAY_PLAYERS: GamedayPlayer[] = [
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function GamedayScreen() {
+  const { isManager } = useUserContext();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [toast, setToast] = useState<string | null>(null);
@@ -145,7 +145,7 @@ export default function GamedayScreen() {
         <SectionHeader
           label="Not yet"
           count={notYet.length}
-          rightAction={IS_MANAGER ? (
+          rightAction={isManager ? (
             <Pressable
               style={({ pressed }) => [styles.latecomersBtn, pressed && { opacity: 0.6 }]}
               onPress={() => showToast('Coming in V2')}

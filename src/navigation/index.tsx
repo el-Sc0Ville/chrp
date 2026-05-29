@@ -19,6 +19,7 @@ import NotificationCentreScreen from '../screens/NotificationCentreScreen';
 import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
+import { UserProvider, useUserContext } from '../context/UserContext';
 import { navy, teams, fonts, spacing } from '../theme';
 import { onAuthStateChanged, type User } from '../firebase/auth';
 
@@ -237,23 +238,22 @@ function TabsNavigator() {
   );
 }
 
-export default function AppNavigator() {
-  // undefined = resolving, null = signed out, User = signed in
-  const [user, setUser] = useState<User | null | undefined>(undefined);
+function AppStack() {
+  const { user: mockUser } = useUserContext();
+  // undefined = resolving Firebase auth, null = signed out, User = signed in
+  const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
-    return onAuthStateChanged(u => setUser(u));
+    return onAuthStateChanged(u => setFirebaseUser(u));
   }, []);
 
-  if (user === undefined) return <LoadingScreen />;
+  const resolvedUser = mockUser ?? firebaseUser;
+  if (resolvedUser === undefined) return <LoadingScreen />;
 
   return (
-    <GameResponseProvider>
-    <NotificationProvider>
-    <ScoreProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
+        {resolvedUser ? (
           <>
             <Stack.Screen name="Tabs"               component={TabsNavigator} />
             <Stack.Screen name="Gameday"            component={GamedayScreen} />
@@ -269,8 +269,19 @@ export default function AppNavigator() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function AppNavigator() {
+  return (
+    <UserProvider>
+    <GameResponseProvider>
+    <NotificationProvider>
+    <ScoreProvider>
+      <AppStack />
     </ScoreProvider>
     </NotificationProvider>
     </GameResponseProvider>
+    </UserProvider>
   );
 }

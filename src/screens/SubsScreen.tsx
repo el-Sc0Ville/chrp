@@ -1,8 +1,6 @@
 // Subs screen — B-11 Manager Sub Requests / C-11 Player Sub Requests.
 // Flip IS_MANAGER to preview each view. Replace with Firebase when backend is wired.
 
-const IS_MANAGER = true;
-
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
@@ -11,6 +9,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 const SPARE_FEE = 20; // $ per game
@@ -116,7 +115,8 @@ const PLAYER_OWN_SEED: SubRequest[] = [
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function SubsScreen() {
-  return IS_MANAGER ? <ManagerSubsScreen /> : <PlayerSubsScreen />;
+  const { isManager } = useUserContext();
+  return isManager ? <ManagerSubsScreen /> : <PlayerSubsScreen />;
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
