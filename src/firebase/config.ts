@@ -4,13 +4,14 @@ import { getAuth } from 'firebase/auth';
 
 // TODO: FCM push notifications require Expo Notifications + a custom dev build — not available in Expo Go
 
+// TODO: move to environment variables before production build
 const firebaseConfig = {
-  apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain:        process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId:         process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket:     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  apiKey:            'AIzaSyBX7oUK7Bit71LntoyKwpLyXnR9HsLfLDU',
+  authDomain:        'chrp-app.firebaseapp.com',
+  projectId:         'chrp-app',
+  storageBucket:     'chrp-app.firebasestorage.app',
+  messagingSenderId: '865858877596',
+  appId:             '1:865858877596:web:3edda39c32d0661f925559',
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
