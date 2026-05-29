@@ -159,8 +159,15 @@ export default function AuthScreen() {
                 style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
                 onPress={async () => {
                   console.log('MANAGER BUTTON PRESSED');
-                  const { user } = await signInAnonymously(auth);
-                  setMockUser(user, true);
+                  try {
+                    console.log('Attempting anonymous sign in...');
+                    const result = await signInAnonymously(auth);
+                    console.log('Anonymous sign in SUCCESS, uid:', result.user.uid);
+                    setMockUser(result.user, true);
+                    console.log('setMockUser called');
+                  } catch (e) {
+                    console.error('Anonymous sign in FAILED:', e);
+                  }
                 }}
               >
                 <Text style={styles.devBtnText}>Enter as Manager (dev)</Text>

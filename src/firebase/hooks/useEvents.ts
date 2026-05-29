@@ -21,6 +21,7 @@ export function useEvents(teamId: string): UseEventsResult {
     const unsub = onSnapshot(
       q,
       snap => {
+        console.log('useEvents: snapshot fired, docs count:', snap.docs.length);
         setEvents(snap.docs.map(d => d.data() as Event));
         setLoading(false);
         setError(null);
@@ -30,6 +31,7 @@ export function useEvents(teamId: string): UseEventsResult {
         setLoading(false);
       },
     );
+    console.log('useEvents: setting up snapshot for team:', teamId);
     return unsub;
   }, [teamId]);
 
