@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
     "@expo-google-fonts/geist": "^0.3.0",
     "@expo-google-fonts/geist-mono": "^0.3.0",
     "@expo-google-fonts/space-grotesk": "^0.3.0",
