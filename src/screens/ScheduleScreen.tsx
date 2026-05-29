@@ -13,8 +13,13 @@ import { navy, teams, ice, status, fonts, type as T, spacing, radius } from '../
 import AvatarPill from '../components/AvatarPill';
 import { useScores, scoreLabel, scoreResult, type Score } from '../context/ScoreContext';
 import { useUserContext } from '../context/UserContext';
+import { useEvents } from '../firebase/hooks/useEvents';
+import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
+
+// TODO Phase 2b: get teamId from user profile
+const TEAM_ID = 'trashdogs';
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -49,73 +54,6 @@ interface PastEvent {
   win?: boolean;
 }
 
-const UPCOMING: ChrpEvent[] = [
-  {
-    id: 'e1',
-    weekday: 'SAT', day: '31', month: 'MAY',
-    kind: 'game',
-    title: 'vs Ember FC',
-    venue: 'Arena Nord',
-    time: '7:30 PM',
-    in: 7, out: 2, maybe: 1, noResp: 3,
-    playerResponse: 'in',
-  },
-  {
-    id: 'e2',
-    weekday: 'WED', day: '04', month: 'JUN',
-    kind: 'practice',
-    title: 'Team Practice',
-    venue: 'Inner Ice Complex',
-    time: '6:00 PM',
-    in: 9, out: 1, maybe: 2, noResp: 1,
-    playerResponse: null,
-  },
-  {
-    id: 'e3',
-    weekday: 'SAT', day: '07', month: 'JUN',
-    kind: 'game',
-    title: '@ Aurora Sky',
-    venue: 'Stadium B',
-    time: '8:00 PM',
-    in: 5, out: 3, maybe: 2, noResp: 3,
-    playerResponse: 'maybe',
-  },
-  {
-    id: 'e4',
-    weekday: 'FRI', day: '13', month: 'JUN',
-    kind: 'social',
-    title: 'End of Season Party',
-    venue: 'The Penalty Box',
-    time: '7:00 PM',
-    in: 11, out: 1, maybe: 1, noResp: 0,
-    playerResponse: null,
-  },
-];
-
-const PAST: PastEvent[] = [
-  {
-    id: 'p1',
-    weekday: 'SAT', day: '17', month: 'MAY',
-    kind: 'game',
-    title: 'vs Verdant FC',
-    venue: 'Arena Nord',
-  },
-  {
-    id: 'p2',
-    weekday: 'WED', day: '21', month: 'MAY',
-    kind: 'practice',
-    title: 'Team Practice',
-    venue: 'Inner Ice Complex',
-  },
-  {
-    id: 'p3',
-    weekday: 'SAT', day: '10', month: 'MAY',
-    kind: 'game',
-    title: 'vs Ice Kings',
-    venue: 'The Barn — Rink 2',
-  },
-];
-
 // ─── Kind tag styles ──────────────────────────────────────────────────────────
 
 const KIND_COLORS: Record<EventKind, { bg: string; text: string }> = {
@@ -123,6 +61,47 @@ const KIND_COLORS: Record<EventKind, { bg: string; text: string }> = {
   practice: { bg: ice[900],             text: ice[300] },
   social:   { bg: status.alert.subtle,  text: status.alert.pure },
 };
+
+// ─── Firestore → display adapters ────────────────────────────────────────────
+
+function toDisplayEvent(e: FirestoreEvent): ChrpEvent {
+  const d = e.startsAt.toDate();
+  const wd = d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase();
+  const mo = d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase();
+  return {
+    id: e.id,
+    weekday: wd,
+    day: String(d.getDate()).padStart(2, '0'),
+    month: mo,
+    kind: e.type as EventKind,
+    title: e.title,
+    venue: e.venue,
+    time: d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase(),
+    in: 0, out: 0, maybe: 0, noResp: 0, // TODO Phase 2: wire response counts
+    playerResponse: null,
+  };
+}
+
+function toPastEvent(e: FirestoreEvent): PastEvent {
+  const d = e.startsAt.toDate();
+  const wd = d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase();
+  const mo = d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase();
+  const score = e.scoreUs !== undefined && e.scoreThem !== undefined
+    ? `${e.scoreUs}–${e.scoreThem}` : undefined;
+  const win = e.scoreUs !== undefined && e.scoreThem !== undefined
+    ? e.scoreUs > e.scoreThem : undefined;
+  return {
+    id: e.id,
+    weekday: wd,
+    day: String(d.getDate()).padStart(2, '0'),
+    month: mo,
+    kind: e.type as EventKind,
+    title: e.title,
+    venue: e.venue,
+    score,
+    win,
+  };
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -248,7 +227,25 @@ function PastEventRow({ event, score, onPress }: { event: PastEvent; score?: Sco
   );
 }
 
-function PastSection({ onNavigate }: { onNavigate: (id: string, title: string) => void }) {
+function ScheduleSkeleton() {
+  return (
+    <View style={{ paddingTop: spacing[4] }}>
+      {[1, 2, 3].map(i => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[12], paddingVertical: spacing[10], paddingHorizontal: spacing[4], marginBottom: spacing[4] }}>
+          <View style={{ width: 50, height: 66, borderRadius: radius.s, backgroundColor: navy[600] }} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <View style={{ width: '40%', height: 14, borderRadius: radius.s, backgroundColor: navy[600] }} />
+            <View style={{ width: '65%', height: 18, borderRadius: radius.s, backgroundColor: navy[600] }} />
+            <View style={{ width: '55%', height: 12, borderRadius: radius.s, backgroundColor: navy[600] }} />
+          </View>
+          <View style={{ width: 56, height: 28, borderRadius: 14, backgroundColor: navy[600] }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function PastSection({ events, onNavigate }: { events: PastEvent[]; onNavigate: (id: string, title: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const { scores } = useScores();
   return (
@@ -260,7 +257,7 @@ function PastSection({ onNavigate }: { onNavigate: (id: string, title: string) =
         <Text style={styles.pastHeaderTitle}>Past events</Text>
         <Text style={[styles.pastChevron, expanded && styles.pastChevronOpen]}>›</Text>
       </Pressable>
-      {expanded && PAST.map(e => (
+      {expanded && events.map(e => (
         <PastEventRow
           key={e.id}
           event={e}
@@ -326,6 +323,13 @@ function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: ()
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  // TODO Phase 2b: get teamId from user profile
+  const { events, loading } = useEvents(TEAM_ID);
+
+  const now      = new Date();
+  const upcoming = events.filter(e => e.startsAt.toDate() > now).map(toDisplayEvent);
+  const past     = events.filter(e => e.startsAt.toDate() <= now).reverse().map(toPastEvent);
+
   const goToCreateEvent = () => navigation.navigate('CreateEvent');
   const goToProfile     = () => navigation.navigate('Profile');
 
@@ -337,12 +341,14 @@ export default function ScheduleScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {UPCOMING.length === 0 ? (
+        {loading ? (
+          <ScheduleSkeleton />
+        ) : upcoming.length === 0 ? (
           <EmptyState onAdd={goToCreateEvent} />
         ) : (
           <>
             <Text style={styles.sectionLabel}>Upcoming</Text>
-            {UPCOMING.map(event => (
+            {upcoming.map(event => (
               <EventRow
                 key={event.id}
                 event={event}
@@ -356,7 +362,10 @@ export default function ScheduleScreen() {
             ))}
           </>
         )}
-        <PastSection onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })} />
+        <PastSection
+          events={past}
+          onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })}
+        />
       </ScrollView>
     </View>
   );

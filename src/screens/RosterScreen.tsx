@@ -1,13 +1,15 @@
 // Roster screen — B-07 Manager Roster / C-07 Player Roster.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import { useMembers } from '../firebase/hooks/useMembers';
+import type { Member } from '../firebase/schema';
 
 type PlayerRole = 'manager' | 'player';
 type TrendDot = 'in' | 'out' | 'maybe' | null;
@@ -23,18 +25,23 @@ interface RosterPlayer {
 
 const TEAM = teams.trashdogs;
 
-const ROSTER_DATA: RosterPlayer[] = [
-  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, role: 'manager', trend: ['in',    'in',    'in',    'in',    'in']    },
-  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, role: 'manager', trend: ['in',    'in',    'out',   'in',    'in']    },
-  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, role: 'player',  trend: ['in',    'in',    'in',    'in',    'maybe'] },
-  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, role: 'player',  trend: ['out',   'in',    'out',   'out',   'in']    },
-  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, role: 'player',  trend: ['in',    'in',    'maybe', 'in',    'in']    },
-  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, role: 'player',  trend: ['in',    'in',    'in',    'in',    'in']    },
-  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, role: 'player',  trend: [null,    null,    'in',    'out',   'in']    },
-  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, role: 'player',  trend: ['in',    'maybe', 'in',    'in',    'maybe'] },
-  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, role: 'player',  trend: ['maybe', 'in',    'in',    'in',    'in']    },
-  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, role: 'player',  trend: ['in',    null,    'in',    'in',    'in']    },
-];
+// TODO Phase 2b: get teamId from user profile
+const TEAM_ID = 'trashdogs';
+
+function toRosterPlayer(m: Member): RosterPlayer {
+  const parts = m.displayName.trim().split(/\s+/);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : m.displayName.slice(0, 2).toUpperCase();
+  return {
+    id: m.userId,
+    name: m.displayName,
+    initials,
+    jersey: m.jerseyNumber,
+    role: m.role,
+    trend: [null, null, null, null, null],
+  };
+}
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
@@ -51,8 +58,14 @@ export default function RosterScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const [roster, setRoster] = useState<RosterPlayer[]>(ROSTER_DATA);
+  const { members, loading } = useMembers(TEAM_ID);
+  const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
+
+  // Sync roster from Firestore; local mutations (makeManager etc.) stay in state
+  React.useEffect(() => {
+    setRoster(members.map(toRosterPlayer));
+  }, [members]);
   const [actionPlayer, setActionPlayer] = useState<RosterPlayer | null>(null);
 
   const inviteCode = useMemo(() => {
@@ -87,13 +100,20 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {roster.map(player => (
-          <PlayerRow
-            key={player.id}
-            player={player}
-            onLongPress={() => setActionPlayer(player)}
-          />
-        ))}
+        {loading && roster.length === 0
+          ? [1,2,3,4,5].map(i => (
+              <View key={i} style={[styles.rowOuter, { height: 68 }]}>
+                <View style={[styles.rowMain, { opacity: 0 }]} />
+              </View>
+            ))
+          : roster.map(player => (
+              <PlayerRow
+                key={player.id}
+                player={player}
+                onLongPress={() => setActionPlayer(player)}
+              />
+            ))
+        }
       </ScrollView>
       <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
         <Text style={styles.stickyCount}>
@@ -126,9 +146,12 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
 
 function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
+  // TODO Phase 2b: get teamId from user profile
+  const { members, loading } = useMembers(TEAM_ID);
+  const roster = members.map(toRosterPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
 
-  const managerCount = ROSTER_DATA.filter(p => p.role === 'manager').length;
+  const managerCount = roster.filter(p => p.role === 'manager').length;
 
   return (
     <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
@@ -138,7 +161,7 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {ROSTER_DATA.map(player => (
+        {roster.map(player => (
           <PlayerRow
             key={player.id}
             player={player}
@@ -148,7 +171,7 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
       </ScrollView>
       <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
         <Text style={styles.stickyCount}>
-          {ROSTER_DATA.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+          {roster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
         </Text>
       </View>
 
