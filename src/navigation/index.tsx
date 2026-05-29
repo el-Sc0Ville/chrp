@@ -6,6 +6,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/HomeScreen';
+import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import RosterScreen from '../screens/RosterScreen';
 import GamedayScreen from '../screens/GamedayScreen';
@@ -84,6 +85,30 @@ function RosterIcon({ active }: { active: boolean }) {
         position: 'absolute', bottom: 1, left: 0, right: 0,
         height: 8, borderTopLeftRadius: 6, borderTopRightRadius: 6,
         borderWidth: 1.5, borderColor: color, borderBottomWidth: 0,
+      }} />
+    </View>
+  );
+}
+
+function AnnouncementsIcon({ active }: { active: boolean }) {
+  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
+  return (
+    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Speech bubble body */}
+      <View style={{
+        position: 'absolute', top: 2, left: 3, right: 3, bottom: 6,
+        borderRadius: 5, borderWidth: 1.5, borderColor: color,
+      }} />
+      {/* Tail — two angled lines meeting at a point bottom-left */}
+      <View style={{
+        position: 'absolute', bottom: 3, left: 5,
+        width: 6, height: 1.5, borderRadius: 1, backgroundColor: color,
+        transform: [{ rotate: '35deg' }],
+      }} />
+      <View style={{
+        position: 'absolute', bottom: 3, left: 5,
+        width: 6, height: 1.5, borderRadius: 1, backgroundColor: color,
+        transform: [{ rotate: '-10deg' }],
       }} />
     </View>
   );
@@ -181,6 +206,7 @@ function ChrpTabBar({ state, descriptors, navigation }: any) {
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
               {route.name === 'Schedule' && <CalendarIcon active={isFocused} />}
               {route.name === 'Home' && <HomeIcon active={isFocused} />}
+              {route.name === 'Announcements' && <AnnouncementsIcon active={isFocused} />}
               {route.name === 'Roster' && <RosterIcon active={isFocused} />}
               {route.name === 'Gameday' && <GamedayIcon active={isFocused} />}
               {route.name === 'Dues' && <DuesIcon active={isFocused} />}
@@ -243,6 +269,11 @@ function TabsNavigator() {
     >
       <Tab.Screen name="Schedule" component={ScheduleScreen} />
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen
+        name="Announcements"
+        component={AnnouncementsScreen}
+        options={{ tabBarLabel: 'Posts' }}
+      />
       <Tab.Screen name="Roster" component={RosterScreen} />
       <Tab.Screen name="Gameday" component={GamedayScreen} />
       <Tab.Screen name="Dues" component={DuesScreen} />
