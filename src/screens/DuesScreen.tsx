@@ -12,7 +12,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 
 const TEAM = teams.trashdogs;
-const DUES_AMOUNT = 40;
+
+const SEASON_TOTAL = 500; // summer league default; winter league = 900
+const PER_PLAYER   = Math.round(SEASON_TOTAL / 10); // 10-player roster → $50
 
 // ─── Shared player list (mirrors RosterScreen ROSTER_DATA) ───────────────────
 
@@ -52,7 +54,7 @@ export default function DuesScreen() {
 function ManagerDuesScreen() {
   const insets = useSafeAreaInsets();
   const [players, setPlayers] = useState<DuesPlayer[]>(DUES_DATA);
-  const [duesAmount, setDuesAmount] = useState(DUES_AMOUNT);
+  const [seasonTotal, setSeasonTotal] = useState(SEASON_TOTAL);
   const [setAmountVisible, setSetAmountVisible] = useState(false);
   const [actionPlayer, setActionPlayer] = useState<DuesPlayer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -75,10 +77,11 @@ function ManagerDuesScreen() {
     showToast(`Reminder sent to ${player.name.split(' ')[0]}`);
   };
 
+  const perPlayer  = Math.round(seasonTotal / players.length);
   const paidCount  = players.filter(p => p.duesStatus === 'paid').length;
   const totalCount = players.length;
-  const collected  = paidCount * duesAmount;
-  const total      = totalCount * duesAmount;
+  const collected  = paidCount * perPlayer;
+  const total      = totalCount * perPlayer;
   const progress   = total > 0 ? collected / total : 0;
 
   return (
@@ -116,7 +119,8 @@ function ManagerDuesScreen() {
             </View>
             <View style={styles.summaryRight}>
               <Text style={styles.summaryFraction}>{paidCount}/{totalCount} players</Text>
-              <Text style={styles.summaryPerPlayer}>${duesAmount}/player</Text>
+              <Text style={styles.summaryPerPlayer}>${perPlayer}/player</Text>
+              <Text style={styles.summarySeasonTotal}>Season: ${seasonTotal}</Text>
             </View>
           </View>
           <View style={styles.progressTrack}>
@@ -140,7 +144,7 @@ function ManagerDuesScreen() {
                   <Text style={styles.playerJersey}>#{player.jersey}</Text>
                 </View>
                 <View style={styles.playerRight}>
-                  <Text style={styles.playerAmount}>${duesAmount}</Text>
+                  <Text style={styles.playerAmount}>${perPlayer}</Text>
                   <StatusPill status={player.duesStatus} />
                 </View>
               </Pressable>
@@ -152,8 +156,8 @@ function ManagerDuesScreen() {
       {/* ── Set Amount Sheet ── */}
       <SetAmountSheet
         visible={setAmountVisible}
-        current={duesAmount}
-        onSave={amount => { setDuesAmount(amount); setSetAmountVisible(false); showToast(`Amount set to $${amount}`); }}
+        current={seasonTotal}
+        onSave={amount => { setSeasonTotal(amount); setSetAmountVisible(false); showToast(`Season total set to $${amount}`); }}
         onClose={() => setSetAmountVisible(false)}
       />
 
@@ -161,6 +165,7 @@ function ManagerDuesScreen() {
       {actionPlayer && (
         <ActionSheet
           player={actionPlayer}
+          perPlayer={perPlayer}
           onMarkPaid={() => markPaid(actionPlayer.id)}
           onReminder={() => sendReminder(actionPlayer)}
           onClose={() => setActionPlayer(null)}
@@ -187,8 +192,9 @@ function ManagerDuesScreen() {
 const PLAYER_SELF = DUES_DATA[0]; // Pat Normandin
 
 const PAYMENT_HISTORY = [
-  { id: 'ph1', label: 'Fall 2024 season dues', date: 'Oct 12, 2024', amount: 40 },
-  { id: 'ph2', label: 'Spring 2024 season dues', date: 'Mar 8, 2024',  amount: 40 },
+  { id: 'ph1', label: 'Winter 2024 season dues', date: 'Oct 5, 2024',  amount: 90  },
+  { id: 'ph2', label: 'Spare fee — Nov 9 game',  date: 'Nov 9, 2024',  amount: 20  },
+  { id: 'ph3', label: 'Summer 2024 season dues', date: 'Apr 12, 2024', amount: 50  },
 ];
 
 function PlayerDuesScreen() {
@@ -225,8 +231,8 @@ function PlayerDuesScreen() {
         <View style={styles.balanceCard}>
           <View style={styles.balanceTop}>
             <View>
-              <Text style={styles.balanceLabel}>Current balance</Text>
-              <Text style={styles.balanceAmount}>${DUES_AMOUNT}</Text>
+              <Text style={styles.balanceLabel}>Your share</Text>
+              <Text style={styles.balanceAmount}>${PER_PLAYER}</Text>
             </View>
             <StatusPill status={PLAYER_SELF.duesStatus} large />
           </View>
@@ -237,8 +243,12 @@ function PlayerDuesScreen() {
               <Text style={styles.balanceMetaValue}>{dueDate}</Text>
             </View>
             <View style={styles.balanceMetaItem}>
+              <Text style={styles.balanceMetaLabel}>Season total</Text>
+              <Text style={styles.balanceMetaValue}>${SEASON_TOTAL}</Text>
+            </View>
+            <View style={styles.balanceMetaItem}>
               <Text style={styles.balanceMetaLabel}>Season</Text>
-              <Text style={styles.balanceMetaValue}>Winter 2025</Text>
+              <Text style={styles.balanceMetaValue}>Summer 2025</Text>
             </View>
           </View>
 
@@ -337,8 +347,8 @@ function SetAmountSheet({
           <Pressable onPress={() => {}}>
             <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
               <View style={styles.sheetHandle} />
-              <Text style={styles.sheetTitle}>Set dues amount</Text>
-              <Text style={styles.sheetSub}>Applied to all players on the roster</Text>
+              <Text style={styles.sheetTitle}>Set season total</Text>
+              <Text style={styles.sheetSub}>Divided equally across all roster players</Text>
 
               <View style={styles.amountInputWrap}>
                 <Text style={styles.amountDollar}>$</Text>
@@ -371,9 +381,10 @@ function SetAmountSheet({
 // ─── Action Sheet ─────────────────────────────────────────────────────────────
 
 function ActionSheet({
-  player, onMarkPaid, onReminder, onClose,
+  player, perPlayer, onMarkPaid, onReminder, onClose,
 }: {
   player: DuesPlayer;
+  perPlayer: number;
   onMarkPaid: () => void;
   onReminder: () => void;
   onClose: () => void;
@@ -391,7 +402,7 @@ function ActionSheet({
               <PlayerAvatar player={player} />
               <View>
                 <Text style={styles.actionName}>{player.name}</Text>
-                <Text style={styles.actionSub}>#{player.jersey} · ${DUES_AMOUNT} owed</Text>
+                <Text style={styles.actionSub}>#{player.jersey} · ${perPlayer} owed</Text>
               </View>
               <View style={{ flex: 1 }} />
               <StatusPill status={player.duesStatus} />
@@ -524,6 +535,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: 12,
     color: navy[400],
+  },
+  summarySeasonTotal: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    color: navy[500],
+    marginTop: 2,
   },
   progressTrack: {
     height: 6,
