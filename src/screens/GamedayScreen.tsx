@@ -1,6 +1,6 @@
-// Gameday screen — B-10 · live arrival tracker for tonight's game.
-// All users see the same view; IS_MANAGER gates the "Message latecomers" button.
-// TODO Phase 2: replace hardcoded arrival data with real geofence listener via expo-location.
+// Gameday screen — B-10 · geofence-based arrival tracker for tonight's game.
+// Same view for all users. IS_MANAGER gates only the "Message latecomers" button.
+// TODO Phase 2: replace hardcoded data with real geofence listener via expo-location.
 
 const IS_MANAGER = true;
 
@@ -16,39 +16,39 @@ const TEAM = teams.trashdogs;
 // TODO Phase 2: check real expo-location permission; prompt if not granted
 const locationGranted = true;
 
-// Hardcoded event — mirrors HomeScreen hero card data
+// Hardcoded event — mirrors HomeScreen hero card
 const TONIGHT_GAME = {
   opponent: 'Ice Sharks',
   venue:    'The Barn — Rink 2',
   time:     '7:30 pm',
-  // TODO Phase 2: use these coordinates for the expo-location geofence (~200 m radius)
+  // TODO Phase 2: feed these into the expo-location geofence (~200 m radius)
   arenaLat: 45.5231,
   arenaLng: -73.5887,
 };
 
-type ArrivalStatus = 'arrived' | 'on-way' | 'not-responded';
+type GeofenceStatus = 'here' | 'not-yet';
 
 interface GamedayPlayer {
   id: string;
   name: string;
   initials: string;
   jersey: number;
-  arrivalStatus: ArrivalStatus;
-  arrivedMinutesAgo?: number; // populated only for 'arrived' players
+  status: GeofenceStatus;
+  arrivedMinutesAgo?: number; // only set for 'here' players
 }
 
-// TODO Phase 2: replace with live geofence state; sort arrived by arrivedAt timestamp
+// TODO Phase 2: replace with live geofence state sorted by arrivedAt timestamp
 const GAMEDAY_PLAYERS: GamedayPlayer[] = [
-  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, arrivalStatus: 'arrived',      arrivedMinutesAgo: 2 },
-  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, arrivalStatus: 'arrived',      arrivedMinutesAgo: 4 },
-  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, arrivalStatus: 'arrived',      arrivedMinutesAgo: 7 },
-  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, arrivalStatus: 'on-way'                             },
-  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, arrivalStatus: 'on-way'                             },
-  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, arrivalStatus: 'on-way'                             },
-  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, arrivalStatus: 'on-way'                             },
-  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, arrivalStatus: 'not-responded'                      },
-  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, arrivalStatus: 'not-responded'                      },
-  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, arrivalStatus: 'not-responded'                      },
+  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, status: 'here',    arrivedMinutesAgo: 2  },
+  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, status: 'here',    arrivedMinutesAgo: 5  },
+  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, status: 'here',    arrivedMinutesAgo: 9  },
+  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, status: 'here',    arrivedMinutesAgo: 11 },
+  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, status: 'not-yet'                        },
+  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, status: 'not-yet'                        },
+  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, status: 'not-yet'                        },
+  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, status: 'not-yet'                        },
+  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, status: 'not-yet'                        },
+  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, status: 'not-yet'                        },
 ];
 
 // ─── Root export ──────────────────────────────────────────────────────────────
@@ -64,9 +64,8 @@ export default function GamedayScreen() {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const arrived      = GAMEDAY_PLAYERS.filter(p => p.arrivalStatus === 'arrived');
-  const onWay        = GAMEDAY_PLAYERS.filter(p => p.arrivalStatus === 'on-way');
-  const notResponded = GAMEDAY_PLAYERS.filter(p => p.arrivalStatus === 'not-responded');
+  const here   = GAMEDAY_PLAYERS.filter(p => p.status === 'here');
+  const notYet = GAMEDAY_PLAYERS.filter(p => p.status === 'not-yet');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -85,7 +84,7 @@ export default function GamedayScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* Location permission banner — rendered only when not granted */}
+        {/* Location permission banner — only shown when location is not granted */}
         {!locationGranted && (
           <View style={styles.locationBanner}>
             <Text style={styles.locationBannerIcon}>📍</Text>
@@ -103,7 +102,7 @@ export default function GamedayScreen() {
             </View>
             <View style={styles.atVenueBadge}>
               <View style={styles.atVenueDot} />
-              <Text style={styles.atVenueText}>{arrived.length} at venue</Text>
+              <Text style={styles.atVenueText}>{here.length} at venue</Text>
             </View>
           </View>
           <Text style={styles.opponentText}>vs. {TONIGHT_GAME.opponent}</Text>
@@ -114,21 +113,21 @@ export default function GamedayScreen() {
           </View>
         </View>
 
-        {/* ── Who's here ── */}
-        <SectionHeader label="Who's here" count={arrived.length} pulse />
+        {/* ── Here ── */}
+        <SectionHeader label="Here" count={here.length} pulse />
         <View style={styles.card}>
-          {arrived.map((player, idx) => (
+          {here.map((player, idx) => (
             <React.Fragment key={player.id}>
               {idx > 0 && <View style={styles.rowDivider} />}
-              <PlayerRow player={player} variant="arrived" />
+              <PlayerRow player={player} />
             </React.Fragment>
           ))}
         </View>
 
-        {/* ── On their way ── */}
+        {/* ── Not yet ── */}
         <SectionHeader
-          label="On their way"
-          count={onWay.length}
+          label="Not yet"
+          count={notYet.length}
           rightAction={IS_MANAGER ? (
             <Pressable
               style={({ pressed }) => [styles.latecomersBtn, pressed && { opacity: 0.6 }]}
@@ -139,21 +138,10 @@ export default function GamedayScreen() {
           ) : null}
         />
         <View style={styles.card}>
-          {onWay.map((player, idx) => (
+          {notYet.map((player, idx) => (
             <React.Fragment key={player.id}>
               {idx > 0 && <View style={styles.rowDivider} />}
-              <PlayerRow player={player} variant="on-way" />
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* ── Not responded ── */}
-        <SectionHeader label="Not responded" count={notResponded.length} />
-        <View style={styles.card}>
-          {notResponded.map((player, idx) => (
-            <React.Fragment key={player.id}>
-              {idx > 0 && <View style={styles.rowDivider} />}
-              <PlayerRow player={player} variant="not-responded" />
+              <PlayerRow player={player} />
             </React.Fragment>
           ))}
         </View>
@@ -204,9 +192,7 @@ function SectionHeader({
   return (
     <View style={styles.sectionHeaderWrap}>
       <View style={styles.sectionHeaderLeft}>
-        {pulse && (
-          <Animated.View style={[styles.pulseDot, { opacity: pulseAnim }]} />
-        )}
+        {pulse && <Animated.View style={[styles.pulseDot, { opacity: pulseAnim }]} />}
         <Text style={styles.sectionLabelText}>{label}</Text>
         <View style={styles.sectionCountPill}>
           <Text style={styles.sectionCountText}>{count}</Text>
@@ -217,27 +203,20 @@ function SectionHeader({
   );
 }
 
-// ─── Player row — three variants ──────────────────────────────────────────────
+// ─── Player row ───────────────────────────────────────────────────────────────
 
-function PlayerRow({ player, variant }: { player: GamedayPlayer; variant: ArrivalStatus }) {
-  const dim = variant === 'not-responded';
+function PlayerRow({ player }: { player: GamedayPlayer }) {
   return (
     <View style={styles.playerRow}>
-      <View style={[styles.avatar, dim && styles.avatarDim]}>
-        <Text style={[styles.avatarText, dim && styles.avatarTextDim]}>{player.initials}</Text>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{player.initials}</Text>
       </View>
       <View style={styles.playerInfo}>
-        <Text style={[styles.playerName, dim && styles.playerNameDim]}>{player.name}</Text>
-        <Text style={[styles.playerJersey, dim && styles.playerJerseyDim]}>#{player.jersey}</Text>
+        <Text style={styles.playerName}>{player.name}</Text>
+        <Text style={styles.playerJersey}>#{player.jersey}</Text>
       </View>
-      {variant === 'arrived' && (
+      {player.status === 'here' && (
         <Text style={styles.arrivedText}>✓ {player.arrivedMinutesAgo} min ago</Text>
-      )}
-      {variant === 'on-way' && (
-        <View style={styles.inChip}>
-          <View style={styles.inDot} />
-          <Text style={styles.inChipText}>In</Text>
-        </View>
       )}
     </View>
   );
@@ -447,8 +426,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[12],
     gap: spacing[12],
   },
-
-  // ── Avatar ────────────────────────────────────────────────────────────────
   avatar: {
     width: 40,
     height: 40,
@@ -459,20 +436,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarDim: {
-    backgroundColor: navy[600],
-    borderColor: navy[500],
-  },
   avatarText: {
     fontFamily: fonts.uiBold,
     fontSize: 13,
     color: TEAM[100],
   },
-  avatarTextDim: {
-    color: navy[400],
-  },
-
-  // ── Player info ───────────────────────────────────────────────────────────
   playerInfo: {
     flex: 1,
     gap: 2,
@@ -482,45 +450,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: navy[100],
   },
-  playerNameDim: {
-    color: navy[400],
-  },
   playerJersey: {
     fontFamily: fonts.mono,
     fontSize: 12,
     color: navy[400],
   },
-  playerJerseyDim: {
-    color: navy[600],
-  },
 
-  // ── Arrived badge ─────────────────────────────────────────────────────────
+  // ── Arrived timestamp ─────────────────────────────────────────────────────
   arrivedText: {
     fontFamily: fonts.uiMedium,
     fontSize: 12,
     color: status.success.pure,
-  },
-
-  // ── "In" chip (on-way players) ────────────────────────────────────────────
-  inChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[4],
-    paddingHorizontal: spacing[8],
-    paddingVertical: 4,
-    borderRadius: radius.xs,
-    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.14)`,
-  },
-  inDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: TEAM[300],
-  },
-  inChipText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 12,
-    color: TEAM[300],
   },
 
   // ── Toast ─────────────────────────────────────────────────────────────────
