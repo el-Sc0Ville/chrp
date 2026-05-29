@@ -67,6 +67,11 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     setActionPlayer(null);
   };
 
+  const demoteToPlayer = (id: string) => {
+    setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'player' as PlayerRole } : p));
+    setActionPlayer(null);
+  };
+
   const removePlayer = (id: string) => {
     setRoster(prev => prev.filter(p => p.id !== id));
     setActionPlayer(null);
@@ -106,6 +111,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
           player={actionPlayer}
           canPromote={actionPlayer.role === 'player'}
           onMakeManager={() => makeManager(actionPlayer.id)}
+          onDemote={() => demoteToPlayer(actionPlayer.id)}
           onRemove={() => removePlayer(actionPlayer.id)}
           onClose={() => setActionPlayer(null)}
         />
@@ -340,12 +346,14 @@ function ActionSheet({
   player,
   canPromote,
   onMakeManager,
+  onDemote,
   onRemove,
   onClose,
 }: {
   player: RosterPlayer;
   canPromote: boolean;
   onMakeManager: () => void;
+  onDemote: () => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
@@ -367,12 +375,19 @@ function ActionSheet({
 
           <View style={styles.actionDivider} />
 
-          {canPromote && (
+          {canPromote ? (
             <Pressable
               style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
               onPress={onMakeManager}
             >
               <Text style={styles.actionRowText}>Make Manager</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+              onPress={onDemote}
+            >
+              <Text style={styles.actionRowText}>Remove Manager role</Text>
             </Pressable>
           )}
 
