@@ -1,0 +1,880 @@
+// Dues screen — B-09 Manager Dues / Player Dues.
+// Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
+
+const IS_MANAGER = true;
+
+import React, { useState, useRef } from 'react';
+import {
+  View, Text, ScrollView, Pressable, Modal, TextInput,
+  StyleSheet, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
+
+const TEAM = teams.trashdogs;
+const DUES_AMOUNT = 40;
+
+// ─── Shared player list (mirrors RosterScreen ROSTER_DATA) ───────────────────
+
+type DuesStatus = 'paid' | 'pending' | 'overdue';
+
+interface DuesPlayer {
+  id: string;
+  name: string;
+  initials: string;
+  jersey: number;
+  duesStatus: DuesStatus;
+}
+
+const DUES_DATA: DuesPlayer[] = [
+  { id: 'r1',  name: 'Pat Normandin',    initials: 'PN', jersey: 17, duesStatus: 'paid'    },
+  { id: 'r2',  name: 'Marco Beauchamp',  initials: 'MB', jersey: 29, duesStatus: 'paid'    },
+  { id: 'r3',  name: 'Sophie Tremblay',  initials: 'ST', jersey:  7, duesStatus: 'paid'    },
+  { id: 'r4',  name: 'Jake Kowalski',    initials: 'JK', jersey: 44, duesStatus: 'overdue' },
+  { id: 'r5',  name: 'Lena Bergström',   initials: 'LB', jersey: 13, duesStatus: 'paid'    },
+  { id: 'r6',  name: 'Tyler MacPherson', initials: 'TM', jersey: 88, duesStatus: 'pending' },
+  { id: 'r7',  name: 'Nina Petrov',      initials: 'NP', jersey:  3, duesStatus: 'overdue' },
+  { id: 'r8',  name: 'Chris Fontaine',   initials: 'CF', jersey: 21, duesStatus: 'pending' },
+  { id: 'r9',  name: 'Sam Delacroix',    initials: 'SD', jersey: 67, duesStatus: 'paid'    },
+  { id: 'r10', name: 'Mia Korhonen',     initials: 'MK', jersey: 11, duesStatus: 'paid'    },
+];
+
+// ─── Root export ──────────────────────────────────────────────────────────────
+
+export default function DuesScreen() {
+  return IS_MANAGER ? <ManagerDuesScreen /> : <PlayerDuesScreen />;
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  B-09 · Manager Dues                                                     ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+function ManagerDuesScreen() {
+  const insets = useSafeAreaInsets();
+  const [players, setPlayers] = useState<DuesPlayer[]>(DUES_DATA);
+  const [duesAmount, setDuesAmount] = useState(DUES_AMOUNT);
+  const [setAmountVisible, setSetAmountVisible] = useState(false);
+  const [actionPlayer, setActionPlayer] = useState<DuesPlayer | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const markPaid = (id: string) => {
+    setPlayers(prev => prev.map(p => p.id === id ? { ...p, duesStatus: 'paid' } : p));
+    setActionPlayer(null);
+    showToast('Marked as paid');
+  };
+
+  const sendReminder = (player: DuesPlayer) => {
+    setActionPlayer(null);
+    showToast(`Reminder sent to ${player.name.split(' ')[0]}`);
+  };
+
+  const paidCount  = players.filter(p => p.duesStatus === 'paid').length;
+  const totalCount = players.length;
+  const collected  = paidCount * duesAmount;
+  const total      = totalCount * duesAmount;
+  const progress   = total > 0 ? collected / total : 0;
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+
+      {/* ── Header ── */}
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Dues</Text>
+        <Pressable
+          style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.65 }]}
+          onPress={() => setSetAmountVisible(true)}
+        >
+          <Text style={styles.ghostBtnText}>Set amount</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, spacing[32]) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* ── Summary banner ── */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <View>
+              <Text style={styles.summaryLabel}>Collected</Text>
+              <Text style={styles.summaryAmount}>
+                <Text style={styles.summaryAmountBold}>${collected}</Text>
+                <Text style={styles.summaryAmountOf}> of ${total}</Text>
+              </Text>
+            </View>
+            <View style={styles.summaryRight}>
+              <Text style={styles.summaryFraction}>{paidCount}/{totalCount} players</Text>
+              <Text style={styles.summaryPerPlayer}>${duesAmount}/player</Text>
+            </View>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+          </View>
+        </View>
+
+        {/* ── Player list ── */}
+        <Text style={styles.sectionLabel}>Players</Text>
+        <View style={styles.card}>
+          {players.map((player, idx) => (
+            <React.Fragment key={player.id}>
+              {idx > 0 && <View style={styles.rowDivider} />}
+              <Pressable
+                style={({ pressed }) => [styles.playerRow, pressed && { backgroundColor: navy[600] }]}
+                onPress={() => setActionPlayer(player)}
+              >
+                <PlayerAvatar player={player} />
+                <View style={styles.playerInfo}>
+                  <Text style={styles.playerName}>{player.name}</Text>
+                  <Text style={styles.playerJersey}>#{player.jersey}</Text>
+                </View>
+                <View style={styles.playerRight}>
+                  <Text style={styles.playerAmount}>${duesAmount}</Text>
+                  <StatusPill status={player.duesStatus} />
+                </View>
+              </Pressable>
+            </React.Fragment>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* ── Set Amount Sheet ── */}
+      <SetAmountSheet
+        visible={setAmountVisible}
+        current={duesAmount}
+        onSave={amount => { setDuesAmount(amount); setSetAmountVisible(false); showToast(`Amount set to $${amount}`); }}
+        onClose={() => setSetAmountVisible(false)}
+      />
+
+      {/* ── Action Sheet ── */}
+      {actionPlayer && (
+        <ActionSheet
+          player={actionPlayer}
+          onMarkPaid={() => markPaid(actionPlayer.id)}
+          onReminder={() => sendReminder(actionPlayer)}
+          onClose={() => setActionPlayer(null)}
+        />
+      )}
+
+      {/* ── Toast ── */}
+      {toast !== null && (
+        <View
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  C-09 · Player Dues                                                      ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+const PLAYER_SELF = DUES_DATA[0]; // Pat Normandin
+
+const PAYMENT_HISTORY = [
+  { id: 'ph1', label: 'Fall 2024 season dues', date: 'Oct 12, 2024', amount: 40 },
+  { id: 'ph2', label: 'Spring 2024 season dues', date: 'Mar 8, 2024',  amount: 40 },
+];
+
+function PlayerDuesScreen() {
+  const insets = useSafeAreaInsets();
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const dueDate = 'Jun 15, 2025';
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+
+      {/* ── Header ── */}
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Dues</Text>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, spacing[32]) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* ── Balance card ── */}
+        <View style={styles.balanceCard}>
+          <View style={styles.balanceTop}>
+            <View>
+              <Text style={styles.balanceLabel}>Current balance</Text>
+              <Text style={styles.balanceAmount}>${DUES_AMOUNT}</Text>
+            </View>
+            <StatusPill status={PLAYER_SELF.duesStatus} large />
+          </View>
+
+          <View style={styles.balanceMeta}>
+            <View style={styles.balanceMetaItem}>
+              <Text style={styles.balanceMetaLabel}>Due date</Text>
+              <Text style={styles.balanceMetaValue}>{dueDate}</Text>
+            </View>
+            <View style={styles.balanceMetaItem}>
+              <Text style={styles.balanceMetaLabel}>Season</Text>
+              <Text style={styles.balanceMetaValue}>Winter 2025</Text>
+            </View>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.payBtn, pressed && { opacity: 0.8 }]}
+            onPress={() => showToast('Payment coming in V2')}
+          >
+            <Text style={styles.payBtnText}>Pay now</Text>
+          </Pressable>
+        </View>
+
+        {/* ── Payment history ── */}
+        <Text style={styles.sectionLabel}>Payment history</Text>
+        <View style={styles.card}>
+          {PAYMENT_HISTORY.map((entry, idx) => (
+            <React.Fragment key={entry.id}>
+              {idx > 0 && <View style={styles.rowDivider} />}
+              <View style={styles.historyRow}>
+                <View style={styles.historyLeft}>
+                  <Text style={styles.historyLabel}>{entry.label}</Text>
+                  <Text style={styles.historyDate}>{entry.date}</Text>
+                </View>
+                <View style={styles.historyRight}>
+                  <Text style={styles.historyAmount}>${entry.amount}</Text>
+                  <StatusPill status="paid" />
+                </View>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* ── Toast ── */}
+      {toast !== null && (
+        <View
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  Sub-components                                                           ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+function PlayerAvatar({ player }: { player: DuesPlayer }) {
+  return (
+    <View style={styles.avatar}>
+      <Text style={styles.avatarText}>{player.initials}</Text>
+    </View>
+  );
+}
+
+function StatusPill({ status: s, large }: { status: DuesStatus; large?: boolean }) {
+  const map: Record<DuesStatus, { label: string; bg: string; text: string }> = {
+    paid:    { label: 'Paid',    bg: statusColors.success.subtle, text: statusColors.success.pure  },
+    pending: { label: 'Pending', bg: statusColors.alert.subtle,   text: statusColors.alert.pure    },
+    overdue: { label: 'Overdue', bg: statusColors.error.subtle,   text: statusColors.error.pure    },
+  };
+  const config = map[s];
+  return (
+    <View style={[styles.pill, { backgroundColor: config.bg }, large && styles.pillLarge]}>
+      <Text style={[styles.pillText, { color: config.text }, large && styles.pillTextLarge]}>
+        {config.label}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Set Amount Sheet ─────────────────────────────────────────────────────────
+
+function SetAmountSheet({
+  visible, current, onSave, onClose,
+}: {
+  visible: boolean;
+  current: number;
+  onSave: (amount: number) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [raw, setRaw] = useState(String(current));
+
+  const handleSave = () => {
+    const parsed = parseInt(raw.replace(/[^0-9]/g, ''), 10);
+    if (!isNaN(parsed) && parsed > 0) onSave(parsed);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined}>
+          <Pressable onPress={() => {}}>
+            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Set dues amount</Text>
+              <Text style={styles.sheetSub}>Applied to all players on the roster</Text>
+
+              <View style={styles.amountInputWrap}>
+                <Text style={styles.amountDollar}>$</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={raw}
+                  onChangeText={text => setRaw(text.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  autoFocus
+                  selectTextOnFocus
+                  maxLength={4}
+                  placeholderTextColor={navy[400]}
+                />
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.8 }]}
+                onPress={handleSave}
+              >
+                <Text style={styles.saveBtnText}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Action Sheet ─────────────────────────────────────────────────────────────
+
+function ActionSheet({
+  player, onMarkPaid, onReminder, onClose,
+}: {
+  player: DuesPlayer;
+  onMarkPaid: () => void;
+  onReminder: () => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable onPress={() => {}}>
+          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
+            <View style={styles.sheetHandle} />
+
+            {/* Player context */}
+            <View style={styles.actionHeader}>
+              <PlayerAvatar player={player} />
+              <View>
+                <Text style={styles.actionName}>{player.name}</Text>
+                <Text style={styles.actionSub}>#{player.jersey} · ${DUES_AMOUNT} owed</Text>
+              </View>
+              <View style={{ flex: 1 }} />
+              <StatusPill status={player.duesStatus} />
+            </View>
+
+            <View style={styles.actionDivider} />
+
+            {player.duesStatus !== 'paid' && (
+              <Pressable
+                style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+                onPress={onMarkPaid}
+              >
+                <Text style={styles.actionRowText}>Mark as paid</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+              onPress={onReminder}
+            >
+              <Text style={styles.actionRowText}>Send reminder</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, styles.actionRowCancel, pressed && { backgroundColor: navy[600] }]}
+              onPress={onClose}
+            >
+              <Text style={styles.actionRowCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║  Styles                                                                  ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+// alias to avoid shadowing the import
+const statusColors = status;
+
+const styles = StyleSheet.create({
+
+  container: {
+    flex: 1,
+    backgroundColor: navy[800],
+  },
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[20],
+    paddingTop: spacing[16],
+    paddingBottom: spacing[14],
+  },
+  pageTitle: {
+    ...T.headingXXL,
+    color: '#FFFFFF',
+  },
+  ghostBtn: {
+    paddingHorizontal: spacing[14],
+    paddingVertical: spacing[6],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+  },
+  ghostBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 13,
+    color: TEAM[300],
+  },
+
+  // ── Scroll ────────────────────────────────────────────────────────────────
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingTop: spacing[4],
+  },
+
+  // ── Summary banner ────────────────────────────────────────────────────────
+  summaryCard: {
+    marginHorizontal: spacing[16],
+    backgroundColor: navy[700],
+    borderRadius: radius.xxl,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: spacing[20],
+    marginBottom: spacing[4],
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: spacing[16],
+  },
+  summaryLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: navy[400],
+    marginBottom: spacing[4],
+  },
+  summaryAmount: {
+    lineHeight: 36,
+  },
+  summaryAmountBold: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    letterSpacing: -0.8,
+    color: '#FFFFFF',
+  },
+  summaryAmountOf: {
+    fontFamily: fonts.ui,
+    fontSize: 16,
+    color: navy[300],
+  },
+  summaryRight: {
+    alignItems: 'flex-end',
+    gap: spacing[2],
+  },
+  summaryFraction: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: navy[200],
+  },
+  summaryPerPlayer: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    color: navy[400],
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: navy[600],
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: TEAM[500],
+  },
+
+  // ── Section label ─────────────────────────────────────────────────────────
+  sectionLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: navy[400],
+    paddingHorizontal: spacing[20],
+    paddingTop: spacing[24],
+    paddingBottom: spacing[8],
+  },
+
+  // ── Card ──────────────────────────────────────────────────────────────────
+  card: {
+    marginHorizontal: spacing[16],
+    backgroundColor: navy[700],
+    borderRadius: radius.l,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.05)',
+    overflow: 'hidden',
+  },
+
+  // ── Player row ────────────────────────────────────────────────────────────
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[12],
+    gap: spacing[12],
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerName: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 15,
+    color: navy[100],
+  },
+  playerJersey: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    color: navy[400],
+    marginTop: 2,
+  },
+  playerRight: {
+    alignItems: 'flex-end',
+    gap: spacing[4],
+  },
+  playerAmount: {
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    color: navy[200],
+  },
+
+  // ── Avatar ────────────────────────────────────────────────────────────────
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: TEAM[700],
+    borderWidth: 1.5,
+    borderColor: TEAM[500],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: fonts.uiBold,
+    fontSize: 13,
+    color: TEAM[100],
+  },
+
+  // ── Status pill ───────────────────────────────────────────────────────────
+  pill: {
+    paddingHorizontal: spacing[8],
+    paddingVertical: 3,
+    borderRadius: radius.xs,
+  },
+  pillLarge: {
+    paddingHorizontal: spacing[12],
+    paddingVertical: spacing[6],
+    borderRadius: radius.s,
+  },
+  pillText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  pillTextLarge: {
+    fontSize: 14,
+  },
+
+  // ── Row divider ───────────────────────────────────────────────────────────
+  rowDivider: {
+    height: 0.5,
+    backgroundColor: navy[600],
+    marginLeft: spacing[16],
+  },
+
+  // ── Balance card (player view) ────────────────────────────────────────────
+  balanceCard: {
+    marginHorizontal: spacing[16],
+    backgroundColor: navy[700],
+    borderRadius: radius.xxl,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.06)',
+    padding: spacing[20],
+  },
+  balanceTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: spacing[20],
+  },
+  balanceLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: navy[400],
+    marginBottom: spacing[4],
+  },
+  balanceAmount: {
+    fontFamily: fonts.display,
+    fontSize: 40,
+    letterSpacing: -1.2,
+    color: '#FFFFFF',
+  },
+  balanceMeta: {
+    flexDirection: 'row',
+    gap: spacing[32],
+    marginBottom: spacing[24],
+  },
+  balanceMetaItem: {
+    gap: spacing[2],
+  },
+  balanceMetaLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: navy[400],
+  },
+  balanceMetaValue: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: navy[200],
+  },
+  payBtn: {
+    backgroundColor: TEAM[500],
+    borderRadius: radius.m,
+    paddingVertical: spacing[14],
+    alignItems: 'center',
+  },
+  payBtnText: {
+    fontFamily: fonts.uiBold,
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEAM.on,
+  },
+
+  // ── Payment history ───────────────────────────────────────────────────────
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[14],
+    gap: spacing[12],
+  },
+  historyLeft: {
+    flex: 1,
+    gap: spacing[2],
+  },
+  historyLabel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: navy[100],
+  },
+  historyDate: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    color: navy[400],
+  },
+  historyRight: {
+    alignItems: 'flex-end',
+    gap: spacing[4],
+  },
+  historyAmount: {
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    color: navy[200],
+  },
+
+  // ── Bottom sheet ──────────────────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.60)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingTop: spacing[12],
+    paddingHorizontal: spacing[20],
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: navy[500],
+    alignSelf: 'center',
+    marginBottom: spacing[20],
+  },
+  sheetTitle: {
+    ...T.headingL,
+    color: '#FFFFFF',
+    marginBottom: spacing[4],
+  },
+  sheetSub: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: navy[300],
+    marginBottom: spacing[24],
+  },
+
+  // ── Amount input ──────────────────────────────────────────────────────────
+  amountInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: navy[800],
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: TEAM[700],
+    paddingHorizontal: spacing[16],
+    marginBottom: spacing[16],
+  },
+  amountDollar: {
+    fontFamily: fonts.mono,
+    fontSize: 24,
+    color: navy[300],
+    marginRight: spacing[4],
+  },
+  amountInput: {
+    fontFamily: fonts.mono,
+    fontSize: 32,
+    color: '#FFFFFF',
+    flex: 1,
+    paddingVertical: spacing[14],
+  },
+
+  // ── Save button ───────────────────────────────────────────────────────────
+  saveBtn: {
+    backgroundColor: TEAM[500],
+    borderRadius: radius.m,
+    paddingVertical: spacing[14],
+    alignItems: 'center',
+    marginBottom: spacing[8],
+  },
+  saveBtnText: {
+    fontFamily: fonts.uiBold,
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEAM.on,
+  },
+
+  // ── Action sheet ──────────────────────────────────────────────────────────
+  actionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[12],
+    marginBottom: spacing[16],
+  },
+  actionName: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  actionSub: {
+    fontFamily: fonts.mono,
+    fontSize: 12,
+    color: navy[400],
+    marginTop: 2,
+  },
+  actionDivider: {
+    height: 0.5,
+    backgroundColor: navy[600],
+    marginBottom: spacing[8],
+  },
+  actionRow: {
+    paddingVertical: spacing[16],
+    borderRadius: radius.s,
+    paddingHorizontal: spacing[4],
+  },
+  actionRowText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    color: navy[100],
+  },
+  actionRowCancel: {
+    marginTop: spacing[4],
+  },
+  actionRowCancelText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    color: navy[400],
+  },
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute',
+    left: spacing[20],
+    right: spacing[20],
+    backgroundColor: navy[700],
+    borderRadius: radius.pill,
+    borderWidth: 0.5,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[20],
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  toastText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+});
+
+// ─── Utility ──────────────────────────────────────────────────────────────────
+
+function hexToRgbVals(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
+}

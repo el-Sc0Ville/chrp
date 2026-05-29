@@ -66,7 +66,7 @@ export default function ProfileScreen() {
     if (value) {
       Alert.alert(
         'Allow location access?',
-        "Chrp uses your location on gameday to show travel time to the rink and let your manager see who's nearby.",
+        "Chrp uses your location on gameday to show travel time to the rink and let your teammates see who's nearby.",
         [
           { text: 'Not now', style: 'cancel' },
           { text: 'Continue', onPress: () => setLocation(true) },
@@ -215,7 +215,7 @@ export default function ProfileScreen() {
           <ToggleRow
             icon="📍"
             label="Location for Gameday"
-            subtitle="Shows your arrival status to your manager on game day"
+            subtitle="Shows your arrival status to all teammates on game day"
             value={location}
             onValueChange={handleLocationToggle}
           />
