@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, ice, status, fonts, type as T, spacing, radius } from '../theme';
 import AvatarPill from '../components/AvatarPill';
-import { useScores, scoreLabel, scoreResult, type Score } from '../context/ScoreContext';
+import { scoreResult } from '../context/ScoreContext';
 import { useUserContext } from '../context/UserContext';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useResponses } from '../firebase/hooks/useResponses';
@@ -51,8 +51,8 @@ interface PastEvent {
   kind: EventKind;
   title: string;
   venue: string;
-  score?: string;
-  win?: boolean;
+  scoreUs?: number;
+  scoreThem?: number;
 }
 
 // ─── Kind tag styles ──────────────────────────────────────────────────────────
@@ -87,10 +87,6 @@ function toPastEvent(e: FirestoreEvent): PastEvent {
   const d = e.startsAt.toDate();
   const wd = d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase();
   const mo = d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase();
-  const score = e.scoreUs !== undefined && e.scoreThem !== undefined
-    ? `${e.scoreUs}–${e.scoreThem}` : undefined;
-  const win = e.scoreUs !== undefined && e.scoreThem !== undefined
-    ? e.scoreUs > e.scoreThem : undefined;
   return {
     id: e.id,
     weekday: wd,
@@ -99,8 +95,8 @@ function toPastEvent(e: FirestoreEvent): PastEvent {
     kind: e.type as EventKind,
     title: e.title,
     venue: e.venue,
-    score,
-    win,
+    scoreUs: e.scoreUs,
+    scoreThem: e.scoreThem,
   };
 }
 
@@ -211,11 +207,8 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
   );
 }
 
-function PastEventRow({ event, score, onPress }: { event: PastEvent; score?: Score; onPress: () => void }) {
-  const displayScore = score
-    ? { text: scoreLabel(score.us, score.them), win: scoreResult(score.us, score.them) === 'win' }
-    : event.score ? { text: event.score, win: event.win } : null;
-
+function PastEventRow({ event, onPress }: { event: PastEvent; onPress: () => void }) {
+  const hasScore = event.scoreUs !== undefined && event.scoreThem !== undefined;
   return (
     <Pressable
       onPress={onPress}
@@ -227,7 +220,12 @@ function PastEventRow({ event, score, onPress }: { event: PastEvent; score?: Sco
         <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
         <Text style={styles.eventMeta} numberOfLines={1}>{event.venue}</Text>
       </View>
-      {displayScore && <ScoreBadge score={displayScore.text} win={displayScore.win} />}
+      {hasScore && (
+        <ScoreBadge
+          score={`${event.scoreUs}–${event.scoreThem}`}
+          win={scoreResult(event.scoreUs!, event.scoreThem!) === 'win'}
+        />
+      )}
     </Pressable>
   );
 }
@@ -252,7 +250,6 @@ function ScheduleSkeleton() {
 
 function PastSection({ events, onNavigate }: { events: PastEvent[]; onNavigate: (id: string, title: string) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const { scores } = useScores();
   return (
     <View style={styles.pastSection}>
       <Pressable
@@ -266,7 +263,6 @@ function PastSection({ events, onNavigate }: { events: PastEvent[]; onNavigate: 
         <PastEventRow
           key={e.id}
           event={e}
-          score={scores[e.id]}
           onPress={() => onNavigate(e.id, e.title)}
         />
       ))}
