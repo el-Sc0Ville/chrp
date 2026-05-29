@@ -3,7 +3,7 @@
 
 const IS_MANAGER = true;
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
   TextInput, KeyboardAvoidingView, Platform, Linking, StyleSheet,
@@ -21,6 +21,7 @@ const TEAM = teams.trashdogs;
 type EventDetailRouteProp = RouteProp<RootStackParamList, 'EventDetail'>;
 type EventDetailNavProp   = NativeStackNavigationProp<RootStackParamList, 'EventDetail'>;
 type PlayerResponse       = 'in' | 'out' | 'maybe' | null;
+type GroupKey             = 'in' | 'out' | 'maybe' | 'noResp';
 
 interface Player {
   id: string;
@@ -95,6 +96,26 @@ function ManagerEventDetail() {
   const score = scores[eventId];
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
+  const [groups, setGroups] = useState<Record<GroupKey, Player[]>>({
+    in:     PLAYERS_IN,
+    out:    PLAYERS_OUT,
+    maybe:  PLAYERS_MAYBE,
+    noResp: PLAYERS_NO_RESP,
+  });
+  const [editTarget, setEditTarget] = useState<{ player: Player; fromGroup: GroupKey } | null>(null);
+
+  const markAs = (toGroup: 'in' | 'out' | 'maybe') => {
+    if (!editTarget) return;
+    const { player, fromGroup } = editTarget;
+    setGroups(prev => {
+      const from = prev[fromGroup].filter(p => p.id !== player.id);
+      const to   = [...prev[toGroup], { ...player, respondedAt: 'just now' }];
+      return { ...prev, [fromGroup]: from, [toGroup]: to };
+    });
+    setEditTarget(null);
+    // TODO Phase 2: write availability override to Firestore with manager attribution
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <NavHeader onBack={() => navigation.goBack()} />
@@ -119,14 +140,26 @@ function ManagerEventDetail() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>
-          <AvailGroup label="In"          dotColor={status.success.pure} players={PLAYERS_IN} />
-          <AvailGroup label="Out"         dotColor={status.error.pure}   players={PLAYERS_OUT} />
-          <AvailGroup label="Maybe"       dotColor={status.alert.pure}   players={PLAYERS_MAYBE} />
           <AvailGroup
-            label="No response"
-            dotColor={navy[400]}
-            players={PLAYERS_NO_RESP}
+            label="In" dotColor={status.success.pure}
+            players={groups.in}
+            onEditPlayer={(p) => setEditTarget({ player: p, fromGroup: 'in' })}
+          />
+          <AvailGroup
+            label="Out" dotColor={status.error.pure}
+            players={groups.out}
+            onEditPlayer={(p) => setEditTarget({ player: p, fromGroup: 'out' })}
+          />
+          <AvailGroup
+            label="Maybe" dotColor={status.alert.pure}
+            players={groups.maybe}
+            onEditPlayer={(p) => setEditTarget({ player: p, fromGroup: 'maybe' })}
+          />
+          <AvailGroup
+            label="No response" dotColor={navy[400]}
+            players={groups.noResp}
             showRemind={!isPast}
+            onEditPlayer={(p) => setEditTarget({ player: p, fromGroup: 'noResp' })}
           />
         </View>
 
@@ -147,6 +180,12 @@ function ManagerEventDetail() {
         onSave={(s) => setScore(eventId, s)}
         onClose={() => setScoreSheetVisible(false)}
       />
+      <AvailEditSheet
+        visible={editTarget !== null}
+        player={editTarget?.player ?? null}
+        onMark={markAs}
+        onClose={() => setEditTarget(null)}
+      />
     </View>
   );
 }
@@ -162,9 +201,23 @@ function PlayerEventDetail() {
   const { title, eventId, isPast = false } = route.params;
   const { responses, setResponse: setGameResponse } = useGameResponse();
   const response: PlayerResponse = responses[eventId] ?? null;
-  const handleRespond = (r: NonNullable<PlayerResponse>) => setGameResponse(eventId, r);
   const { scores } = useScores();
   const score = scores[eventId];
+
+  const [subSheetVisible, setSubSheetVisible] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const handleRespond = (r: NonNullable<PlayerResponse>) => {
+    setGameResponse(eventId, r);
+    if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -206,6 +259,25 @@ function PlayerEventDetail() {
           </View>
         )}
       </ScrollView>
+
+      <SubRequestSheet
+        visible={subSheetVisible}
+        gameName={title}
+        onYes={() => {
+          setSubSheetVisible(false);
+          showToast('Request sent to manager');
+          // TODO Phase 2: wire sub request to Firestore + trigger manager push notification
+        }}
+        onDismiss={() => setSubSheetVisible(false)}
+      />
+      {toast !== null && (
+        <View
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -419,12 +491,13 @@ function ScoreSheet({
 // ─── Availability group (collapsible) ─────────────────────────────────────────
 
 function AvailGroup({
-  label, dotColor, players, showRemind = false,
+  label, dotColor, players, showRemind = false, onEditPlayer,
 }: {
   label: string;
   dotColor: string;
   players: Player[];
   showRemind?: boolean;
+  onEditPlayer?: (player: Player) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -451,14 +524,14 @@ function AvailGroup({
 
       {expanded && (
         <View style={styles.groupBody}>
-          {players.map(p => <PlayerRow key={p.id} player={p} />)}
+          {players.map(p => <PlayerRow key={p.id} player={p} onEditPlayer={onEditPlayer} />)}
         </View>
       )}
     </View>
   );
 }
 
-function PlayerRow({ player }: { player: Player }) {
+function PlayerRow({ player, onEditPlayer }: { player: Player; onEditPlayer?: (player: Player) => void }) {
   return (
     <View style={styles.playerRow}>
       <View style={styles.jerseyBadge}>
@@ -468,7 +541,99 @@ function PlayerRow({ player }: { player: Player }) {
       {player.respondedAt && (
         <Text style={styles.playerTime}>{player.respondedAt}</Text>
       )}
+      {onEditPlayer && (
+        <Pressable onPress={() => onEditPlayer(player)} hitSlop={10} style={styles.editPlayerBtn}>
+          <Text style={styles.editPlayerIcon}>✎</Text>
+        </Pressable>
+      )}
     </View>
+  );
+}
+
+// ─── Manager availability edit sheet ─────────────────────────────────────────
+
+function AvailEditSheet({
+  visible, player, onMark, onClose,
+}: {
+  visible: boolean;
+  player: Player | null;
+  onMark: (group: 'in' | 'out' | 'maybe') => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const MARK_OPTS: { id: 'in' | 'out' | 'maybe'; label: string; color: string }[] = [
+    { id: 'in',    label: 'Mark as In',    color: status.success.pure },
+    { id: 'out',   label: 'Mark as Out',   color: status.error.pure   },
+    { id: 'maybe', label: 'Mark as Maybe', color: status.alert.pure   },
+  ];
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.availEditSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+        >
+          <View style={styles.sheetHandle} />
+          {player && <Text style={styles.availEditName}>{player.name}</Text>}
+          {MARK_OPTS.map(opt => (
+            <Pressable
+              key={opt.id}
+              style={({ pressed }) => [styles.availEditOption, pressed && { opacity: 0.75 }]}
+              onPress={() => onMark(opt.id)}
+            >
+              <Text style={[styles.availEditOptionText, { color: opt.color }]}>{opt.label}</Text>
+            </Pressable>
+          ))}
+          <Pressable
+            style={({ pressed }) => [styles.availEditOption, pressed && { opacity: 0.75 }]}
+            onPress={onClose}
+          >
+            <Text style={[styles.availEditOptionText, { color: navy[400] }]}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Sub request sheet (player only) ─────────────────────────────────────────
+
+function SubRequestSheet({
+  visible, gameName, onYes, onDismiss,
+}: {
+  visible: boolean;
+  gameName: string;
+  onYes: () => void;
+  onDismiss: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.subRequestSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+        >
+          <View style={styles.sheetHandle} />
+          <Text style={styles.subRequestTitle}>Need a sub?</Text>
+          <Text style={styles.subRequestBody}>
+            Want us to let your manager know you need a replacement for {gameName}?
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.subRequestYesBtn, pressed && { opacity: 0.85 }]}
+            onPress={onYes}
+          >
+            <Text style={styles.subRequestYesBtnText}>Yes, request a sub</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.subRequestNoBtn, pressed && { opacity: 0.75 }]}
+            onPress={onDismiss}
+          >
+            <Text style={styles.subRequestNoBtnText}>No thanks</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -799,6 +964,72 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   ghostBtnText: { fontFamily: fonts.uiSemiBold, fontSize: 15, color: TEAM[300] },
+
+  // ── Player edit button ────────────────────────────────────────────────────
+  editPlayerBtn: { padding: 4 },
+  editPlayerIcon: { fontSize: 15, color: navy[400], fontFamily: fonts.ui },
+
+  // ── Avail edit sheet ──────────────────────────────────────────────────────
+  availEditSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24], paddingTop: spacing[16],
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  availEditName: {
+    fontFamily: fonts.uiSemiBold, fontSize: 14, color: navy[300],
+    textAlign: 'center', marginBottom: spacing[16],
+  },
+  availEditOption: {
+    height: 52, alignItems: 'center', justifyContent: 'center',
+    borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.07)',
+  },
+  availEditOptionText: { fontFamily: fonts.uiSemiBold, fontSize: 16, fontWeight: '600' },
+
+  // ── Sub request sheet ─────────────────────────────────────────────────────
+  subRequestSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24], paddingTop: spacing[16],
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  subRequestTitle: {
+    fontFamily: fonts.display, fontSize: 20, fontWeight: '700',
+    letterSpacing: -0.3, color: '#FFFFFF',
+    textAlign: 'center', marginBottom: spacing[10],
+  },
+  subRequestBody: {
+    fontFamily: fonts.ui, fontSize: 14, lineHeight: 20,
+    color: navy[300], textAlign: 'center', marginBottom: spacing[24],
+  },
+  subRequestYesBtn: {
+    height: 52, borderRadius: radius.l, backgroundColor: TEAM[500],
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[10],
+    shadowColor: TEAM[500], shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
+  },
+  subRequestYesBtnText: { fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM.on },
+  subRequestNoBtn: {
+    height: 52, borderRadius: radius.l, borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[8],
+  },
+  subRequestNoBtnText: { fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM[300] },
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute', left: spacing[20], right: spacing[20],
+    backgroundColor: navy[700], borderRadius: radius.pill,
+    borderWidth: 0.5, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    paddingVertical: spacing[12], paddingHorizontal: spacing[20],
+    alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 10,
+  },
+  toastText: { fontFamily: fonts.uiSemiBold, fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
 });
 
 // ─── Utility ──────────────────────────────────────────────────────────────────

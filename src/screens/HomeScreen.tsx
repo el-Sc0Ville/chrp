@@ -5,10 +5,10 @@
 const IS_MANAGER = true;
 const IS_GAME_DAY = true;
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Pressable, Linking,
+  StyleSheet, Pressable, Linking, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -299,8 +299,22 @@ function PlayerHomeScreen() {
   const { unreadCount } = useNotifications();
   const { responses, setResponse: setGameResponse } = useGameResponse();
   const response: Response = responses['home_game'] ?? null;
-  const handleRespond = (r: Response) => setGameResponse('home_game', r);
   const hasEvent = true;
+
+  const [subSheetVisible, setSubSheetVisible] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const handleRespond = (r: Response) => {
+    setGameResponse('home_game', r);
+    if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
+  };
 
   const goToProfile       = () => navigation.navigate('Profile');
   const goToGameday       = () => navigation.navigate('Gameday');
@@ -336,6 +350,25 @@ function PlayerHomeScreen() {
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
+
+      <SubRequestSheet
+        visible={subSheetVisible}
+        gameName="vs. Ice Sharks"
+        onYes={() => {
+          setSubSheetVisible(false);
+          showToast('Request sent to manager');
+          // TODO Phase 2: wire sub request to Firestore + trigger manager push notification
+        }}
+        onDismiss={() => setSubSheetVisible(false)}
+      />
+      {toast !== null && (
+        <View
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -582,6 +615,47 @@ function AnnouncementsSection({ hasEvent, onViewAll }: { hasEvent: boolean; onVi
         <Text style={styles.announcementChevron}>›</Text>
       </TouchableOpacity>
     </View>
+  );
+}
+
+// ─── Sub request sheet ────────────────────────────────────────────────────────
+
+function SubRequestSheet({
+  visible, gameName, onYes, onDismiss,
+}: {
+  visible: boolean;
+  gameName: string;
+  onYes: () => void;
+  onDismiss: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.subRequestSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+        >
+          <View style={styles.sheetHandle} />
+          <Text style={styles.subRequestTitle}>Need a sub?</Text>
+          <Text style={styles.subRequestBody}>
+            Want us to let your manager know you need a replacement for {gameName}?
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.subRequestYesBtn, pressed && { opacity: 0.85 }]}
+            onPress={onYes}
+          >
+            <Text style={styles.subRequestYesBtnText}>Yes, request a sub</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.subRequestNoBtn, pressed && { opacity: 0.75 }]}
+            onPress={onDismiss}
+          >
+            <Text style={styles.subRequestNoBtnText}>No thanks</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -1116,6 +1190,61 @@ const styles = StyleSheet.create({
     color: 'rgba(229,234,242,0.40)',
     lineHeight: 20,
   },
+
+  // ── Sub request sheet ─────────────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.60)',
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: navy[500],
+    alignSelf: 'center', marginBottom: spacing[20],
+  },
+  subRequestSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24], paddingTop: spacing[16],
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  subRequestTitle: {
+    fontFamily: fonts.display, fontSize: 20, fontWeight: '700',
+    letterSpacing: -0.3, color: '#FFFFFF',
+    textAlign: 'center', marginBottom: spacing[10],
+  },
+  subRequestBody: {
+    fontFamily: fonts.ui, fontSize: 14, lineHeight: 20,
+    color: navy[300], textAlign: 'center', marginBottom: spacing[24],
+  },
+  subRequestYesBtn: {
+    height: 52, borderRadius: radius.l, backgroundColor: TEAM[500],
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[10],
+    shadowColor: TEAM[500], shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
+  },
+  subRequestYesBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM.on,
+  },
+  subRequestNoBtn: {
+    height: 52, borderRadius: radius.l, borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[8],
+  },
+  subRequestNoBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM[300],
+  },
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute', left: spacing[20], right: spacing[20],
+    backgroundColor: navy[700], borderRadius: radius.pill,
+    borderWidth: 0.5, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    paddingVertical: spacing[12], paddingHorizontal: spacing[20],
+    alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 10,
+  },
+  toastText: { fontFamily: fonts.uiSemiBold, fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
 });
 
 // ─── Utility ──────────────────────────────────────────────────────────────────

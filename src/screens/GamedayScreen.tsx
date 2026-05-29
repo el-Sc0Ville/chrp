@@ -9,6 +9,9 @@ import {
   View, Text, ScrollView, Pressable, Animated, Linking, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 
 const TEAM = teams.trashdogs;
@@ -55,6 +58,7 @@ const GAMEDAY_PLAYERS: GamedayPlayer[] = [
 
 export default function GamedayScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,6 +76,14 @@ export default function GamedayScreen() {
 
       {/* ── Page header ── */}
       <View style={styles.pageHeader}>
+        <Pressable
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          onPress={() => navigation.goBack()}
+          hitSlop={12}
+        >
+          <Text style={styles.backChevron}>‹</Text>
+          <Text style={styles.backBtnText}>Back</Text>
+        </Pressable>
         <Text style={styles.pageTitle}>Gameday</Text>
       </View>
 
@@ -241,9 +253,18 @@ const styles = StyleSheet.create({
   // ── Page header ───────────────────────────────────────────────────────────
   pageHeader: {
     paddingHorizontal: spacing[20],
-    paddingTop: spacing[16],
+    paddingTop: spacing[10],
     paddingBottom: spacing[14],
   },
+  backBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    alignSelf: 'flex-start', marginBottom: spacing[6],
+  },
+  backChevron: {
+    fontFamily: fonts.display, fontSize: 26, lineHeight: 28,
+    color: TEAM[300], marginTop: -2,
+  },
+  backBtnText: { fontFamily: fonts.uiMedium, fontSize: 15, color: TEAM[300] },
   pageTitle: {
     ...T.headingXXL,
     color: '#FFFFFF',

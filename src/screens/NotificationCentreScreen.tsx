@@ -1,9 +1,9 @@
 // Notification centre — availability RSVP, announcements, sub confirmations.
 // Part of the Home tab stack; accessible via bell icon in HomeScreen header.
 
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -42,6 +42,17 @@ export default function NotificationCentreScreen() {
   const { notifications, markRead, markAllRead, unreadCount } = useNotifications();
   const { responses, setResponse } = useGameResponse();
 
+  const [subSheetVisible, setSubSheetVisible] = useState(false);
+  const [subGameName,     setSubGameName]     = useState('');
+  const [toast,           setToast]           = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+  };
+
   const renderCard = (notif: AppNotification) => {
     switch (notif.type) {
       case 'availability':
@@ -54,6 +65,10 @@ export default function NotificationCentreScreen() {
             onRespond={(r) => {
               setResponse(notif.eventId, r);
               markRead(notif.id);
+              if (r === 'out' || r === 'maybe') {
+                setSubGameName(`vs. ${notif.opponent}`);
+                setSubSheetVisible(true);
+              }
               // TODO Phase 2: wire response to Firestore + trigger FCM confirmation
             }}
           />
@@ -129,6 +144,25 @@ export default function NotificationCentreScreen() {
           </View>
         )}
       </ScrollView>
+
+      <SubRequestSheet
+        visible={subSheetVisible}
+        gameName={subGameName}
+        onYes={() => {
+          setSubSheetVisible(false);
+          showToast('Request sent to manager');
+          // TODO Phase 2: wire sub request to Firestore + trigger manager push notification
+        }}
+        onDismiss={() => setSubSheetVisible(false)}
+      />
+      {toast !== null && (
+        <View
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -267,6 +301,47 @@ function SubFilledCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+// ─── Sub request sheet ────────────────────────────────────────────────────────
+
+function SubRequestSheet({
+  visible, gameName, onYes, onDismiss,
+}: {
+  visible: boolean;
+  gameName: string;
+  onYes: () => void;
+  onDismiss: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.subRequestSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+        >
+          <View style={styles.sheetHandle} />
+          <Text style={styles.subRequestTitle}>Need a sub?</Text>
+          <Text style={styles.subRequestBody}>
+            Want us to let your manager know you need a replacement for {gameName}?
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.subRequestYesBtn, pressed && { opacity: 0.85 }]}
+            onPress={onYes}
+          >
+            <Text style={styles.subRequestYesBtnText}>Yes, request a sub</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.subRequestNoBtn, pressed && { opacity: 0.75 }]}
+            onPress={onDismiss}
+          >
+            <Text style={styles.subRequestNoBtnText}>No thanks</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -484,6 +559,61 @@ const styles = StyleSheet.create({
     color: navy[400],
     textAlign: 'center',
   },
+
+  // ── Sub request sheet ─────────────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.60)',
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: navy[500],
+    alignSelf: 'center', marginBottom: spacing[20],
+  },
+  subRequestSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24], paddingTop: spacing[16],
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  subRequestTitle: {
+    fontFamily: fonts.display, fontSize: 20, fontWeight: '700',
+    letterSpacing: -0.3, color: '#FFFFFF',
+    textAlign: 'center', marginBottom: spacing[10],
+  },
+  subRequestBody: {
+    fontFamily: fonts.ui, fontSize: 14, lineHeight: 20,
+    color: navy[300], textAlign: 'center', marginBottom: spacing[24],
+  },
+  subRequestYesBtn: {
+    height: 52, borderRadius: radius.l, backgroundColor: TEAM[500],
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[10],
+    shadowColor: TEAM[500], shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
+  },
+  subRequestYesBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM.on,
+  },
+  subRequestNoBtn: {
+    height: 52, borderRadius: radius.l, borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[8],
+  },
+  subRequestNoBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM[300],
+  },
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute', left: spacing[20], right: spacing[20],
+    backgroundColor: navy[700], borderRadius: radius.pill,
+    borderWidth: 0.5, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    paddingVertical: spacing[12], paddingHorizontal: spacing[20],
+    alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 10,
+  },
+  toastText: { fontFamily: fonts.uiSemiBold, fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
 });
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
