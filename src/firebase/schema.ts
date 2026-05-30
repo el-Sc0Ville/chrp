@@ -91,5 +91,6 @@ export interface DuesRecord {
   amountPaid: number;
   status: 'paid' | 'partial' | 'pending' | 'overdue';
   notes?: string;
+  dueDate?: Timestamp;
   lastPaymentAt?: Timestamp;
 }

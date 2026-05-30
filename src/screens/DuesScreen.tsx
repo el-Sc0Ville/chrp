@@ -7,7 +7,10 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
@@ -33,6 +36,7 @@ interface DuesPlayer {
   paidAmount: number;
   seasonAmount: number;
   notes?: string;
+  dueDate: Date | null;
 }
 
 function toDuesPlayer(r: DuesRecord): DuesPlayer {
@@ -44,7 +48,14 @@ function toDuesPlayer(r: DuesRecord): DuesPlayer {
     id: r.userId, name: r.displayName, initials,
     jersey: 0, duesStatus: r.status, paidAmount: r.amountPaid,
     seasonAmount: r.seasonAmount, notes: r.notes,
+    dueDate: r.dueDate?.toDate() ?? null,
   };
+}
+
+function formatDueDate(d: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
 // ─── Root export ──────────────────────────────────────────────────────────────
@@ -400,18 +411,27 @@ function PlayerEditSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [owedRaw, setOwedRaw] = useState(String(player.seasonAmount));
-  const [paidRaw, setPaidRaw] = useState(String(player.paidAmount));
-  const [notes,   setNotes]   = useState(player.notes ?? '');
-  const [saving,  setSaving]  = useState(false);
+  const [owedRaw,         setOwedRaw]         = useState(String(player.seasonAmount));
+  const [paidRaw,         setPaidRaw]         = useState(String(player.paidAmount));
+  const [notes,           setNotes]           = useState(player.notes ?? '');
+  const [dueDate,         setDueDate]         = useState<Date | null>(player.dueDate);
+  const [showDatePicker,  setShowDatePicker]  = useState(false);
+  const [saving,          setSaving]          = useState(false);
 
   const owed = parseInt(owedRaw.replace(/[^0-9]/g, ''), 10) || 0;
   const paid = parseInt(paidRaw.replace(/[^0-9]/g, ''), 10) || 0;
+  const now  = new Date();
 
   const computedStatus: DuesStatus =
-    owed > 0 && paid >= owed ? 'paid'
-    : paid > 0               ? 'partial'
-    :                          'pending';
+    owed > 0 && paid >= owed                ? 'paid'
+    : paid > 0                              ? 'partial'
+    : dueDate !== null && dueDate < now     ? 'overdue'
+    :                                         'pending';
+
+  function onDateChange(event: DateTimePickerEvent, selected?: Date) {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'set' && selected) setDueDate(selected);
+  }
 
   const handleSave = async () => {
     if (saving) return;
@@ -422,6 +442,7 @@ function PlayerEditSheet({
         seasonAmount: owed,
         status:       computedStatus,
         notes:        notes.trim(),
+        dueDate:      dueDate !== null ? Timestamp.fromDate(dueDate) : deleteField(),
         ...(paid > 0 && { lastPaymentAt: serverTimestamp() }),
       });
       onSave('Payment record updated');
@@ -465,11 +486,11 @@ function PlayerEditSheet({
               </View>
 
               {/* Amount paid + live computed status */}
-              <View style={styles.fieldLabelRow}>
+              <View style={[styles.fieldLabelRow, styles.fieldSpacing]}>
                 <Text style={styles.fieldLabel}>AMOUNT PAID</Text>
                 <StatusPill status={computedStatus} />
               </View>
-              <View style={[styles.amountInputWrap, styles.fieldSpacing]}>
+              <View style={styles.amountInputWrap}>
                 <Text style={styles.amountDollar}>$</Text>
                 <TextInput
                   style={styles.amountInput}
@@ -481,6 +502,41 @@ function PlayerEditSheet({
                   placeholderTextColor={navy[400]}
                 />
               </View>
+
+              {/* Due date */}
+              <Pressable
+                style={({ pressed }) => [styles.dueDateRow, styles.fieldSpacing, pressed && { opacity: 0.75 }]}
+                onPress={() => setShowDatePicker(v => !v)}
+              >
+                <Text style={styles.fieldLabel}>DUE DATE</Text>
+                <View style={styles.dueDateRight}>
+                  <Text style={[styles.dueDateValue, !dueDate && styles.dueDatePlaceholder]}>
+                    {dueDate ? formatDueDate(dueDate) : 'Not set'}
+                  </Text>
+                  <Text style={[styles.pickerChevron, showDatePicker && styles.pickerChevronOpen]}>›</Text>
+                </View>
+              </Pressable>
+
+              {showDatePicker && (
+                <View style={styles.pickerContainer}>
+                  <DateTimePicker
+                    value={dueDate ?? new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    onChange={onDateChange}
+                    accentColor={TEAM[300]}
+                    themeVariant="dark"
+                  />
+                  {Platform.OS === 'ios' && (
+                    <Pressable
+                      onPress={() => setShowDatePicker(false)}
+                      style={({ pressed }) => [styles.pickerDone, pressed && { opacity: 0.7 }]}
+                    >
+                      <Text style={styles.pickerDoneText}>Done</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
 
               {/* Notes */}
               <Text style={[styles.fieldLabel, styles.fieldSpacing]}>NOTES</Text>
@@ -948,6 +1004,60 @@ const styles = StyleSheet.create({
     minHeight: 72,
     textAlignVertical: 'top',
     marginBottom: spacing[20],
+  },
+
+  // ── Due date picker row ───────────────────────────────────────────────────
+  dueDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: navy[800],
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: navy[600],
+    paddingHorizontal: spacing[14],
+    paddingVertical: spacing[12],
+  },
+  dueDateRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[6],
+  },
+  dueDateValue: {
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    color: navy[100],
+  },
+  dueDatePlaceholder: {
+    color: navy[400],
+  },
+  pickerChevron: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    lineHeight: 22,
+    color: navy[400],
+    transform: [{ rotate: '90deg' }],
+  },
+  pickerChevronOpen: {
+    transform: [{ rotate: '270deg' }],
+  },
+  pickerContainer: {
+    backgroundColor: navy[800],
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: navy[600],
+    marginTop: spacing[4],
+    overflow: 'hidden',
+  },
+  pickerDone: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[10],
+  },
+  pickerDoneText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: TEAM[300],
   },
 
   // ── Toast ─────────────────────────────────────────────────────────────────
