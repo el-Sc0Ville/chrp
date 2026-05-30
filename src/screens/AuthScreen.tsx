@@ -164,7 +164,7 @@ export default function AuthScreen() {
                     console.log('Attempting anonymous sign in...');
                     const result = await signInAnonymously(auth);
                     console.log('Anonymous sign in SUCCESS, uid:', result.user.uid);
-                    const mockUser = { ...result.user, uid: 'u3', displayName: 'Pat Normandin' };
+                    const mockUser = { ...result.user, uid: 'r1', displayName: 'Pat Normandin' };
                     setMockUser(mockUser as typeof result.user, true);
                     console.log('setMockUser called');
                   } catch (e) {
@@ -178,7 +178,7 @@ export default function AuthScreen() {
                 style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
                 onPress={async () => {
                   const { user } = await signInAnonymously(auth);
-                  const mockUser = { ...user, uid: 'u3', displayName: 'Pat Normandin' };
+                  const mockUser = { ...user, uid: 'r3', displayName: 'Sophie Tremblay' };
                   setMockUser(mockUser as typeof user, false);
                 }}
               >
