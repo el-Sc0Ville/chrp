@@ -44,8 +44,8 @@ async function addEventToCalendar(
   firestoreEvent: FirestoreEvent,
   showToast: (msg: string) => void,
 ): Promise<void> {
-  const { granted } = await Calendar.requestCalendarPermissions();
-  if (!granted) {
+  const { status } = await Calendar.requestCalendarPermissionsAsync();
+  if (status !== 'granted') {
     Alert.alert(
       'Calendar Access Needed',
       'Calendar access is needed to add this event. Please enable it in Settings.',
@@ -53,15 +53,17 @@ async function addEventToCalendar(
     return;
   }
   try {
-    let cal: Calendar.ExpoCalendar | undefined;
+    let calendarId: string;
     if (Platform.OS === 'ios') {
-      cal = Calendar.getDefaultCalendarSync();
+      const defaultCal = await Calendar.getDefaultCalendarAsync();
+      calendarId = defaultCal.id;
     } else {
-      const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
-      cal = calendars.find(c => c.allowsModifications);
+      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+      const writable = calendars.find(c => c.allowsModifications);
+      if (!writable) throw new Error('No writable calendar available');
+      calendarId = writable.id;
     }
-    if (!cal) throw new Error('No writable calendar available');
-    await cal.createEvent({
+    await Calendar.createEventAsync(calendarId, {
       title: firestoreEvent.title,
       startDate: firestoreEvent.startsAt.toDate(),
       endDate: firestoreEvent.endsAt.toDate(),
