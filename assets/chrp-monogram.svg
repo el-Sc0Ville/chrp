@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Chrp monogram">
+  <defs>
+    
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16223F"></stop>
+      <stop offset="0.55" stop-color="#0B1426"></stop>
+      <stop offset="1" stop-color="#070B14"></stop>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="57" fill="url(#g)"></rect>
+  <text x="128" y="140" text-anchor="middle" dominant-baseline="central" font-family="&#39;Chakra Petch&#39;, sans-serif" font-weight="700" font-size="150" letter-spacing="-4" fill="#FFFFFF">C</text>
+  
+  <circle cx="178" cy="96" r="13" fill="#5B8BFF"></circle>
+</svg>
