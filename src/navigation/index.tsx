@@ -228,6 +228,7 @@ function LoadingScreen() {
 function TabsNavigator() {
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       tabBar={(props) => <ChrpTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >

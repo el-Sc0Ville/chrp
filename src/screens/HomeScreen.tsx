@@ -17,7 +17,8 @@ import { useEvents } from '../firebase/hooks/useEvents';
 import { useTeam } from '../firebase/hooks/useTeam';
 import { useResponses } from '../firebase/hooks/useResponses';
 import { useMembers } from '../firebase/hooks/useMembers';
-import type { Event as TeamEvent } from '../firebase/schema';
+import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
+import type { Event as TeamEvent, Announcement } from '../firebase/schema';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
@@ -49,9 +50,10 @@ function ManagerHomeScreen() {
   const { unreadCount } = useNotifications();
   const { user } = useUserContext();
 
-  const { team }            = useTeam(TEAM_ID);
-  const { events, loading } = useEvents(TEAM_ID);
-  const { members }         = useMembers(TEAM_ID);
+  const { team }                 = useTeam(TEAM_ID);
+  const { events, loading }      = useEvents(TEAM_ID);
+  const { members }              = useMembers(TEAM_ID);
+  const { announcements }        = useAnnouncements(TEAM_ID);
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
@@ -70,6 +72,8 @@ function ManagerHomeScreen() {
     });
     return counts;
   }, [members, responses]);
+
+  console.log('Home event id:', nextEvent?.id, 'counts:', avail.in, avail.out);
 
   const managerResponse: Response = (responses[uid] as Response) ?? null;
 
@@ -134,7 +138,11 @@ function ManagerHomeScreen() {
         )}
 
         {/* Region 3: announcements */}
-        <AnnouncementsSection hasEvent={hasEvent} onViewAll={goToTeam} />
+        <AnnouncementsSection
+          announcements={announcements}
+          onViewAll={goToTeam}
+          onNavigateTo={id => navigation.navigate('AnnouncementThread', { announcementId: id })}
+        />
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
@@ -380,6 +388,7 @@ function PlayerHomeScreen() {
 
   const { team }            = useTeam(TEAM_ID);
   const { events, loading } = useEvents(TEAM_ID);
+  const { announcements }   = useAnnouncements(TEAM_ID);
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
@@ -388,7 +397,10 @@ function PlayerHomeScreen() {
   const uid = user?.uid ?? 'anon';
   const { responses: firestoreResponses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
   const response: Response = (firestoreResponses[uid] as Response) ?? null;
-  const inCount = Object.values(firestoreResponses).filter(r => r === 'in').length;
+  const inCount  = Object.values(firestoreResponses).filter(r => r === 'in').length;
+  const outCount = Object.values(firestoreResponses).filter(r => r === 'out').length;
+
+  console.log('Home event id:', nextEvent?.id, 'counts:', inCount, outCount);
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -459,7 +471,11 @@ function PlayerHomeScreen() {
           )}
         </View>
 
-        <AnnouncementsSection hasEvent={hasEvent} onViewAll={goToTeam} />
+        <AnnouncementsSection
+          announcements={announcements}
+          onViewAll={goToTeam}
+          onNavigateTo={id => navigation.navigate('AnnouncementThread', { announcementId: id })}
+        />
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
@@ -720,10 +736,16 @@ function InOutMaybeToggle({ response, onRespond }: {
 // ║  Shared components                                                       ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-function AnnouncementsSection({ hasEvent, onViewAll }: { hasEvent: boolean; onViewAll: () => void }) {
-  const ann = hasEvent
-    ? { title: 'Jerseys — wear white on Friday', meta: 'Pat N. · 2h ago' }
-    : { title: 'Welcome to Trashdogs — first game posts soon', meta: 'Pat N. · yesterday' };
+function AnnouncementsSection({
+  announcements,
+  onViewAll,
+  onNavigateTo,
+}: {
+  announcements: Announcement[];
+  onViewAll: () => void;
+  onNavigateTo: (id: string) => void;
+}) {
+  const latest = announcements.slice(0, 2);
 
   return (
     <View style={styles.announcements}>
@@ -733,18 +755,34 @@ function AnnouncementsSection({ hasEvent, onViewAll }: { hasEvent: boolean; onVi
           <Text style={styles.announcementsAll}>All →</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.announcementCard} activeOpacity={0.75} onPress={onViewAll}>
-        <View style={styles.announcementIcon}>
-          <Text>📣</Text>
-        </View>
-        <View style={styles.announcementBody}>
-          <Text style={styles.announcementTitle} numberOfLines={1}>
-            {ann.title}
+      {latest.length === 0 && (
+        <View style={[styles.announcementCard, { justifyContent: 'center' }]}>
+          <Text style={[styles.announcementMeta, { textAlign: 'center', paddingVertical: 4 }]}>
+            No announcements yet
           </Text>
-          <Text style={styles.announcementMeta}>{ann.meta}</Text>
         </View>
-        <Text style={styles.announcementChevron}>›</Text>
-      </TouchableOpacity>
+      )}
+      {latest.map(ann => (
+        <TouchableOpacity
+          key={ann.id}
+          style={[styles.announcementCard, latest.indexOf(ann) > 0 && { marginTop: 8 }]}
+          activeOpacity={0.75}
+          onPress={() => onNavigateTo(ann.id)}
+        >
+          <View style={styles.announcementIcon}>
+            <Text>📣</Text>
+          </View>
+          <View style={styles.announcementBody}>
+            <Text style={styles.announcementTitle} numberOfLines={1}>
+              {ann.body}
+            </Text>
+            <Text style={styles.announcementMeta}>
+              {formatAnnAuthor(ann.authorName)} · {formatAnnTime(ann.createdAt)}
+            </Text>
+          </View>
+          <Text style={styles.announcementChevron}>›</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }
@@ -1414,6 +1452,23 @@ function parseTitleDisplay(event: TeamEvent): { prefix: string; name: string } {
   if (event.title.startsWith('vs '))  return { prefix: 'vs.', name: event.title.slice(3) };
   if (event.title.startsWith('@ '))   return { prefix: '@',   name: event.title.slice(2) };
   return { prefix: '', name: event.title };
+}
+
+function formatAnnAuthor(name: string): string {
+  const parts = name.trim().split(' ');
+  if (parts.length < 2) return name;
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
+function formatAnnTime(ts: { toDate(): Date } | undefined): string {
+  if (!ts) return 'Just now';
+  const diffMs    = Date.now() - ts.toDate().getTime();
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays  = Math.floor(diffMs / 86_400_000);
+  if (diffHours < 1)  return 'Just now';
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays}d ago`;
 }
 
 function hexToRgbVals(hex: string): string {
