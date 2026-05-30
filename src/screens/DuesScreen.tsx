@@ -423,10 +423,10 @@ function PlayerEditSheet({
   const now  = new Date();
 
   const computedStatus: DuesStatus =
-    owed > 0 && paid >= owed                ? 'paid'
-    : paid > 0                              ? 'partial'
-    : dueDate !== null && dueDate < now     ? 'overdue'
-    :                                         'pending';
+    paid >= owed && owed > 0                    ? 'paid'
+    : dueDate !== null && dueDate < now && paid < owed ? 'overdue'
+    : paid > 0                                  ? 'partial'
+    :                                             'pending';
 
   function onDateChange(event: DateTimePickerEvent, selected?: Date) {
     if (Platform.OS === 'android') setShowDatePicker(false);

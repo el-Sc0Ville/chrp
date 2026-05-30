@@ -17,7 +17,6 @@ import { seedDatabase } from '../firebase/seed';
 
 const TEAM = teams.trashdogs;
 
-// TODO: copy chrp-icon-1024.png, chrp-wordmark.svg, chrp-monogram.svg to assets/ folder
 const WORDMARK = require('../../assets/chrp-wordmark.svg');
 
 export default function AuthScreen() {
@@ -62,8 +61,8 @@ export default function AuthScreen() {
         <View style={styles.wordmarkArea}>
           {wordmarkAssets?.[0]?.localUri && (
             <SvgUri
-              width={200}
-              height={60}
+              width={160}
+              height={48}
               uri={wordmarkAssets[0].localUri}
             />
           )}
