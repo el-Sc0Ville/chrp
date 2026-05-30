@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
-  TextInput, KeyboardAvoidingView, Platform, Linking, Alert, StyleSheet,
+  TextInput, KeyboardAvoidingView, Platform, Linking, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -19,7 +19,6 @@ import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useResponses } from '../firebase/hooks/useResponses';
 import type { Event as FirestoreEvent } from '../firebase/schema';
-import * as Calendar from 'expo-calendar';
 
 const TEAM = teams.trashdogs;
 
@@ -40,41 +39,23 @@ interface Player {
 
 // ─── Calendar helper ──────────────────────────────────────────────────────────
 
-async function addEventToCalendar(
-  firestoreEvent: FirestoreEvent,
-  showToast: (msg: string) => void,
-): Promise<void> {
-  const { status } = await Calendar.requestCalendarPermissionsAsync();
-  if (status !== 'granted') {
-    Alert.alert(
-      'Calendar Access Needed',
-      'Calendar access is needed to add this event. Please enable it in Settings.',
-    );
-    return;
-  }
-  try {
-    let calendarId: string;
-    if (Platform.OS === 'ios') {
-      const defaultCal = await Calendar.getDefaultCalendarAsync();
-      calendarId = defaultCal.id;
-    } else {
-      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-      const writable = calendars.find(c => c.allowsModifications);
-      if (!writable) throw new Error('No writable calendar available');
-      calendarId = writable.id;
-    }
-    await Calendar.createEventAsync(calendarId, {
-      title: firestoreEvent.title,
-      startDate: firestoreEvent.startsAt.toDate(),
-      endDate: firestoreEvent.endsAt.toDate(),
-      location: firestoreEvent.venue,
-      notes: firestoreEvent.notes,
-    });
-    showToast('Added to your calendar ✓');
-    // TODO Phase 2b: also offer iCal export link for non-iOS users
-  } catch {
-    Alert.alert('Error', "Couldn't add to calendar. Please try again.");
-  }
+function formatGCalDate(d: Date): string {
+  // YYYYMMDDTHHmmssZ format required by Google Calendar URL API
+  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+function addEventToCalendar(firestoreEvent: FirestoreEvent): void {
+  const startDate = firestoreEvent.startsAt.toDate();
+  const endDate   = firestoreEvent.endsAt.toDate();
+  const url = [
+    'https://calendar.google.com/calendar/render?action=TEMPLATE',
+    `&text=${encodeURIComponent(firestoreEvent.title)}`,
+    `&dates=${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`,
+    `&location=${encodeURIComponent(firestoreEvent.venue ?? '')}`,
+    `&details=${encodeURIComponent(firestoreEvent.notes ?? '')}`,
+  ].join('');
+  // TODO Phase 2b: use expo-calendar in custom dev build for native calendar integration
+  Linking.openURL(url);
 }
 
 // ─── Toggle config ────────────────────────────────────────────────────────────
@@ -114,14 +95,6 @@ function ManagerEventDetail() {
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = (msg: string) => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast(msg);
-    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
-  };
 
   const handleSaveScore = async (s: Score) => {
     try {
@@ -195,7 +168,7 @@ function ManagerEventDetail() {
           <View style={styles.scoreActionRow}>
             <Pressable
               style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
-              onPress={() => event && addEventToCalendar(event, showToast)}
+              onPress={() => event && addEventToCalendar(event)}
             >
               <Text style={styles.ghostBtnText}>Add to calendar</Text>
             </Pressable>
@@ -250,14 +223,6 @@ function ManagerEventDetail() {
         onMark={markAs}
         onClose={() => setEditTarget(null)}
       />
-      {toast !== null && (
-        <View
-          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
-          pointerEvents="none"
-        >
-          <Text style={styles.toastText}>{toast}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -348,7 +313,7 @@ function PlayerEventDetail() {
           <View style={styles.footer}>
             <Pressable
               style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
-              onPress={() => event && addEventToCalendar(event, showToast)}
+              onPress={() => event && addEventToCalendar(event)}
             >
               <Text style={styles.ghostBtnText}>Add to calendar</Text>
             </Pressable>
