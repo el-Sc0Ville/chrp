@@ -5,11 +5,11 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
-  Switch, Alert, StyleSheet, KeyboardAvoidingView, Platform,
+  Switch, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { navy, ice, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
@@ -36,6 +36,9 @@ export default function ProfileScreen() {
   // Edit mode
   const [isEditingName, setIsEditingName]     = useState(false);
   const [isEditingJersey, setIsEditingJersey] = useState(false);
+
+  // Tip jar
+  const [tipJarVisible, setTipJarVisible] = useState(false);
 
   // Settings toggles
   const [notifications, setNotifications] = useState(true);
@@ -236,6 +239,20 @@ export default function ProfileScreen() {
             value={location}
             onValueChange={handleLocationToggle}
           />
+          <View style={styles.rowDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
+            onPress={() => setTipJarVisible(true)}
+          >
+            <View style={styles.toggleLeft}>
+              <Text style={styles.toggleIcon}>❤️</Text>
+              <View style={styles.toggleTextBlock}>
+                <Text style={styles.toggleLabel}>Support Chrp</Text>
+                <Text style={styles.toggleSubtitle}>Free, forever</Text>
+              </View>
+            </View>
+            <Text style={styles.rowChevron}>›</Text>
+          </Pressable>
         </View>
 
         {/* ── Danger zone ── */}
@@ -249,6 +266,12 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <TipJarSheet
+        visible={tipJarVisible}
+        onDismiss={() => setTipJarVisible(false)}
+        showToast={showToast}
+      />
 
       {/* ── Toast ── */}
       {toast !== null && (
@@ -339,6 +362,73 @@ function RolePill({ role }: { role: 'manager' | 'player' }) {
         {isManager ? 'Manager' : 'Player'}
       </Text>
     </View>
+  );
+}
+
+// ─── Tip jar sheet ────────────────────────────────────────────────────────────
+
+const TIP_OPTIONS = [
+  { amount: '$2',  emoji: '☕' },
+  { amount: '$5',  emoji: '🍕' },
+  { amount: '$10', emoji: '🎉' },
+  { amount: '$25', emoji: '🏒' },
+];
+
+function TipJarSheet({
+  visible, onDismiss, showToast,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+  showToast: (msg: string) => void;
+}) {
+  const insets = useSafeAreaInsets();
+
+  const handleTip = () => {
+    // TODO Phase 2b: wire to Stripe or Apple/Google in-app purchase
+    onDismiss();
+    showToast('Coming soon — payment support is on the way! 🙏');
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.tipSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+        >
+          <View style={styles.sheetHandle} />
+
+          <Text style={styles.tipWordmark}>
+            <Text style={styles.tipWordmarkCh}>Ch</Text>
+            <Text style={styles.tipWordmarkRp}>rp</Text>
+          </Text>
+
+          <Text style={styles.tipTagline}>
+            Chrp is free and always will be. If it saves you one awkward "are you coming?" text, consider buying us a coffee.
+          </Text>
+
+          <View style={styles.tipGrid}>
+            {TIP_OPTIONS.map(({ amount, emoji }) => (
+              <Pressable
+                key={amount}
+                style={({ pressed }) => [styles.tipBtn, pressed && { opacity: 0.8 }]}
+                onPress={handleTip}
+              >
+                <Text style={styles.tipBtnEmoji}>{emoji}</Text>
+                <Text style={styles.tipBtnAmount}>{amount}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.tipLaterBtn, pressed && { opacity: 0.75 }]}
+            onPress={onDismiss}
+          >
+            <Text style={styles.tipLaterBtnText}>Maybe later</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -697,6 +787,110 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: status.error.pure,
+  },
+
+  // ── Support Chrp row ──────────────────────────────────────────────────────
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[14],
+  },
+  rowChevron: {
+    fontFamily: fonts.ui,
+    fontSize: 22,
+    color: navy[500],
+    lineHeight: 24,
+  },
+
+  // ── Tip jar sheet ─────────────────────────────────────────────────────────
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.60)',
+  },
+  tipSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24],
+    paddingTop: spacing[16],
+    borderTopWidth: 0.5,
+    borderLeftWidth: 0.5,
+    borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: navy[500],
+    alignSelf: 'center',
+    marginBottom: spacing[24],
+  },
+  tipWordmark: {
+    fontFamily: fonts.wordmark,
+    fontSize: 44,
+    letterSpacing: -2,
+    lineHeight: 48,
+    textAlign: 'center',
+    marginBottom: spacing[12],
+  },
+  tipWordmarkCh: {
+    color: '#E7ECF5',
+  },
+  tipWordmarkRp: {
+    color: signal[400],
+  },
+  tipTagline: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    lineHeight: 21,
+    color: navy[300],
+    textAlign: 'center',
+    marginBottom: spacing[24],
+  },
+  tipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[10],
+    marginBottom: spacing[20],
+  },
+  tipBtn: {
+    width: '47.5%',
+    paddingVertical: spacing[16],
+    borderRadius: radius.l,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+    borderWidth: 0.5,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
+    alignItems: 'center',
+    gap: spacing[6],
+  },
+  tipBtnEmoji: {
+    fontSize: 26,
+    lineHeight: 30,
+  },
+  tipBtnAmount: {
+    fontFamily: fonts.monoBold,
+    fontSize: 16,
+    fontWeight: '700',
+    color: TEAM[300],
+    letterSpacing: 0.3,
+  },
+  tipLaterBtn: {
+    height: 52,
+    borderRadius: radius.l,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[4],
+  },
+  tipLaterBtnText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 15,
+    color: navy[400],
   },
 
   // ── Toast ─────────────────────────────────────────────────────────────────
