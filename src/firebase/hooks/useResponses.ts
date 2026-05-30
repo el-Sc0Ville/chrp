@@ -28,6 +28,7 @@ export function useResponses(teamId: string, eventId: string | null): UseRespons
     const unsub = onSnapshot(
       ref,
       snap => {
+        console.log('useResponses snapshot fired, count:', snap.docs.length);
         const map: ResponseMap = {};
         snap.docs.forEach(d => {
           const data = d.data() as AvailabilityResponse;
