@@ -97,6 +97,7 @@ function ManagerHomeScreen() {
   const goToGameday       = () => navigation.navigate('Gameday');
   const goToTeam          = () => navigation.navigate('Team');
   const goToNotifications = () => navigation.navigate('Notifications');
+  const goToEventDetail   = () => nextEvent && navigation.navigate('EventDetail', { eventId: nextEvent.id, title: nextEvent.title });
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -124,6 +125,7 @@ function ManagerHomeScreen() {
               response={managerResponse}
               onRespond={handleManagerRespond}
               onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
+              onPress={goToEventDetail}
             />
           ) : (
             <ManagerEmptyCard />
@@ -192,18 +194,20 @@ function ManagerPageHeader({
 
 // ─── Manager hero card ────────────────────────────────────────────────────────
 
-function ManagerHeroCard({ event, avail, response, onRespond, onGameday }: {
+function ManagerHeroCard({ event, avail, response, onRespond, onGameday, onPress }: {
   event: TeamEvent;
   avail: AvailCounts;
   response: Response;
   onRespond: (r: Response) => void;
   onGameday?: () => void;
+  onPress: () => void;
 }) {
   const { prefix, name } = parseTitleDisplay(event);
   const responded = avail.in + avail.out + avail.maybe;
   const total     = responded + avail.noResp;
 
   return (
+    <Pressable onPress={onPress}>
     <View style={styles.heroCard}>
       {/* Meta row */}
       <View style={styles.metaRow}>
@@ -260,6 +264,7 @@ function ManagerHeroCard({ event, avail, response, onRespond, onGameday }: {
         </Pressable>
       )}
     </View>
+    </Pressable>
   );
 }
 
@@ -438,6 +443,7 @@ function PlayerHomeScreen() {
   const goToGameday       = () => navigation.navigate('Gameday');
   const goToTeam          = () => navigation.navigate('Team');
   const goToNotifications = () => navigation.navigate('Notifications');
+  const goToEventDetail   = () => nextEvent && navigation.navigate('EventDetail', { eventId: nextEvent.id, title: nextEvent.title });
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -463,6 +469,7 @@ function PlayerHomeScreen() {
               inCount={inCount}
               onRespond={handleRespond}
               onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
+              onPress={goToEventDetail}
             />
           ) : (
             <PlayerEmptyCard />
@@ -531,15 +538,17 @@ function PlayerPageHeader({
   );
 }
 
-function PlayerHeroCard({ event, response, inCount, onRespond, onGameday }: {
+function PlayerHeroCard({ event, response, inCount, onRespond, onGameday, onPress }: {
   event: TeamEvent;
   response: Response;
   inCount: number;
   onRespond: (r: Response) => void;
   onGameday?: () => void;
+  onPress: () => void;
 }) {
   const { prefix, name } = parseTitleDisplay(event);
   return (
+    <Pressable onPress={onPress}>
     <View style={styles.heroCard}>
       <View style={styles.metaRow}>
         <View style={styles.metaLeft}>
@@ -581,6 +590,7 @@ function PlayerHeroCard({ event, response, inCount, onRespond, onGameday }: {
         </Pressable>
       )}
     </View>
+    </Pressable>
   );
 }
 
