@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Chrp app icon">
+  <defs>
+    
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16223F"></stop>
+      <stop offset="0.55" stop-color="#0B1426"></stop>
+      <stop offset="1" stop-color="#070B14"></stop>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.78" cy="0.08" r="0.6">
+      <stop offset="0" stop-color="#2F6BFF" stop-opacity="0.30"></stop>
+      <stop offset="0.6" stop-color="#2F6BFF" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+  
+  <rect width="1024" height="1024" fill="url(#g)"></rect>
+  <rect width="1024" height="1024" fill="url(#sheen)"></rect>
+  <text x="506" y="556" text-anchor="middle" dominant-baseline="central" font-family="&#39;Chakra Petch&#39;, sans-serif" font-weight="700" font-size="392" letter-spacing="-8">
+    <tspan fill="#FFFFFF">Ch</tspan><tspan fill="#5B8BFF">rp</tspan>
+  </text>
+</svg>
