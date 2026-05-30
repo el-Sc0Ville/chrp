@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
-  TextInput, KeyboardAvoidingView, Platform, Linking, StyleSheet,
+  TextInput, KeyboardAvoidingView, Platform, Linking, Alert, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -19,6 +19,7 @@ import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useResponses } from '../firebase/hooks/useResponses';
 import type { Event as FirestoreEvent } from '../firebase/schema';
+import * as Calendar from 'expo-calendar';
 
 const TEAM = teams.trashdogs;
 
@@ -35,6 +36,43 @@ interface Player {
   name: string;
   jersey: number;
   respondedAt?: string;
+}
+
+// ─── Calendar helper ──────────────────────────────────────────────────────────
+
+async function addEventToCalendar(
+  firestoreEvent: FirestoreEvent,
+  showToast: (msg: string) => void,
+): Promise<void> {
+  const { granted } = await Calendar.requestCalendarPermissions();
+  if (!granted) {
+    Alert.alert(
+      'Calendar Access Needed',
+      'Calendar access is needed to add this event. Please enable it in Settings.',
+    );
+    return;
+  }
+  try {
+    let cal: Calendar.ExpoCalendar | undefined;
+    if (Platform.OS === 'ios') {
+      cal = Calendar.getDefaultCalendarSync();
+    } else {
+      const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+      cal = calendars.find(c => c.allowsModifications);
+    }
+    if (!cal) throw new Error('No writable calendar available');
+    await cal.createEvent({
+      title: firestoreEvent.title,
+      startDate: firestoreEvent.startsAt.toDate(),
+      endDate: firestoreEvent.endsAt.toDate(),
+      location: firestoreEvent.venue,
+      notes: firestoreEvent.notes,
+    });
+    showToast('Added to your calendar ✓');
+    // TODO Phase 2b: also offer iCal export link for non-iOS users
+  } catch {
+    Alert.alert('Error', "Couldn't add to calendar. Please try again.");
+  }
 }
 
 // ─── Toggle config ────────────────────────────────────────────────────────────
@@ -74,6 +112,14 @@ function ManagerEventDetail() {
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+  };
 
   const handleSaveScore = async (s: Score) => {
     try {
@@ -143,6 +189,16 @@ function ManagerEventDetail() {
             </Pressable>
           </View>
         )}
+        {!isPast && (
+          <View style={styles.scoreActionRow}>
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+              onPress={() => event && addEventToCalendar(event, showToast)}
+            >
+              <Text style={styles.ghostBtnText}>Add to calendar</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Availability</Text>
@@ -192,6 +248,14 @@ function ManagerEventDetail() {
         onMark={markAs}
         onClose={() => setEditTarget(null)}
       />
+      {toast !== null && (
+        <View
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -280,7 +344,10 @@ function PlayerEventDetail() {
 
         {!isPast && (
           <View style={styles.footer}>
-            <Pressable style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}>
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+              onPress={() => event && addEventToCalendar(event, showToast)}
+            >
               <Text style={styles.ghostBtnText}>Add to calendar</Text>
             </Pressable>
             <Pressable
