@@ -5,10 +5,8 @@ import {
   View, Text, TextInput, Pressable, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
-import { useAssets } from 'expo-asset';
-import { SvgUri } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navy, teams, status, fonts, spacing, radius } from '../theme';
+import { navy, teams, status, fonts, signal, spacing, radius } from '../theme';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { sendMagicLink } from '../firebase/auth';
@@ -17,12 +15,9 @@ import { seedDatabase } from '../firebase/seed';
 
 const TEAM = teams.trashdogs;
 
-const WORDMARK = require('../../assets/chrp-wordmark.svg');
-
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { setMockUser } = useUserContext();
-  const [wordmarkAssets] = useAssets([WORDMARK]);
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
   const [seedStatus,  setSeedStatus]  = useState<'idle' | 'seeding' | 'done' | 'error'>('idle');
@@ -59,13 +54,10 @@ export default function AuthScreen() {
       >
         {/* ── Wordmark ── */}
         <View style={styles.wordmarkArea}>
-          {wordmarkAssets?.[0]?.localUri && (
-            <SvgUri
-              width={160}
-              height={48}
-              uri={wordmarkAssets[0].localUri}
-            />
-          )}
+          <Text style={styles.wordmark}>
+            <Text style={styles.wordmarkCh}>Ch</Text>
+            <Text style={styles.wordmarkRp}>rp</Text>
+          </Text>
           <Text style={styles.tagline}>Your team. One tap away.</Text>
         </View>
 
@@ -238,6 +230,19 @@ const styles = StyleSheet.create({
   wordmarkArea: {
     alignItems: 'center',
     marginBottom: spacing[40],
+  },
+  wordmark: {
+    fontFamily: fonts.wordmark,
+    fontSize: 56,
+    letterSpacing: -2,
+    lineHeight: 60,
+    marginBottom: spacing[8],
+  },
+  wordmarkCh: {
+    color: '#E7ECF5',
+  },
+  wordmarkRp: {
+    color: signal[400],
   },
   tagline: {
     fontFamily: fonts.ui,

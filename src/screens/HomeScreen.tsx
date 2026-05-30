@@ -1,6 +1,6 @@
 // Home tab — switches between B-01 (Manager) and C-01 (Player) based on role.
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Pressable, Linking, Modal,
@@ -61,19 +61,17 @@ function ManagerHomeScreen() {
 
   const { responses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
 
-  const avail = useMemo<AvailCounts>(() => {
-    const counts = { in: 0, out: 0, maybe: 0, noResp: 0 };
-    members.forEach(m => {
-      const r = responses[m.userId];
-      if      (r === 'in')    counts.in++;
-      else if (r === 'out')   counts.out++;
-      else if (r === 'maybe') counts.maybe++;
-      else                    counts.noResp++;
-    });
-    return counts;
-  }, [members, responses]);
+  const avail: AvailCounts = { in: 0, out: 0, maybe: 0, noResp: 0 };
+  members.forEach(m => {
+    const r = responses[m.userId];
+    if      (r === 'in')    avail.in++;
+    else if (r === 'out')   avail.out++;
+    else if (r === 'maybe') avail.maybe++;
+    else                    avail.noResp++;
+  });
 
-  console.log('Home event id:', nextEvent?.id, 'counts:', avail.in, avail.out);
+  console.log('Home event id:', nextEvent?.id, 'members:', members.length,
+    'counts — in:', avail.in, 'out:', avail.out, 'maybe:', avail.maybe, 'noResp:', avail.noResp);
 
   const managerResponse: Response = (responses[uid] as Response) ?? null;
 
