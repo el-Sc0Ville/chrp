@@ -31,6 +31,8 @@ interface DuesPlayer {
   jersey: number;
   duesStatus: DuesStatus;
   paidAmount: number;
+  seasonAmount: number;
+  notes?: string;
 }
 
 function toDuesPlayer(r: DuesRecord): DuesPlayer {
@@ -41,6 +43,7 @@ function toDuesPlayer(r: DuesRecord): DuesPlayer {
   return {
     id: r.userId, name: r.displayName, initials,
     jersey: 0, duesStatus: r.status, paidAmount: r.amountPaid,
+    seasonAmount: r.seasonAmount, notes: r.notes,
   };
 }
 
@@ -71,21 +74,6 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(msg);
     toastTimer.current = setTimeout(() => setToast(null), 2200);
-  };
-
-  const markPaid = async (id: string) => {
-    await updateDoc(doc(db, 'teams', TEAM_ID, 'dues', id), {
-      status: 'paid',
-      amountPaid: seasonDues,
-      lastPaymentAt: serverTimestamp(),
-    });
-    setActionPlayer(null);
-    showToast('Marked as paid');
-  };
-
-  const sendReminder = (player: DuesPlayer) => {
-    setActionPlayer(null);
-    showToast(`Reminder sent to ${player.name.split(' ')[0]}`);
   };
 
   const paidCount  = players.filter(p => p.duesStatus === 'paid').length;
@@ -185,13 +173,11 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
         onClose={() => setSetAmountVisible(false)}
       />
 
-      {/* ── Action Sheet ── */}
+      {/* ── Player Edit Sheet ── */}
       {actionPlayer && (
-        <ActionSheet
+        <PlayerEditSheet
           player={actionPlayer}
-          seasonDues={seasonDues}
-          onMarkPaid={() => markPaid(actionPlayer.id)}
-          onReminder={() => sendReminder(actionPlayer)}
+          onSave={msg => { showToast(msg); setActionPlayer(null); }}
           onClose={() => setActionPlayer(null)}
         />
       )}
@@ -404,62 +390,124 @@ function SetAmountSheet({
   );
 }
 
-// ─── Action Sheet ─────────────────────────────────────────────────────────────
+// ─── Player Edit Sheet ────────────────────────────────────────────────────────
 
-function ActionSheet({
-  player, seasonDues, onMarkPaid, onReminder, onClose,
+function PlayerEditSheet({
+  player, onSave, onClose,
 }: {
   player: DuesPlayer;
-  seasonDues: number;
-  onMarkPaid: () => void;
-  onReminder: () => void;
+  onSave: (msg: string) => void;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const [owedRaw, setOwedRaw] = useState(String(player.seasonAmount));
+  const [paidRaw, setPaidRaw] = useState(String(player.paidAmount));
+  const [notes,   setNotes]   = useState(player.notes ?? '');
+  const [saving,  setSaving]  = useState(false);
+
+  const owed = parseInt(owedRaw.replace(/[^0-9]/g, ''), 10) || 0;
+  const paid = parseInt(paidRaw.replace(/[^0-9]/g, ''), 10) || 0;
+
+  const computedStatus: DuesStatus =
+    owed > 0 && paid >= owed ? 'paid'
+    : paid > 0               ? 'partial'
+    :                          'pending';
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'teams', TEAM_ID, 'dues', player.id), {
+        amountPaid:   paid,
+        seasonAmount: owed,
+        status:       computedStatus,
+        notes:        notes.trim(),
+        ...(paid > 0 && { lastPaymentAt: serverTimestamp() }),
+      });
+      onSave('Payment record updated');
+    } catch (err) {
+      console.error('[DuesScreen] save failed:', err);
+      setSaving(false);
+    }
+  };
+
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
-        <Pressable onPress={() => {}}>
-          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
-            <View style={styles.sheetHandle} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined}>
+          <Pressable onPress={() => {}}>
+            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
+              <View style={styles.sheetHandle} />
 
-            {/* Player context */}
-            <View style={styles.actionHeader}>
-              <PlayerAvatar player={player} />
-              <View>
-                <Text style={styles.actionName}>{player.name}</Text>
-                <Text style={styles.actionSub}>
-                  #{player.jersey} · ${seasonDues - player.paidAmount} remaining
-                </Text>
+              {/* Player header */}
+              <View style={styles.editHeader}>
+                <PlayerAvatar player={player} />
+                <Text style={styles.editPlayerName}>{player.name}</Text>
+                <View style={{ flex: 1 }} />
+                <StatusPill status={player.duesStatus} />
               </View>
-              <View style={{ flex: 1 }} />
-              <StatusPill status={player.duesStatus} />
-            </View>
 
-            <View style={styles.actionDivider} />
+              <View style={styles.editDivider} />
 
-            {player.duesStatus !== 'paid' && (
+              {/* Amount owed */}
+              <Text style={styles.fieldLabel}>AMOUNT OWED</Text>
+              <View style={[styles.amountInputWrap, styles.fieldSpacing]}>
+                <Text style={styles.amountDollar}>$</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={owedRaw}
+                  onChangeText={t => setOwedRaw(t.replace(/[^0-9]/g, '').slice(0, 5))}
+                  keyboardType="number-pad"
+                  selectTextOnFocus
+                  maxLength={5}
+                  placeholderTextColor={navy[400]}
+                />
+              </View>
+
+              {/* Amount paid + live computed status */}
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.fieldLabel}>AMOUNT PAID</Text>
+                <StatusPill status={computedStatus} />
+              </View>
+              <View style={[styles.amountInputWrap, styles.fieldSpacing]}>
+                <Text style={styles.amountDollar}>$</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={paidRaw}
+                  onChangeText={t => setPaidRaw(t.replace(/[^0-9]/g, '').slice(0, 5))}
+                  keyboardType="number-pad"
+                  selectTextOnFocus
+                  maxLength={5}
+                  placeholderTextColor={navy[400]}
+                />
+              </View>
+
+              {/* Notes */}
+              <Text style={[styles.fieldLabel, styles.fieldSpacing]}>NOTES</Text>
+              <TextInput
+                style={[styles.notesInput, styles.fieldSpacing]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="e.g. Paid $200 cash March 5"
+                placeholderTextColor={navy[400]}
+                multiline
+                numberOfLines={2}
+                maxLength={200}
+              />
+
               <Pressable
-                style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
-                onPress={onMarkPaid}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  (pressed || saving) && { opacity: 0.75 },
+                ]}
+                onPress={handleSave}
+                disabled={saving}
               >
-                <Text style={styles.actionRowText}>Mark as paid</Text>
+                <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
               </Pressable>
-            )}
-            <Pressable
-              style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
-              onPress={onReminder}
-            >
-              <Text style={styles.actionRowText}>Send reminder</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.actionRow, styles.actionRowCancel, pressed && { backgroundColor: navy[600] }]}
-              onPress={onClose}
-            >
-              <Text style={styles.actionRowCancelText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );
@@ -853,46 +901,53 @@ const styles = StyleSheet.create({
     color: TEAM.on,
   },
 
-  // ── Action sheet ──────────────────────────────────────────────────────────
-  actionHeader: {
+  // ── Player edit sheet ─────────────────────────────────────────────────────
+  editHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[12],
     marginBottom: spacing[16],
   },
-  actionName: {
+  editPlayerName: {
     fontFamily: fonts.uiSemiBold,
-    fontSize: 15,
+    fontSize: 16,
     color: '#FFFFFF',
   },
-  actionSub: {
-    fontFamily: fonts.mono,
-    fontSize: 12,
-    color: navy[400],
-    marginTop: 2,
-  },
-  actionDivider: {
+  editDivider: {
     height: 0.5,
     backgroundColor: navy[600],
+    marginBottom: spacing[20],
+  },
+  fieldLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: navy[400],
     marginBottom: spacing[8],
   },
-  actionRow: {
-    paddingVertical: spacing[16],
-    borderRadius: radius.s,
-    paddingHorizontal: spacing[4],
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[8],
   },
-  actionRowText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 16,
-    color: navy[100],
+  fieldSpacing: {
+    marginTop: spacing[16],
   },
-  actionRowCancel: {
-    marginTop: spacing[4],
-  },
-  actionRowCancelText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 16,
-    color: navy[400],
+  notesInput: {
+    backgroundColor: navy[800],
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: navy[600],
+    paddingHorizontal: spacing[14],
+    paddingVertical: spacing[12],
+    fontFamily: fonts.ui,
+    fontSize: 15,
+    color: '#FFFFFF',
+    minHeight: 72,
+    textAlignVertical: 'top',
+    marginBottom: spacing[20],
   },
 
   // ── Toast ─────────────────────────────────────────────────────────────────
