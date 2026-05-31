@@ -108,7 +108,7 @@ function ManagerHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ManagerPageHeader
-          teamName={team?.name ?? 'Trashdogs'}
+          teamName={team?.name ?? 'Trash Dogs'}
           hasEvent={hasEvent}
           onAdd={goToCreateEvent}
           onProfile={goToProfile}
@@ -454,7 +454,7 @@ function PlayerHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <PlayerPageHeader
-          teamName={team?.name ?? 'Trashdogs'}
+          teamName={team?.name ?? 'Trash Dogs'}
           hasEvent={hasEvent}
           onProfile={goToProfile}
           onNotifications={goToNotifications}

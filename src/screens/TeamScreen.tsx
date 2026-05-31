@@ -9,6 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, fonts, spacing, radius } from '../theme';
 import AvatarPill from '../components/AvatarPill';
+import { useUserContext } from '../context/UserContext';
+import { useTeam } from '../firebase/hooks/useTeam';
 import RosterScreen from './RosterScreen';
 import AnnouncementsScreen from './AnnouncementsScreen';
 import DuesScreen from './DuesScreen';
@@ -27,6 +29,8 @@ const SUB_TABS: { id: SubTab | 'subs'; label: string; navigate?: string }[] = [
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { activeTeamId } = useUserContext();
+  const { team } = useTeam(activeTeamId);
   const [activeTab, setActiveTab] = useState<SubTab>('roster');
 
   const goToProfile = () => navigation.navigate('Profile');
@@ -39,7 +43,7 @@ export default function TeamScreen() {
         <View>
           <View style={styles.teamPill}>
             <View style={styles.teamDot} />
-            <Text style={styles.teamPillText}>Trashdogs</Text>
+            <Text style={styles.teamPillText}>{team?.name ?? 'Trash Dogs'}</Text>
             <Text style={styles.teamPillChevron}>›</Text>
           </View>
           <Text style={styles.pageTitle}>Team</Text>
