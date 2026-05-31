@@ -1,11 +1,12 @@
 import type { Timestamp } from 'firebase/firestore';
+import type { TeamKey } from '../theme';
 
 // /teams/{teamId}
 export interface Team {
   id: string;
   name: string;
   sport: string;
-  palette: 'trashdogs' | 'ember' | 'verdant' | 'solstice' | 'aurora';
+  palette: TeamKey;
   managerIds: string[];
   createdAt: Timestamp;
 }
@@ -81,6 +82,15 @@ export interface SubRequest {
   gameMonth: string;
   gameVenue: string;
   gameTime: string;
+}
+
+// /users/{userId}/teams/{teamId}
+export interface UserTeam {
+  teamId: string;
+  teamName: string;
+  palette: TeamKey;
+  role: 'manager' | 'player';
+  joinedAt: Timestamp;
 }
 
 // /teams/{teamId}/dues/{userId}

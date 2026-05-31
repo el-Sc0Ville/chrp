@@ -18,12 +18,12 @@ import { useTeam } from '../firebase/hooks/useTeam';
 import { useResponses } from '../firebase/hooks/useResponses';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
-import type { Event as TeamEvent, Announcement } from '../firebase/schema';
+import type { Event as TeamEvent, Announcement, UserTeam } from '../firebase/schema';
+import { useUserTeams } from '../firebase/hooks/useUserTeams';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
-const TEAM_ID = 'trashdogs';
-const TEAM    = teams.trashdogs;
+const TEAM = teams.trashdogs; // used by StyleSheet.create() — dynamic overrides applied inline in components
 
 interface AvailCounts {
   in: number;
@@ -48,18 +48,20 @@ function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { unreadCount } = useNotifications();
-  const { user } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette, setActiveTeamId, setActiveTeamPalette } = useUserContext();
+  const { teams: userTeams } = useUserTeams(user?.uid ?? null);
+  const [switcherVisible, setSwitcherVisible] = useState(false);
 
-  const { team }                 = useTeam(TEAM_ID);
-  const { events, loading }      = useEvents(TEAM_ID);
-  const { members }              = useMembers(TEAM_ID);
-  const { announcements }        = useAnnouncements(TEAM_ID);
+  const { team }                 = useTeam(activeTeamId);
+  const { events, loading }      = useEvents(activeTeamId);
+  const { members }              = useMembers(activeTeamId);
+  const { announcements }        = useAnnouncements(activeTeamId);
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
   const uid       = user?.uid ?? 'anon';
 
-  const { responses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
+  const { responses } = useResponses(activeTeamId, nextEvent?.id ?? null);
 
   const avail: AvailCounts = { in: 0, out: 0, maybe: 0, noResp: 0 };
   members.forEach(m => {
@@ -78,7 +80,7 @@ function ManagerHomeScreen() {
   const handleManagerRespond = async (r: Response) => {
     console.log('Manager respond uid:', user?.uid);
     if (!r || !nextEvent) return;
-    const responseRef = doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid);
+    const responseRef = doc(db, 'teams', activeTeamId, 'events', nextEvent.id, 'responses', uid);
     try {
       await setDoc(responseRef, {
         userId: uid,
@@ -112,6 +114,7 @@ function ManagerHomeScreen() {
           onProfile={goToProfile}
           onNotifications={goToNotifications}
           unreadCount={unreadCount}
+          onTeamSwitch={userTeams.length > 1 ? () => setSwitcherVisible(true) : undefined}
         />
 
         {/* Region 1: hero or empty state */}
@@ -146,6 +149,17 @@ function ManagerHomeScreen() {
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
+      <TeamSwitcherSheet
+        visible={switcherVisible}
+        userTeams={userTeams}
+        activeTeamId={activeTeamId}
+        onSelect={(id, palette) => {
+          setActiveTeamId(id);
+          setActiveTeamPalette(palette);
+          setSwitcherVisible(false);
+        }}
+        onClose={() => setSwitcherVisible(false)}
+      />
     </View>
   );
 }
@@ -153,7 +167,7 @@ function ManagerHomeScreen() {
 // ─── Manager header ───────────────────────────────────────────────────────────
 
 function ManagerPageHeader({
-  teamName, hasEvent, onAdd, onProfile, onNotifications, unreadCount,
+  teamName, hasEvent, onAdd, onProfile, onNotifications, unreadCount, onTeamSwitch,
 }: {
   teamName: string;
   hasEvent: boolean;
@@ -161,17 +175,32 @@ function ManagerPageHeader({
   onProfile: () => void;
   onNotifications: () => void;
   unreadCount: number;
+  onTeamSwitch?: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const activeTeam = teams[activeTeamPalette];
+  const pillContent = (
+    <>
+      <View style={[styles.teamDot, { backgroundColor: activeTeam[300] }]} />
+      <Text style={[styles.teamPillText, { color: activeTeam[300] }]}>{teamName}</Text>
+      <Text style={[styles.teamPillChevron, { color: activeTeam[300] }]}>›</Text>
+    </>
+  );
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         <BellButton onPress={onNotifications} unreadCount={unreadCount} />
         <View>
-          <View style={styles.teamPill}>
-            <View style={styles.teamDot} />
-            <Text style={styles.teamPillText}>{teamName}</Text>
-            <Text style={styles.teamPillChevron}>›</Text>
-          </View>
+          {onTeamSwitch ? (
+            <Pressable
+              style={({ pressed }) => [styles.teamPill, pressed && { opacity: 0.7 }]}
+              onPress={onTeamSwitch}
+            >
+              {pillContent}
+            </Pressable>
+          ) : (
+            <View style={styles.teamPill}>{pillContent}</View>
+          )}
           <Text style={styles.pageTitle}>
             {hasEvent ? 'Next up' : 'No games yet'}
           </Text>
@@ -180,11 +209,11 @@ function ManagerPageHeader({
 
       <View style={styles.headerButtons}>
         <Pressable
-          style={styles.addEventBtn}
+          style={[styles.addEventBtn, { backgroundColor: activeTeam[500], shadowColor: activeTeam[500] }]}
           onPress={onAdd}
           android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true }}
         >
-          <Text style={styles.addEventBtnText}>+</Text>
+          <Text style={[styles.addEventBtnText, { color: activeTeam.on }]}>+</Text>
         </Pressable>
         <AvatarPill onPress={onProfile} />
       </View>
@@ -270,66 +299,32 @@ function ManagerHeroCard({ event, avail, response, onRespond, onGameday, onPress
 
 // ─── Availability bar ─────────────────────────────────────────────────────────
 
-const AVAIL_CHIPS: {
-  key: keyof AvailCounts;
-  label: string;
-  dot: string;
-  bg: string;
-  border: string;
-  text: string;
-}[] = [
-  {
-    key: 'in',
-    label: 'In',
-    dot: TEAM[300],
-    bg: `rgba(${hexToRgbVals(TEAM[500])}, 0.16)`,
-    border: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
-    text: TEAM[300],
-  },
-  {
-    key: 'out',
-    label: 'Out',
-    dot: status.error.pure,
-    bg: status.error.subtle,
-    border: 'rgba(239,68,68,0.38)',
-    text: status.error.light,
-  },
-  {
-    key: 'maybe',
-    label: 'Maybe',
-    dot: status.alert.pure,
-    bg: status.alert.subtle,
-    border: 'rgba(245,158,11,0.38)',
-    text: status.alert.light,
-  },
-  {
-    key: 'noResp',
-    label: 'No resp.',
-    dot: navy[400],
-    bg: 'rgba(95,107,133,0.14)',
-    border: 'rgba(95,107,133,0.28)',
-    text: navy[300],
-  },
-];
-
 function AvailabilityBar({ avail }: { avail: AvailCounts }) {
+  const { activeTeamPalette } = useUserContext();
+  const activeTeam = teams[activeTeamPalette];
+  const chips: { key: keyof AvailCounts; label: string; dot: string; bg: string; border: string; text: string }[] = [
+    {
+      key: 'in',
+      label: 'In',
+      dot: activeTeam[300],
+      bg: `rgba(${hexToRgbVals(activeTeam[500])}, 0.16)`,
+      border: `rgba(${hexToRgbVals(activeTeam[500])}, 0.38)`,
+      text: activeTeam[300],
+    },
+    { key: 'out',    label: 'Out',      dot: status.error.pure, bg: status.error.subtle,  border: 'rgba(239,68,68,0.38)',   text: status.error.light },
+    { key: 'maybe',  label: 'Maybe',    dot: status.alert.pure, bg: status.alert.subtle,  border: 'rgba(245,158,11,0.38)',  text: status.alert.light },
+    { key: 'noResp', label: 'No resp.', dot: navy[400],          bg: 'rgba(95,107,133,0.14)', border: 'rgba(95,107,133,0.28)', text: navy[300] },
+  ];
   return (
     <View style={styles.availRow}>
-      {AVAIL_CHIPS.map((chip) => (
+      {chips.map((chip) => (
         <View
           key={chip.key}
-          style={[
-            styles.availChip,
-            { backgroundColor: chip.bg, borderColor: chip.border },
-          ]}
+          style={[styles.availChip, { backgroundColor: chip.bg, borderColor: chip.border }]}
         >
           <View style={[styles.availDot, { backgroundColor: chip.dot }]} />
-          <Text style={[styles.availLabel, { color: chip.text }]}>
-            {chip.label}
-          </Text>
-          <Text style={[styles.availCount, { color: chip.text }]}>
-            {avail[chip.key]}
-          </Text>
+          <Text style={[styles.availLabel, { color: chip.text }]}>{chip.label}</Text>
+          <Text style={[styles.availCount, { color: chip.text }]}>{avail[chip.key]}</Text>
         </View>
       ))}
     </View>
@@ -339,14 +334,19 @@ function AvailabilityBar({ avail }: { avail: AvailCounts }) {
 // ─── Manager quick actions ────────────────────────────────────────────────────
 
 function ManagerQuickActions({ noRespCount, onAdd }: { noRespCount: number; onAdd: () => void }) {
+  const { activeTeamPalette } = useUserContext();
+  const activeTeam = teams[activeTeamPalette];
   return (
     <View style={styles.quickActions}>
       {noRespCount > 0 && (
         <Pressable
-          style={styles.remindBtn}
-          android_ripple={{ color: `rgba(${hexToRgbVals(TEAM[500])}, 0.15)` }}
+          style={[styles.remindBtn, {
+            borderColor: `rgba(${hexToRgbVals(activeTeam[500])}, 0.45)`,
+            backgroundColor: `rgba(${hexToRgbVals(activeTeam[500])}, 0.08)`,
+          }]}
+          android_ripple={{ color: `rgba(${hexToRgbVals(activeTeam[500])}, 0.15)` }}
         >
-          <Text style={styles.remindBtnText}>
+          <Text style={[styles.remindBtnText, { color: activeTeam[300] }]}>
             🔔  Remind {noRespCount} non-responder{noRespCount !== 1 ? 's' : ''}
           </Text>
         </Pressable>
@@ -387,18 +387,20 @@ function PlayerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { unreadCount } = useNotifications();
-  const { user } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette, setActiveTeamId, setActiveTeamPalette } = useUserContext();
+  const { teams: userTeams } = useUserTeams(user?.uid ?? null);
+  const [switcherVisible, setSwitcherVisible] = useState(false);
 
-  const { team }            = useTeam(TEAM_ID);
-  const { events, loading } = useEvents(TEAM_ID);
-  const { announcements }   = useAnnouncements(TEAM_ID);
+  const { team }            = useTeam(activeTeamId);
+  const { events, loading } = useEvents(activeTeamId);
+  const { announcements }   = useAnnouncements(activeTeamId);
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
 
   // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
   const uid = user?.uid ?? 'anon';
-  const { responses: firestoreResponses } = useResponses(TEAM_ID, nextEvent?.id ?? null);
+  const { responses: firestoreResponses } = useResponses(activeTeamId, nextEvent?.id ?? null);
   const response: Response = (firestoreResponses[uid] as Response) ?? null;
   const inCount  = Object.values(firestoreResponses).filter(r => r === 'in').length;
   const outCount = Object.values(firestoreResponses).filter(r => r === 'out').length;
@@ -423,7 +425,7 @@ function PlayerHomeScreen() {
     }
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
     // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
-    const responseRef = doc(db, 'teams', TEAM_ID, 'events', nextEvent.id, 'responses', uid);
+    const responseRef = doc(db, 'teams', activeTeamId, 'events', nextEvent.id, 'responses', uid);
     console.log('[HomeScreen] writing response', r, 'to', responseRef.path);
     try {
       await setDoc(responseRef, {
@@ -457,6 +459,7 @@ function PlayerHomeScreen() {
           onProfile={goToProfile}
           onNotifications={goToNotifications}
           unreadCount={unreadCount}
+          onTeamSwitch={userTeams.length > 1 ? () => setSwitcherVisible(true) : undefined}
         />
 
         <View style={styles.heroWrapper}>
@@ -485,6 +488,17 @@ function PlayerHomeScreen() {
         <View style={{ height: spacing[24] }} />
       </ScrollView>
 
+      <TeamSwitcherSheet
+        visible={switcherVisible}
+        userTeams={userTeams}
+        activeTeamId={activeTeamId}
+        onSelect={(id, palette) => {
+          setActiveTeamId(id);
+          setActiveTeamPalette(palette);
+          setSwitcherVisible(false);
+        }}
+        onClose={() => setSwitcherVisible(false)}
+      />
       <SubRequestSheet
         visible={subSheetVisible}
         gameName={nextEvent?.title ?? ''}
@@ -508,24 +522,39 @@ function PlayerHomeScreen() {
 }
 
 function PlayerPageHeader({
-  teamName, hasEvent, onProfile, onNotifications, unreadCount,
+  teamName, hasEvent, onProfile, onNotifications, unreadCount, onTeamSwitch,
 }: {
   teamName: string;
   hasEvent: boolean;
   onProfile: () => void;
   onNotifications: () => void;
   unreadCount: number;
+  onTeamSwitch?: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const activeTeam = teams[activeTeamPalette];
+  const pillContent = (
+    <>
+      <View style={[styles.teamDot, { backgroundColor: activeTeam[300] }]} />
+      <Text style={[styles.teamPillText, { color: activeTeam[300] }]}>{teamName}</Text>
+      <Text style={[styles.teamPillChevron, { color: activeTeam[300] }]}>›</Text>
+    </>
+  );
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         <BellButton onPress={onNotifications} unreadCount={unreadCount} />
         <View>
-          <View style={styles.teamPill}>
-            <View style={styles.teamDot} />
-            <Text style={styles.teamPillText}>{teamName}</Text>
-            <Text style={styles.teamPillChevron}>›</Text>
-          </View>
+          {onTeamSwitch ? (
+            <Pressable
+              style={({ pressed }) => [styles.teamPill, pressed && { opacity: 0.7 }]}
+              onPress={onTeamSwitch}
+            >
+              {pillContent}
+            </Pressable>
+          ) : (
+            <View style={styles.teamPill}>{pillContent}</View>
+          )}
           <Text style={styles.pageTitle}>
             {hasEvent ? 'Next up' : 'No games yet'}
           </Text>
@@ -678,22 +707,18 @@ const OPTS: { id: Response; label: string; glyph: string }[] = [
   { id: 'maybe', label: 'Maybe',  glyph: '?' },
 ];
 
-const RESPONSE_TINTS: Record<NonNullable<Response>, string> = {
-  in:    TEAM[500],
-  out:   status.error.pure,
-  maybe: status.alert.pure,
-};
-
-const RESPONSE_ON: Record<NonNullable<Response>, string> = {
-  in:    TEAM.on,
-  out:   '#FFFFFF',
-  maybe: '#0B1220',
-};
-
 function InOutMaybeToggle({ response, onRespond }: {
   response: Response;
   onRespond: (r: Response) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const activeTeam = teams[activeTeamPalette];
+  const RESPONSE_TINTS: Record<NonNullable<Response>, string> = {
+    in: activeTeam[500], out: status.error.pure, maybe: status.alert.pure,
+  };
+  const RESPONSE_ON: Record<NonNullable<Response>, string> = {
+    in: activeTeam.on, out: '#FFFFFF', maybe: '#0B1220',
+  };
   const activeIdx = OPTS.findIndex(o => o.id === response);
 
   return (
@@ -792,6 +817,54 @@ function AnnouncementsSection({
         </TouchableOpacity>
       ))}
     </View>
+  );
+}
+
+// ─── Team switcher sheet ──────────────────────────────────────────────────────
+
+function TeamSwitcherSheet({
+  visible, userTeams, activeTeamId, onSelect, onClose,
+}: {
+  visible: boolean;
+  userTeams: UserTeam[];
+  activeTeamId: string;
+  onSelect: (teamId: string, palette: UserTeam['palette']) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.subRequestSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}
+        >
+          <View style={styles.sheetHandle} />
+          <Text style={styles.switcherTitle}>Switch Team</Text>
+          {userTeams.map(t => {
+            const isActive = t.teamId === activeTeamId;
+            const dotColor = teams[t.palette][300];
+            return (
+              <Pressable
+                key={t.teamId}
+                style={({ pressed }) => [styles.switcherRow, pressed && { backgroundColor: navy[600] }]}
+                onPress={() => onSelect(t.teamId, t.palette)}
+              >
+                <View style={[styles.switcherDot, { backgroundColor: dotColor }]} />
+                <Text style={styles.switcherTeamName}>{t.teamName}</Text>
+                {isActive && <Text style={[styles.switcherCheck, { color: dotColor }]}>✓</Text>}
+              </Pressable>
+            );
+          })}
+          <Pressable
+            style={({ pressed }) => [styles.switcherCancel, pressed && { opacity: 0.7 }]}
+            onPress={onClose}
+          >
+            <Text style={styles.switcherCancelText}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -1398,6 +1471,55 @@ const styles = StyleSheet.create({
   },
   subRequestNoBtnText: {
     fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM[300],
+  },
+
+  // ── Team switcher ─────────────────────────────────────────────────────────
+  switcherTitle: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: spacing[16],
+  },
+  switcherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing[14],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.s,
+    gap: spacing[12],
+  },
+  switcherDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  switcherTeamName: {
+    flex: 1,
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  switcherCheck: {
+    fontFamily: fonts.uiBold,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  switcherCancel: {
+    paddingVertical: spacing[14],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[4],
+    borderRadius: radius.s,
+    alignItems: 'center',
+  },
+  switcherCancelText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 16,
+    fontWeight: '600',
+    color: navy[300],
   },
 
   // ── Toast ─────────────────────────────────────────────────────────────────

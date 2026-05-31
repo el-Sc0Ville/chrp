@@ -15,8 +15,7 @@ import { useUserContext } from '../context/UserContext';
 import { useSubRequests } from '../firebase/hooks/useSubRequests';
 import type { SubRequest as FirestoreSubRequest } from '../firebase/schema';
 
-const TEAM    = teams.trashdogs;
-const TEAM_ID = 'trashdogs';
+const TEAM = teams.trashdogs;
 const SPARE_FEE = 20; // $ per game
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -148,7 +147,8 @@ export default function SubsScreen() {
 function ManagerSubsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { subRequests: firestoreRequests } = useSubRequests(TEAM_ID);
+  const { activeTeamId } = useUserContext();
+  const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
   const requests     = firestoreRequests.map(toDisplaySubRequest);
   const [findSubTarget,  setFindSubTarget]  = useState<SubRequest | null>(null);
   const [invitedSpares,  setInvitedSpares]  = useState<Set<string>>(new Set());
@@ -171,7 +171,7 @@ function ManagerSubsScreen() {
     setInvitedSpares(prev => new Set([...prev, key]));
     showToast(`Invite sent to ${spare.name.split(' ')[0]}`);
     try {
-      await updateDoc(doc(db, 'teams', TEAM_ID, 'subRequests', findSubTarget.id), {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'subRequests', findSubTarget.id), {
         status: 'filled', filledBy: spare.name,
       });
     } catch (err) {
@@ -404,8 +404,8 @@ function FindSubSheet({
 function PlayerSubsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user } = useUserContext();
-  const { subRequests: firestoreRequests } = useSubRequests(TEAM_ID);
+  const { user, activeTeamId } = useUserContext();
+  const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
   const ownRequests = firestoreRequests
     .filter(r => r.requestedBy === (user?.uid ?? ''))
     .map(toDisplaySubRequest);
@@ -431,10 +431,10 @@ function PlayerSubsScreen() {
     setNoteText('');
     setRequestTarget(null);
     showToast('Request sent to your manager');
-    const path = `teams/${TEAM_ID}/subRequests`;
+    const path = `teams/${activeTeamId}/subRequests`;
     console.log('Writing sub request to:', path);
     try {
-      const result = await addDoc(collection(db, 'teams', TEAM_ID, 'subRequests'), {
+      const result = await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
         eventId:         requestTarget.id,
         requestedBy:     user?.uid ?? 'anon',
         requestedByName: user?.displayName ?? 'Player',

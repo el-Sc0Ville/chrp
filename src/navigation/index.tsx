@@ -40,8 +40,8 @@ const Tab = createBottomTabNavigator();
 
 // ─── Tab bar icons ─────────────────────────────────────────────────────────────
 
-function CalendarIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
+function CalendarIcon({ active, activeColor = teams.trashdogs[300] }: { active: boolean; activeColor?: string }) {
+  const color = active ? activeColor : 'rgba(229,234,242,0.45)';
   return (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
@@ -57,9 +57,9 @@ function CalendarIcon({ active }: { active: boolean }) {
   );
 }
 
-function HomeIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
-  const bgColor = active ? teams.trashdogs[300] : 'transparent';
+function HomeIcon({ active, activeColor = teams.trashdogs[300] }: { active: boolean; activeColor?: string }) {
+  const color = active ? activeColor : 'rgba(229,234,242,0.45)';
+  const bgColor = active ? activeColor : 'transparent';
   const textColor = active ? navy[800] : color;
   return (
     <View style={{
@@ -79,8 +79,8 @@ function HomeIcon({ active }: { active: boolean }) {
   );
 }
 
-function TeamIcon({ active }: { active: boolean }) {
-  const color = active ? teams.trashdogs[300] : 'rgba(229,234,242,0.45)';
+function TeamIcon({ active, activeColor = teams.trashdogs[300] }: { active: boolean; activeColor?: string }) {
+  const color = active ? activeColor : 'rgba(229,234,242,0.45)';
   return (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
       {/* Left person head */}
@@ -109,7 +109,8 @@ function TeamIcon({ active }: { active: boolean }) {
 
 function ChrpTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const activeTeam = teams.trashdogs;
+  const { activeTeamPalette } = useUserContext();
+  const activeTeam = teams[activeTeamPalette];
 
   return (
     <View style={[styles.tabBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
@@ -143,9 +144,9 @@ function ChrpTabBar({ state, descriptors, navigation }: any) {
             onResponderGrant={onPress}
           >
             <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
-              {route.name === 'Schedule' && <CalendarIcon active={isFocused} />}
-              {route.name === 'Home'     && <HomeIcon     active={isFocused} />}
-              {route.name === 'Team'     && <TeamIcon     active={isFocused} />}
+              {route.name === 'Schedule' && <CalendarIcon active={isFocused} activeColor={activeTeam[300]} />}
+              {route.name === 'Home'     && <HomeIcon     active={isFocused} activeColor={activeTeam[300]} />}
+              {route.name === 'Team'     && <TeamIcon     active={isFocused} activeColor={activeTeam[300]} />}
             </View>
             <Text style={[styles.tabLabel, { color: labelColor, fontWeight: isFocused ? '600' : '500' }]}>
               {String(label)}

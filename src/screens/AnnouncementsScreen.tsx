@@ -18,7 +18,6 @@ import type { Announcement as FirestoreAnnouncement } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
 const MAX_CHARS = 500;
-const TEAM_ID = 'trashdogs';
 
 interface DisplayAnn {
   id: string;
@@ -77,8 +76,8 @@ export default function AnnouncementsScreen({ embedded }: { embedded?: boolean }
 function ManagerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user } = useUserContext();
-  const { announcements: firestoreAnnouncements } = useAnnouncements(TEAM_ID);
+  const { user, activeTeamId } = useUserContext();
+  const { announcements: firestoreAnnouncements } = useAnnouncements(activeTeamId);
   const announcements = firestoreAnnouncements.map(toDisplayAnn);
   const [postVisible, setPostVisible]   = useState(false);
   const [editingId, setEditingId]       = useState<string | null>(null);
@@ -98,12 +97,12 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 
   const handlePost = async (body: string, isPinned: boolean) => {
     if (editingId) {
-      await updateDoc(doc(db, 'teams', TEAM_ID, 'announcements', editingId), {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'announcements', editingId), {
         body, pinned: isPinned,
       });
       showToast('Announcement updated');
     } else {
-      await addDoc(collection(db, 'teams', TEAM_ID, 'announcements'), {
+      await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
         authorId: user?.uid ?? 'anon',
         authorName: user?.displayName ?? 'Manager',
         body,
@@ -125,7 +124,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 
   const handleDelete = async () => {
     if (!actionItem) return;
-    await deleteDoc(doc(db, 'teams', TEAM_ID, 'announcements', actionItem.id));
+    await deleteDoc(doc(db, 'teams', activeTeamId, 'announcements', actionItem.id));
     setActionItem(null);
     showToast('Announcement deleted');
   };
@@ -227,7 +226,8 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 function PlayerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { announcements: firestoreAnnouncements } = useAnnouncements(TEAM_ID);
+  const { activeTeamId } = useUserContext();
+  const { announcements: firestoreAnnouncements } = useAnnouncements(activeTeamId);
   const announcements = firestoreAnnouncements.map(toDisplayAnn);
   const [readIds, setReadIds] = useState<Set<string>>(new Set<string>());
 

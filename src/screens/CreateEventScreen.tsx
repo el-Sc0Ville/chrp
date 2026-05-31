@@ -17,8 +17,7 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 
-const TEAM    = teams.trashdogs;
-const TEAM_ID = 'trashdogs';
+const TEAM = teams.trashdogs;
 
 type CreateEventNavProp = NativeStackNavigationProp<RootStackParamList>;
 type EventType = 'game' | 'practice' | 'social';
@@ -66,7 +65,7 @@ function formatTime(d: Date): string {
 export default function CreateEventScreen() {
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation<CreateEventNavProp>();
-  const { user }   = useUserContext();
+  const { user, activeTeamId }   = useUserContext();
 
   // Form state
   const [eventType,   setEventType]   = useState<EventType>('game');
@@ -94,7 +93,7 @@ export default function CreateEventScreen() {
       );
       const end = new Date(start.getTime() + 90 * 60 * 1000);
       const notesValue = notes.trim();
-      await addDoc(collection(db, 'teams', TEAM_ID, 'events'), {
+      await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
         type:      eventType,
         title:     eventName.trim(),
         venue:     venue.trim(),

@@ -19,8 +19,6 @@ import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
 
-// TODO Phase 2b: get teamId from user profile
-const TEAM_ID = 'trashdogs';
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -181,8 +179,8 @@ function ScoreBadge({ score, win }: { score: string; win?: boolean }) {
 }
 
 function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void }) {
-  const { isManager, user } = useUserContext();
-  const { responses } = useResponses(TEAM_ID, event.id);
+  const { isManager, user, activeTeamId } = useUserContext();
+  const { responses } = useResponses(activeTeamId, event.id);
   const inCount    = Object.values(responses).filter(r => r === 'in').length;
   const outCount   = Object.values(responses).filter(r => r === 'out').length;
   const myResponse = (responses[user?.uid ?? ''] as PlayerResponse) ?? null;
@@ -324,8 +322,8 @@ function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: ()
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  // TODO Phase 2b: get teamId from user profile
-  const { events, loading } = useEvents(TEAM_ID);
+  const { activeTeamId } = useUserContext();
+  const { events, loading } = useEvents(activeTeamId);
 
   const now      = new Date();
   const upcoming = events.filter(e => e.startsAt.toDate() > now).map(toDisplayEvent);

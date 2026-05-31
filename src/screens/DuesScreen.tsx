@@ -18,7 +18,6 @@ import { useDues } from '../firebase/hooks/useDues';
 import type { DuesRecord } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
-const TEAM_ID = 'trashdogs';
 
 // Per-player season dues fallback
 const SEASON_DUES = 500;
@@ -73,7 +72,8 @@ export default function DuesScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { dues } = useDues(TEAM_ID);
+  const { activeTeamId } = useUserContext();
+  const { dues } = useDues(activeTeamId);
   const players = dues.map(toDuesPlayer);
   const [seasonDues, setSeasonDues] = useState(SEASON_DUES);
   const [setAmountVisible, setSetAmountVisible] = useState(false);
@@ -217,8 +217,8 @@ const PAYMENT_HISTORY = [
 
 function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { user } = useUserContext();
-  const { dues } = useDues(TEAM_ID);
+  const { user, activeTeamId } = useUserContext();
+  const { dues } = useDues(activeTeamId);
   const uid = user?.uid ?? 'anon';
   const selfRecord = dues.find(d => d.userId === uid);
   const selfPlayer = selfRecord ? toDuesPlayer(selfRecord) : null;
@@ -411,6 +411,7 @@ function PlayerEditSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { activeTeamId } = useUserContext();
   const [owedRaw,         setOwedRaw]         = useState(String(player.seasonAmount));
   const [paidRaw,         setPaidRaw]         = useState(String(player.paidAmount));
   const [notes,           setNotes]           = useState(player.notes ?? '');
@@ -437,7 +438,7 @@ function PlayerEditSheet({
     if (saving) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'teams', TEAM_ID, 'dues', player.id), {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'dues', player.id), {
         amountPaid:   paid,
         seasonAmount: owed,
         status:       computedStatus,

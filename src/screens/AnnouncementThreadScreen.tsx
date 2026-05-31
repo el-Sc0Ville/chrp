@@ -15,8 +15,7 @@ import { useUserContext } from '../context/UserContext';
 import { useReplies } from '../firebase/hooks/useReplies';
 import type { Announcement, AnnouncementReply } from '../firebase/schema';
 
-const TEAM    = teams.trashdogs;
-const TEAM_ID = 'trashdogs';
+const TEAM = teams.trashdogs;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +43,7 @@ export default function AnnouncementThreadScreen() {
   const insets     = useSafeAreaInsets();
   const route      = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user }   = useUserContext();
+  const { user, activeTeamId }   = useUserContext();
 
   const { announcementId } = route.params as { announcementId: string };
 
@@ -53,10 +52,10 @@ export default function AnnouncementThreadScreen() {
   const [sending,      setSending]      = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const { replies } = useReplies(TEAM_ID, announcementId);
+  const { replies } = useReplies(activeTeamId, announcementId);
 
   useEffect(() => {
-    const ref = doc(db, 'teams', TEAM_ID, 'announcements', announcementId);
+    const ref = doc(db, 'teams', activeTeamId, 'announcements', announcementId);
     const unsub = onSnapshot(ref, snap => {
       if (snap.exists()) setAnnouncement({ id: snap.id, ...snap.data() } as Announcement);
     });
@@ -70,7 +69,7 @@ export default function AnnouncementThreadScreen() {
     setDraft('');
     try {
       await addDoc(
-        collection(db, 'teams', TEAM_ID, 'announcements', announcementId, 'replies'),
+        collection(db, 'teams', activeTeamId, 'announcements', announcementId, 'replies'),
         {
           authorId:   user?.uid ?? 'anon',
           authorName: user?.displayName ?? 'Player',

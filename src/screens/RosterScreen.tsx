@@ -27,8 +27,6 @@ interface RosterPlayer {
 
 const TEAM = teams.trashdogs;
 
-// TODO Phase 2b: get teamId from user profile
-const TEAM_ID = 'trashdogs';
 
 function toRosterPlayer(m: Member): RosterPlayer {
   const parts = m.displayName.trim().split(/\s+/);
@@ -60,8 +58,8 @@ export default function RosterScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { user } = useUserContext();
-  const { members, loading } = useMembers(TEAM_ID);
+  const { user, activeTeamId } = useUserContext();
+  const { members, loading } = useMembers(activeTeamId);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
 
@@ -82,8 +80,8 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'manager' as PlayerRole } : p));
     setActionPlayer(null);
     try {
-      await updateDoc(doc(db, 'teams', TEAM_ID, 'members', id), { role: 'manager' });
-      await updateDoc(doc(db, 'teams', TEAM_ID), { managerIds: arrayUnion(id) });
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', id), { role: 'manager' });
+      await updateDoc(doc(db, 'teams', activeTeamId), { managerIds: arrayUnion(id) });
     } catch (err) {
       console.error('[Roster] makeManager failed:', err);
     }
@@ -98,8 +96,8 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'player' as PlayerRole } : p));
     setActionPlayer(null);
     try {
-      await updateDoc(doc(db, 'teams', TEAM_ID, 'members', id), { role: 'player' });
-      await updateDoc(doc(db, 'teams', TEAM_ID), { managerIds: arrayRemove(id) });
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', id), { role: 'player' });
+      await updateDoc(doc(db, 'teams', activeTeamId), { managerIds: arrayRemove(id) });
     } catch (err) {
       console.error('[Roster] demoteToPlayer failed:', err);
     }
@@ -110,9 +108,9 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     setRoster(prev => prev.filter(p => p.id !== id));
     setActionPlayer(null);
     try {
-      await deleteDoc(doc(db, 'teams', TEAM_ID, 'members', id));
+      await deleteDoc(doc(db, 'teams', activeTeamId, 'members', id));
       if (wasManager) {
-        await updateDoc(doc(db, 'teams', TEAM_ID), { managerIds: arrayRemove(id) });
+        await updateDoc(doc(db, 'teams', activeTeamId), { managerIds: arrayRemove(id) });
       }
     } catch (err) {
       console.error('[Roster] removePlayer failed:', err);
@@ -175,8 +173,8 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
 
 function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  // TODO Phase 2b: get teamId from user profile
-  const { members, loading } = useMembers(TEAM_ID);
+  const { activeTeamId } = useUserContext();
+  const { members, loading } = useMembers(activeTeamId);
   const roster = members.map(toRosterPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
 

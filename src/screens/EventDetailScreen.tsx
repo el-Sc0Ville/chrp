@@ -22,8 +22,6 @@ import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
 
-// TODO Phase 2b: get teamId from user profile
-const TEAM_ID = 'trashdogs';
 
 type EventDetailRouteProp = RouteProp<RootStackParamList, 'EventDetail'>;
 type EventDetailNavProp   = NativeStackNavigationProp<RootStackParamList, 'EventDetail'>;
@@ -94,11 +92,12 @@ function ManagerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
+  const { activeTeamId } = useUserContext();
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
   const handleSaveScore = async (s: Score) => {
     try {
-      await updateDoc(doc(db, 'teams', TEAM_ID, 'events', eventId), {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'events', eventId), {
         scoreUs: s.us, scoreThem: s.them,
       });
     } catch (err) {
@@ -106,10 +105,9 @@ function ManagerEventDetail() {
     }
   };
 
-  // TODO Phase 2b: get teamId from user profile
-  const { events } = useEvents(TEAM_ID);
-  const { members } = useMembers(TEAM_ID);
-  const { responses } = useResponses(TEAM_ID, eventId);
+  const { events } = useEvents(activeTeamId);
+  const { members } = useMembers(activeTeamId);
+  const { responses } = useResponses(activeTeamId, eventId);
   const event = events.find(e => e.id === eventId) ?? null;
 
   const [groups, setGroups] = useState<Record<GroupKey, Player[]>>({
@@ -236,12 +234,11 @@ function PlayerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
-  const { user } = useUserContext();
+  const { user, activeTeamId } = useUserContext();
 
-  // TODO Phase 2b: get teamId from user profile
-  const { events }                       = useEvents(TEAM_ID);
-  const { members }                      = useMembers(TEAM_ID);
-  const { responses: firestoreResponses } = useResponses(TEAM_ID, eventId);
+  const { events }                       = useEvents(activeTeamId);
+  const { members }                      = useMembers(activeTeamId);
+  const { responses: firestoreResponses } = useResponses(activeTeamId, eventId);
   const event = events.find(e => e.id === eventId) ?? null;
 
   const uid      = user?.uid ?? 'anon';
@@ -271,7 +268,7 @@ function PlayerEventDetail() {
   const handleRespond = async (r: NonNullable<PlayerResponse>) => {
     if (!event) return;
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
-    const responseRef = doc(db, 'teams', TEAM_ID, 'events', event.id, 'responses', uid);
+    const responseRef = doc(db, 'teams', activeTeamId, 'events', event.id, 'responses', uid);
     try {
       await setDoc(responseRef, {
         userId:       uid,
