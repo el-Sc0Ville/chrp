@@ -18,6 +18,7 @@ import { scoreResult, type Score } from '../context/ScoreContext';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useResponses } from '../firebase/hooks/useResponses';
+import { useTeam } from '../firebase/hooks/useTeam';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
@@ -400,6 +401,8 @@ function EventSummary({ event, fallbackTitle }: {
   event: FirestoreEvent | null;
   fallbackTitle: string;
 }) {
+  const { activeTeamId } = useUserContext();
+  const { team } = useTeam(activeTeamId);
   const title     = event?.title   ?? fallbackTitle;
   const typeBadge = (event?.type   ?? 'game').toUpperCase();
   const venue     = event?.venue   ?? 'TBD';
@@ -414,7 +417,7 @@ function EventSummary({ event, fallbackTitle }: {
     <View style={styles.eventSummary}>
       <View style={styles.teamPill}>
         <View style={styles.teamDot} />
-        <Text style={styles.teamPillText}>TRASHDOGS</Text>
+        <Text style={styles.teamPillText}>{team?.name ?? 'Trash Dogs'}</Text>
       </View>
 
       <View style={styles.kindBadge}>

@@ -15,6 +15,7 @@ import { scoreResult } from '../context/ScoreContext';
 import { useUserContext } from '../context/UserContext';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useResponses } from '../firebase/hooks/useResponses';
+import { useTeam } from '../firebase/hooks/useTeam';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
@@ -291,12 +292,13 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: () => void }) {
-  const { isManager } = useUserContext();
+  const { isManager, activeTeamId } = useUserContext();
+  const { team } = useTeam(activeTeamId);
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
         <View style={styles.teamDot} />
-        <Text style={styles.teamName}>TRASHDOGS</Text>
+        <Text style={styles.teamName}>{team?.name ?? 'Trash Dogs'}</Text>
       </View>
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Schedule</Text>

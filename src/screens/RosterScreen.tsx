@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import { useMembers } from '../firebase/hooks/useMembers';
+import { useTeam } from '../firebase/hooks/useTeam';
 import type { Member } from '../firebase/schema';
 
 type PlayerRole = 'manager' | 'player';
@@ -215,11 +216,13 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 function RosterHeader({ isManager, onInvite }: { isManager: boolean; onInvite?: () => void }) {
+  const { activeTeamId } = useUserContext();
+  const { team } = useTeam(activeTeamId);
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
         <View style={styles.teamDot} />
-        <Text style={styles.teamName}>TRASHDOGS</Text>
+        <Text style={styles.teamName}>{team?.name ?? 'Trash Dogs'}</Text>
       </View>
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Roster</Text>

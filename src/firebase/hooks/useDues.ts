@@ -18,7 +18,7 @@ export function useDues(teamId: string): UseDuesResult {
     const ref = collection(db, 'teams', teamId, 'dues');
     const unsub = onSnapshot(
       ref,
-      snap => { setDues(snap.docs.map(d => d.data() as DuesRecord)); setLoading(false); setError(null); },
+      snap => { setDues(snap.docs.map(d => ({ userId: d.id, ...d.data() }) as DuesRecord)); setLoading(false); setError(null); },
       err  => { setError(err.message); setLoading(false); },
     );
     return unsub;
