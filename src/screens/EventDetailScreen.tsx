@@ -129,7 +129,7 @@ function ManagerEventDetail() {
     setGroups(g);
   }, [members, responses]);
 
-  const markAs = (toGroup: 'in' | 'out' | 'maybe') => {
+  const markAs = async (toGroup: 'in' | 'out' | 'maybe') => {
     if (!editTarget) return;
     const { player, fromGroup } = editTarget;
     setGroups(prev => {
@@ -138,7 +138,15 @@ function ManagerEventDetail() {
       return { ...prev, [fromGroup]: from, [toGroup]: to };
     });
     setEditTarget(null);
-    // TODO Phase 2: write availability override to Firestore with manager attribution
+    try {
+      await setDoc(doc(db, 'teams', activeTeamId, 'events', eventId, 'responses', player.id), {
+        userId:      player.id,
+        displayName: player.name,
+        response:    toGroup,
+        respondedAt: Timestamp.now(),
+        setByManager: true,
+      });
+    } catch (err) { console.error('[EventDetail] override write failed:', err); }
   };
 
   return (

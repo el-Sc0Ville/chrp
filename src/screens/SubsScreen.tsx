@@ -13,6 +13,7 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { useSubRequests } from '../firebase/hooks/useSubRequests';
+import { useEvents } from '../firebase/hooks/useEvents';
 import type { SubRequest as FirestoreSubRequest } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
@@ -95,15 +96,6 @@ const SUB_REQUESTS_SEED: SubRequest[] = [
   },
 ];
 
-// Upcoming games the player hasn't responded to or is Out for
-const PLAYER_UPCOMING: UpcomingEvent[] = [
-  {
-    id: 'e3', weekday: 'SAT', day: '07', month: 'JUN',
-    opponent: '@ Aurora Sky', venue: 'Stadium B', time: '8:00 PM',
-    myResponse: null,
-  },
-];
-
 // Player's own submitted requests (Pat Normandin has 1 pending)
 const PLAYER_OWN_SEED: SubRequest[] = [
   {
@@ -130,6 +122,30 @@ function toDisplaySubRequest(r: FirestoreSubRequest): SubRequest {
     gameWeekday: r.gameWeekday, gameDay: r.gameDay, gameMonth: r.gameMonth,
     opponent: r.opponent, venue: r.gameVenue, gameTime: r.gameTime,
     reason: r.reason, status: r.status, filledBy: r.filledBy,
+  };
+}
+
+// ─── Event → UpcomingEvent mapper ────────────────────────────────────────────
+
+const WEEKDAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MONTH_ABBR   = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+function toUpcomingEvent(e: import('../firebase/schema').Event): UpcomingEvent {
+  const d = e.startsAt.toDate();
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 === 0 ? 12 : h % 12;
+  const time = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+  return {
+    id:       e.id,
+    weekday:  WEEKDAY_ABBR[d.getDay()],
+    day:      String(d.getDate()).padStart(2, '0'),
+    month:    MONTH_ABBR[d.getMonth()],
+    opponent: e.opponent ?? e.title,
+    venue:    e.venue,
+    time,
+    myResponse: null,
   };
 }
 
@@ -406,6 +422,7 @@ function PlayerSubsScreen() {
   const navigation = useNavigation<any>();
   const { user, activeTeamId } = useUserContext();
   const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
+  const { events: allEvents } = useEvents(activeTeamId);
   const ownRequests = firestoreRequests
     .filter(r => r.requestedBy === (user?.uid ?? ''))
     .map(toDisplaySubRequest);
@@ -414,10 +431,14 @@ function PlayerSubsScreen() {
   const [toast,          setToast]          = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Events the player hasn't submitted a request for yet
-  const availableEvents = PLAYER_UPCOMING.filter(
-    e => !firestoreRequests.some(r => r.eventId === e.id && r.requestedBy === (user?.uid ?? '')),
-  );
+  // Future events the player hasn't already submitted a sub request for
+  const now = new Date();
+  const availableEvents: UpcomingEvent[] = allEvents
+    .filter(e =>
+      e.startsAt.toDate() > now &&
+      !firestoreRequests.some(r => r.eventId === e.id && r.requestedBy === (user?.uid ?? '')),
+    )
+    .map(toUpcomingEvent);
 
   const showToast = (msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
