@@ -3,8 +3,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet,
+  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert,
 } from 'react-native';
+import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
@@ -58,6 +60,7 @@ export default function RosterScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
+  const { user } = useUserContext();
   const { members, loading } = useMembers(TEAM_ID);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
@@ -75,19 +78,45 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     ).join('');
   }, []);
 
-  const makeManager = (id: string) => {
+  const makeManager = async (id: string) => {
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'manager' as PlayerRole } : p));
     setActionPlayer(null);
+    try {
+      await updateDoc(doc(db, 'teams', TEAM_ID, 'members', id), { role: 'manager' });
+      await updateDoc(doc(db, 'teams', TEAM_ID), { managerIds: arrayUnion(id) });
+    } catch (err) {
+      console.error('[Roster] makeManager failed:', err);
+    }
   };
 
-  const demoteToPlayer = (id: string) => {
+  const demoteToPlayer = async (id: string) => {
+    if (id === user?.uid) {
+      Alert.alert("Can't remove your own manager role", 'Ask another manager to do this.');
+      setActionPlayer(null);
+      return;
+    }
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'player' as PlayerRole } : p));
     setActionPlayer(null);
+    try {
+      await updateDoc(doc(db, 'teams', TEAM_ID, 'members', id), { role: 'player' });
+      await updateDoc(doc(db, 'teams', TEAM_ID), { managerIds: arrayRemove(id) });
+    } catch (err) {
+      console.error('[Roster] demoteToPlayer failed:', err);
+    }
   };
 
-  const removePlayer = (id: string) => {
+  const removePlayer = async (id: string) => {
+    const wasManager = roster.find(p => p.id === id)?.role === 'manager';
     setRoster(prev => prev.filter(p => p.id !== id));
     setActionPlayer(null);
+    try {
+      await deleteDoc(doc(db, 'teams', TEAM_ID, 'members', id));
+      if (wasManager) {
+        await updateDoc(doc(db, 'teams', TEAM_ID), { managerIds: arrayRemove(id) });
+      }
+    } catch (err) {
+      console.error('[Roster] removePlayer failed:', err);
+    }
   };
 
   const managerCount = roster.filter(p => p.role === 'manager').length;
