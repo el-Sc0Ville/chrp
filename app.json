@@ -3,6 +3,7 @@
     "name": "Chrp",
     "slug": "chrp",
     "version": "1.0.0",
+    "scheme": "chrp",
     "orientation": "portrait",
     "icon": "./assets/chrp-icon-1024.png",
     "userInterfaceStyle": "dark",
@@ -12,7 +13,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.chrp.app"
+      "bundleIdentifier": "com.chrp.app",
+      "associatedDomains": ["applinks:chrp-app.firebaseapp.com"]
     },
     "android": {
       "package": "com.chrp.app",
