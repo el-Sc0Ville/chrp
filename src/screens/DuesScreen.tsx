@@ -437,11 +437,19 @@ function PlayerEditSheet({
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
+    // Recompute status at save time with a fresh timestamp so overdue
+    // records with dueDate set are evaluated correctly on write.
+    const saveNow = new Date();
+    const finalStatus: DuesStatus =
+      paid >= owed && owed > 0                               ? 'paid'
+      : dueDate !== null && dueDate < saveNow && paid < owed ? 'overdue'
+      : paid > 0                                             ? 'partial'
+      :                                                        'pending';
     try {
       await updateDoc(doc(db, 'teams', activeTeamId, 'dues', player.id), {
         amountPaid:   paid,
         seasonAmount: owed,
-        status:       computedStatus,
+        status:       finalStatus,
         notes:        notes.trim(),
         dueDate:      dueDate !== null ? Timestamp.fromDate(dueDate) : deleteField(),
         ...(paid > 0 && { lastPaymentAt: serverTimestamp() }),

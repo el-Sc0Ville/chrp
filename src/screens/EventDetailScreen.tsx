@@ -281,7 +281,7 @@ function PlayerEventDetail() {
     try {
       await setDoc(responseRef, {
         userId:       uid,
-        displayName:  user?.displayName ?? user?.email ?? 'Player',
+        displayName:  user?.displayName ?? 'Player',
         response:     r,
         respondedAt:  Timestamp.now(),
         setByManager: false,

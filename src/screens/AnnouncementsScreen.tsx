@@ -104,7 +104,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     } else {
       await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
         authorId: user?.uid ?? 'anon',
-        authorName: user?.displayName ?? 'Manager',
+        authorName: user?.displayName ?? 'Player',
         body,
         pinned: isPinned,
         createdAt: serverTimestamp(),

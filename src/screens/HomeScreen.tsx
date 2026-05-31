@@ -84,7 +84,7 @@ function ManagerHomeScreen() {
     try {
       await setDoc(responseRef, {
         userId: uid,
-        displayName: user?.displayName ?? user?.email ?? 'Manager',
+        displayName: user?.displayName ?? 'Player',
         response: r,
         respondedAt: Timestamp.now(),
         setByManager: true,
@@ -430,7 +430,7 @@ function PlayerHomeScreen() {
     try {
       await setDoc(responseRef, {
         userId:       uid,
-        displayName:  user?.displayName ?? user?.email ?? 'Player',
+        displayName:  user?.displayName ?? 'Player',
         response:     r,
         respondedAt:  Timestamp.now(),
         setByManager: false,
