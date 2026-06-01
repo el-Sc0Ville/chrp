@@ -164,7 +164,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
                   <Text style={styles.playerJersey}>#{player.jersey}</Text>
                 </View>
                 <View style={styles.playerRight}>
-                  {player.duesStatus === 'partial'
+                  {(player.duesStatus === 'partial' || (player.duesStatus === 'overdue' && player.paidAmount > 0))
                     ? <Text style={styles.playerAmountPartial}>${player.paidAmount} of ${player.seasonAmount}</Text>
                     : <Text style={styles.playerAmount}>${player.seasonAmount}</Text>
                   }
