@@ -116,7 +116,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: 10.5,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
     color: TEAM[300],
     fontWeight: '600',
   },

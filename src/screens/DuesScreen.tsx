@@ -165,8 +165,8 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
                 </View>
                 <View style={styles.playerRight}>
                   {player.duesStatus === 'partial'
-                    ? <Text style={styles.playerAmountPartial}>${player.paidAmount} of ${seasonDues}</Text>
-                    : <Text style={styles.playerAmount}>${seasonDues}</Text>
+                    ? <Text style={styles.playerAmountPartial}>${player.paidAmount} of ${player.seasonAmount}</Text>
+                    : <Text style={styles.playerAmount}>${player.seasonAmount}</Text>
                   }
                   <StatusPill status={player.duesStatus} />
                 </View>
