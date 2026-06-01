@@ -21,22 +21,22 @@ function daysFromNow(n: number, hour = 19, minute = 30): Timestamp {
   return Timestamp.fromDate(d);
 }
 
-// ─── Members (mirrors RosterScreen ROSTER_DATA) ───────────────────────────────
+// ─── Members ──────────────────────────────────────────────────────────────────
 
 const MEMBERS: Omit<Member, 'joinedAt'>[] = [
-  { userId: 'r1',  displayName: 'Pat Normandin',    jerseyNumber: 17, role: 'manager', email: 'pat@trashdogs.ca' },
-  { userId: 'r2',  displayName: 'Marco Beauchamp',  jerseyNumber: 29, role: 'manager', email: 'marco@trashdogs.ca' },
-  { userId: 'r3',  displayName: 'Sophie Tremblay',  jerseyNumber:  7, role: 'player',  email: 'sophie@trashdogs.ca' },
-  { userId: 'r4',  displayName: 'Jake Kowalski',    jerseyNumber: 44, role: 'player',  email: 'jake@trashdogs.ca' },
-  { userId: 'r5',  displayName: 'Lena Bergström',   jerseyNumber: 13, role: 'player',  email: 'lena@trashdogs.ca' },
-  { userId: 'r6',  displayName: 'Tyler MacPherson', jerseyNumber: 88, role: 'player',  email: 'tyler@trashdogs.ca' },
-  { userId: 'r7',  displayName: 'Nina Petrov',      jerseyNumber:  3, role: 'player',  email: 'nina@trashdogs.ca' },
-  { userId: 'r8',  displayName: 'Chris Fontaine',   jerseyNumber: 21, role: 'player',  email: 'chris@trashdogs.ca' },
-  { userId: 'r9',  displayName: 'Sam Delacroix',    jerseyNumber: 67, role: 'player',  email: 'sam@trashdogs.ca' },
-  { userId: 'r10', displayName: 'Mia Korhonen',     jerseyNumber: 11, role: 'player',  email: 'mia@trashdogs.ca' },
+  { userId: 'r1',  displayName: 'Pat Normandin',        jerseyNumber: 11, role: 'manager', email: 'pat@trashdogs.ca'       },
+  { userId: 'r2',  displayName: 'Mathieu Gagnon',        jerseyNumber: 29, role: 'manager', email: 'mathieu@trashdogs.ca'   },
+  { userId: 'r3',  displayName: 'Pat Normandin',         jerseyNumber: 11, role: 'player',  email: 'pat.p@trashdogs.ca'     },
+  { userId: 'r4',  displayName: 'Olivier Tremblay',      jerseyNumber:  4, role: 'player',  email: 'olivier@trashdogs.ca'   },
+  { userId: 'r5',  displayName: 'Alexis Bergeron',       jerseyNumber: 19, role: 'player',  email: 'alexis@trashdogs.ca'    },
+  { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', jerseyNumber: 88, role: 'player',  email: 'marc@trashdogs.ca'      },
+  { userId: 'r7',  displayName: 'Émilie Lemieux',        jerseyNumber: 23, role: 'player',  email: 'emilie@trashdogs.ca'    },
+  { userId: 'r8',  displayName: 'Jean-François Caron',   jerseyNumber: 16, role: 'player',  email: 'jf@trashdogs.ca'        },
+  { userId: 'r9',  displayName: 'Stéphane Lapointe',     jerseyNumber: 55, role: 'player',  email: 'stephane@trashdogs.ca'  },
+  { userId: 'r10', displayName: 'Véronique Rivard',      jerseyNumber: 37, role: 'player',  email: 'veronique@trashdogs.ca' },
 ];
 
-// ─── Events (mirrors ScheduleScreen UPCOMING + PAST) ─────────────────────────
+// ─── Events ───────────────────────────────────────────────────────────────────
 
 interface EventSeed {
   event: Omit<Event, 'createdAt'>;
@@ -57,16 +57,16 @@ const EVENTS: EventSeed[] = [
       createdBy: 'r1',
     },
     responses: [
-      { userId: 'r1',  displayName: 'Pat Normandin',    response: 'in',    setByManager: false },
-      { userId: 'r2',  displayName: 'Marco Beauchamp',  response: 'in',    setByManager: false },
-      { userId: 'r3',  displayName: 'Sophie Tremblay',  response: 'in',    setByManager: false },
-      { userId: 'r5',  displayName: 'Lena Bergström',   response: 'in',    setByManager: false },
-      { userId: 'r6',  displayName: 'Tyler MacPherson', response: 'in',    setByManager: false },
-      { userId: 'r8',  displayName: 'Chris Fontaine',   response: 'in',    setByManager: false },
-      { userId: 'r9',  displayName: 'Sam Delacroix',    response: 'in',    setByManager: false },
-      { userId: 'r4',  displayName: 'Jake Kowalski',    response: 'out',   setByManager: false },
-      { userId: 'r7',  displayName: 'Nina Petrov',      response: 'out',   setByManager: false },
-      { userId: 'r10', displayName: 'Mia Korhonen',     response: 'maybe', setByManager: false },
+      { userId: 'r1',  displayName: 'Pat Normandin',        response: 'in',    setByManager: false },
+      { userId: 'r2',  displayName: 'Mathieu Gagnon',        response: 'in',    setByManager: false },
+      { userId: 'r3',  displayName: 'Pat Normandin',         response: 'in',    setByManager: false },
+      { userId: 'r5',  displayName: 'Alexis Bergeron',       response: 'in',    setByManager: false },
+      { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', response: 'in',    setByManager: false },
+      { userId: 'r8',  displayName: 'Jean-François Caron',   response: 'in',    setByManager: false },
+      { userId: 'r9',  displayName: 'Stéphane Lapointe',     response: 'in',    setByManager: false },
+      { userId: 'r4',  displayName: 'Olivier Tremblay',      response: 'out',   setByManager: false },
+      { userId: 'r7',  displayName: 'Émilie Lemieux',        response: 'out',   setByManager: false },
+      { userId: 'r10', displayName: 'Véronique Rivard',      response: 'maybe', setByManager: false },
     ],
   },
   {
@@ -81,16 +81,16 @@ const EVENTS: EventSeed[] = [
       createdBy: 'r1',
     },
     responses: [
-      { userId: 'r1',  displayName: 'Pat Normandin',    response: 'in',  setByManager: false },
-      { userId: 'r2',  displayName: 'Marco Beauchamp',  response: 'in',  setByManager: false },
-      { userId: 'r3',  displayName: 'Sophie Tremblay',  response: 'in',  setByManager: false },
-      { userId: 'r5',  displayName: 'Lena Bergström',   response: 'in',  setByManager: false },
-      { userId: 'r6',  displayName: 'Tyler MacPherson', response: 'in',  setByManager: false },
-      { userId: 'r7',  displayName: 'Nina Petrov',      response: 'in',  setByManager: false },
-      { userId: 'r8',  displayName: 'Chris Fontaine',   response: 'in',  setByManager: false },
-      { userId: 'r9',  displayName: 'Sam Delacroix',    response: 'in',  setByManager: false },
-      { userId: 'r10', displayName: 'Mia Korhonen',     response: 'in',  setByManager: false },
-      { userId: 'r4',  displayName: 'Jake Kowalski',    response: 'out', setByManager: false },
+      { userId: 'r1',  displayName: 'Pat Normandin',        response: 'in',  setByManager: false },
+      { userId: 'r2',  displayName: 'Mathieu Gagnon',        response: 'in',  setByManager: false },
+      { userId: 'r3',  displayName: 'Pat Normandin',         response: 'in',  setByManager: false },
+      { userId: 'r5',  displayName: 'Alexis Bergeron',       response: 'in',  setByManager: false },
+      { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', response: 'in',  setByManager: false },
+      { userId: 'r7',  displayName: 'Émilie Lemieux',        response: 'in',  setByManager: false },
+      { userId: 'r8',  displayName: 'Jean-François Caron',   response: 'in',  setByManager: false },
+      { userId: 'r9',  displayName: 'Stéphane Lapointe',     response: 'in',  setByManager: false },
+      { userId: 'r10', displayName: 'Véronique Rivard',      response: 'in',  setByManager: false },
+      { userId: 'r4',  displayName: 'Olivier Tremblay',      response: 'out', setByManager: false },
     ],
   },
   {
@@ -106,16 +106,16 @@ const EVENTS: EventSeed[] = [
       createdBy: 'r1',
     },
     responses: [
-      { userId: 'r1',  displayName: 'Pat Normandin',    response: 'in',    setByManager: false },
-      { userId: 'r2',  displayName: 'Marco Beauchamp',  response: 'in',    setByManager: false },
-      { userId: 'r6',  displayName: 'Tyler MacPherson', response: 'in',    setByManager: false },
-      { userId: 'r9',  displayName: 'Sam Delacroix',    response: 'in',    setByManager: false },
-      { userId: 'r10', displayName: 'Mia Korhonen',     response: 'in',    setByManager: false },
-      { userId: 'r4',  displayName: 'Jake Kowalski',    response: 'out',   setByManager: false },
-      { userId: 'r5',  displayName: 'Lena Bergström',   response: 'out',   setByManager: false },
-      { userId: 'r7',  displayName: 'Nina Petrov',      response: 'out',   setByManager: false },
-      { userId: 'r3',  displayName: 'Sophie Tremblay',  response: 'maybe', setByManager: false },
-      { userId: 'r8',  displayName: 'Chris Fontaine',   response: 'maybe', setByManager: false },
+      { userId: 'r1',  displayName: 'Pat Normandin',        response: 'in',    setByManager: false },
+      { userId: 'r2',  displayName: 'Mathieu Gagnon',        response: 'in',    setByManager: false },
+      { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', response: 'in',    setByManager: false },
+      { userId: 'r9',  displayName: 'Stéphane Lapointe',     response: 'in',    setByManager: false },
+      { userId: 'r10', displayName: 'Véronique Rivard',      response: 'in',    setByManager: false },
+      { userId: 'r4',  displayName: 'Olivier Tremblay',      response: 'out',   setByManager: false },
+      { userId: 'r5',  displayName: 'Alexis Bergeron',       response: 'out',   setByManager: false },
+      { userId: 'r7',  displayName: 'Émilie Lemieux',        response: 'out',   setByManager: false },
+      { userId: 'r3',  displayName: 'Pat Normandin',         response: 'maybe', setByManager: false },
+      { userId: 'r8',  displayName: 'Jean-François Caron',   response: 'maybe', setByManager: false },
     ],
   },
   {
@@ -130,20 +130,19 @@ const EVENTS: EventSeed[] = [
       createdBy: 'r1',
     },
     responses: [
-      { userId: 'r1',  displayName: 'Pat Normandin',    response: 'in',  setByManager: false },
-      { userId: 'r2',  displayName: 'Marco Beauchamp',  response: 'in',  setByManager: false },
-      { userId: 'r3',  displayName: 'Sophie Tremblay',  response: 'in',  setByManager: false },
-      { userId: 'r5',  displayName: 'Lena Bergström',   response: 'in',  setByManager: false },
-      { userId: 'r6',  displayName: 'Tyler MacPherson', response: 'in',  setByManager: false },
-      { userId: 'r7',  displayName: 'Nina Petrov',      response: 'in',  setByManager: false },
-      { userId: 'r8',  displayName: 'Chris Fontaine',   response: 'in',  setByManager: false },
-      { userId: 'r9',  displayName: 'Sam Delacroix',    response: 'in',  setByManager: false },
-      { userId: 'r10', displayName: 'Mia Korhonen',     response: 'in',  setByManager: false },
-      { userId: 'r10', displayName: 'Mia Korhonen',     response: 'in',  setByManager: false },
-      { userId: 'r4',  displayName: 'Jake Kowalski',    response: 'out', setByManager: false },
+      { userId: 'r1',  displayName: 'Pat Normandin',        response: 'in',  setByManager: false },
+      { userId: 'r2',  displayName: 'Mathieu Gagnon',        response: 'in',  setByManager: false },
+      { userId: 'r3',  displayName: 'Pat Normandin',         response: 'in',  setByManager: false },
+      { userId: 'r5',  displayName: 'Alexis Bergeron',       response: 'in',  setByManager: false },
+      { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', response: 'in',  setByManager: false },
+      { userId: 'r7',  displayName: 'Émilie Lemieux',        response: 'in',  setByManager: false },
+      { userId: 'r8',  displayName: 'Jean-François Caron',   response: 'in',  setByManager: false },
+      { userId: 'r9',  displayName: 'Stéphane Lapointe',     response: 'in',  setByManager: false },
+      { userId: 'r10', displayName: 'Véronique Rivard',      response: 'in',  setByManager: false },
+      { userId: 'r4',  displayName: 'Olivier Tremblay',      response: 'out', setByManager: false },
     ],
   },
-  // Past events with scores (mirrors ScheduleScreen PAST)
+  // Past events with scores
   {
     event: {
       id: 'p1',
@@ -191,7 +190,7 @@ const EVENTS: EventSeed[] = [
   },
 ];
 
-// ─── Announcements (mirrors AnnouncementsScreen SEED) ────────────────────────
+// ─── Announcements ────────────────────────────────────────────────────────────
 
 interface AnnouncementSeed {
   announcement: Omit<Announcement, 'createdAt'>;
@@ -208,9 +207,9 @@ const ANNOUNCEMENTS: AnnouncementSeed[] = [
       pinned: true,
     },
     replies: [
-      { id: 'rep1a', authorId: 'r2',  authorName: 'Marco Beauchamp',  body: "Got it. Does that change the warm-up time too?" },
-      { id: 'rep1b', authorId: 'r3',  authorName: 'Sophie Tremblay',  body: "Thanks for the heads up! 👍" },
-      { id: 'rep1c', authorId: 'r4',  authorName: 'Jake Kowalski',    body: "Will we still use the same entrance?" },
+      { id: 'rep1a', authorId: 'r2',  authorName: 'Mathieu Gagnon',        body: "Got it. Does that change the warm-up time too?" },
+      { id: 'rep1b', authorId: 'r3',  authorName: 'Pat Normandin',         body: "Thanks for the heads up! 👍" },
+      { id: 'rep1c', authorId: 'r4',  authorName: 'Olivier Tremblay',      body: "Will we still use the same entrance?" },
     ],
   },
   {
@@ -222,15 +221,15 @@ const ANNOUNCEMENTS: AnnouncementSeed[] = [
       pinned: false,
     },
     replies: [
-      { id: 'rep2a', authorId: 'r6',  authorName: 'Tyler MacPherson', body: "Can we pick them up before the game on Sunday?" },
-      { id: 'rep2b', authorId: 'r7',  authorName: 'Nina Petrov',      body: "I'm a medium — saving you the trouble of guessing 😄" },
+      { id: 'rep2a', authorId: 'r6',  authorName: 'Marc-Antoine Bouchard', body: "Can we pick them up before the game on Sunday?" },
+      { id: 'rep2b', authorId: 'r7',  authorName: 'Émilie Lemieux',        body: "I'm a medium — saving you the trouble of guessing 😄" },
     ],
   },
   {
     announcement: {
       id: 'ann3',
       authorId: 'r2',
-      authorName: 'Marco Beauchamp',
+      authorName: 'Mathieu Gagnon',
       body: "Friendly reminder to update your availability for the playoff rounds — we need a final headcount by Thursday noon.",
       pinned: false,
     },
@@ -245,25 +244,25 @@ const ANNOUNCEMENTS: AnnouncementSeed[] = [
       pinned: false,
     },
     replies: [
-      { id: 'rep4a', authorId: 'r8',  authorName: 'Chris Fontaine',  body: "I'm in! Best post-game tradition 🍺" },
-      { id: 'rep4b', authorId: 'r9',  authorName: 'Sam Delacroix',   body: "Count me in too 🙌" },
+      { id: 'rep4a', authorId: 'r8',  authorName: 'Jean-François Caron',  body: "I'm in! Best post-game tradition 🍺" },
+      { id: 'rep4b', authorId: 'r9',  authorName: 'Stéphane Lapointe',    body: "Count me in too 🙌" },
     ],
   },
 ];
 
-// ─── Dues (mirrors DuesScreen DUES_DATA) ─────────────────────────────────────
+// ─── Dues ─────────────────────────────────────────────────────────────────────
 
 const DUES: DuesRecord[] = [
-  { userId: 'r1',  displayName: 'Pat Normandin',    seasonAmount: 500, amountPaid: 500, status: 'paid',    lastPaymentAt: daysAgo(30) },
-  { userId: 'r2',  displayName: 'Marco Beauchamp',  seasonAmount: 500, amountPaid: 500, status: 'paid',    lastPaymentAt: daysAgo(28) },
-  { userId: 'r3',  displayName: 'Sophie Tremblay',  seasonAmount: 500, amountPaid: 500, status: 'paid',    lastPaymentAt: daysAgo(25) },
-  { userId: 'r4',  displayName: 'Jake Kowalski',    seasonAmount: 500, amountPaid:   0, status: 'overdue'  },
-  { userId: 'r5',  displayName: 'Lena Bergström',   seasonAmount: 500, amountPaid: 200, status: 'partial', lastPaymentAt: daysAgo(14) },
-  { userId: 'r6',  displayName: 'Tyler MacPherson', seasonAmount: 500, amountPaid: 500, status: 'paid',    lastPaymentAt: daysAgo(20) },
-  { userId: 'r7',  displayName: 'Nina Petrov',      seasonAmount: 500, amountPaid:   0, status: 'overdue'  },
-  { userId: 'r8',  displayName: 'Chris Fontaine',   seasonAmount: 500, amountPaid: 250, status: 'partial', lastPaymentAt: daysAgo(7)  },
-  { userId: 'r9',  displayName: 'Sam Delacroix',    seasonAmount: 500, amountPaid:   0, status: 'pending'  },
-  { userId: 'r10', displayName: 'Mia Korhonen',     seasonAmount: 500, amountPaid:   0, status: 'pending'  },
+  { userId: 'r1',  displayName: 'Pat Normandin',        seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r2',  displayName: 'Mathieu Gagnon',        seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r3',  displayName: 'Pat Normandin',         seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r4',  displayName: 'Olivier Tremblay',      seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r5',  displayName: 'Alexis Bergeron',       seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r7',  displayName: 'Émilie Lemieux',        seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r8',  displayName: 'Jean-François Caron',   seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r9',  displayName: 'Stéphane Lapointe',     seasonAmount: 500, amountPaid: 0, status: 'pending' },
+  { userId: 'r10', displayName: 'Véronique Rivard',      seasonAmount: 500, amountPaid: 0, status: 'pending' },
 ];
 
 // ─── Seed function ────────────────────────────────────────────────────────────
