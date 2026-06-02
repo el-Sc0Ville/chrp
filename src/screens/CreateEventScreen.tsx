@@ -21,6 +21,7 @@ import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
+import { sendPushNotification } from '../firebase/sendNotification';
 
 const TEAM = teams.trashdogs;
 
@@ -167,6 +168,21 @@ export default function CreateEventScreen() {
           );
         }
         await batch.commit();
+
+        // TODO Phase 2b: move to Firebase Cloud Function for reliability
+        const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const dateLabel = `${DAYS[start.getDay()]}, ${MONTHS[start.getMonth()]} ${start.getDate()}`;
+        for (const memberDoc of membersSnap.docs) {
+          const m = memberDoc.data() as Member;
+          if (m.pushToken) {
+            sendPushNotification(
+              m.pushToken,
+              `New event: ${fields.title}`,
+              `📅 ${dateLabel} at ${fields.venue}. Are you in?`,
+            ).catch(console.error);
+          }
+        }
       }
 
       navigation.goBack();

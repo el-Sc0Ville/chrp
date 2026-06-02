@@ -35,6 +35,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/chrp-icon-1024.png",
+          "color": "#2F6BFF",
+          "sounds": []
+        }
+      ]
+    ]
   }
 }

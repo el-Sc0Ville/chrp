@@ -11,8 +11,10 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
-import { doc, setDoc, updateDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, addDoc, getDocs, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { sendPushNotification } from '../firebase/sendNotification';
+import type { Member } from '../firebase/schema';
 import { useUserContext } from '../context/UserContext';
 import { scoreResult, type Score } from '../context/ScoreContext';
 import { useEvents } from '../firebase/hooks/useEvents';
@@ -127,13 +129,26 @@ function ManagerEventDetail() {
               });
               console.log('Cancel result: success');
               if (event) {
+                const cancelBody = `🚫 ${event.title} on ${formatEventDate(event.startsAt)} has been cancelled.`;
                 await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
-                  body:       `🚫 ${event.title} on ${formatEventDate(event.startsAt)} has been cancelled.`,
+                  body:       cancelBody,
                   authorId:   user?.uid ?? 'manager',
                   authorName: user?.displayName ?? 'Manager',
                   pinned:     true,
                   createdAt:  serverTimestamp(),
                 });
+                // TODO Phase 2b: move to Firebase Cloud Function for reliability
+                const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+                for (const memberDoc of membersSnap.docs) {
+                  const m = memberDoc.data() as Member;
+                  if (m.pushToken) {
+                    sendPushNotification(
+                      m.pushToken,
+                      'Event cancelled',
+                      cancelBody,
+                    ).catch(console.error);
+                  }
+                }
               }
               navigation.goBack();
             } catch (err) {

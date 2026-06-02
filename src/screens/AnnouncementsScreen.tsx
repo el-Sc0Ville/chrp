@@ -9,12 +9,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { doc, addDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, addDoc, updateDoc, deleteDoc, getDocs, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { sendPushNotification } from '../firebase/sendNotification';
+import type { Announcement as FirestoreAnnouncement, Member } from '../firebase/schema';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
-import type { Announcement as FirestoreAnnouncement } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
 const MAX_CHARS = 500;
@@ -102,13 +103,27 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
       });
       showToast('Announcement updated');
     } else {
+      const authorName = user?.displayName ?? 'Manager';
       await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
         authorId: user?.uid ?? 'anon',
-        authorName: user?.displayName ?? 'Player',
+        authorName,
         body,
         pinned: isPinned,
         createdAt: serverTimestamp(),
       });
+      // TODO Phase 2b: move to Firebase Cloud Function for reliability
+      const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+      const preview = body.length > 100 ? body.slice(0, 97) + '...' : body;
+      for (const memberDoc of membersSnap.docs) {
+        const m = memberDoc.data() as Member;
+        if (m.pushToken) {
+          sendPushNotification(
+            m.pushToken,
+            `${authorName} posted an announcement`,
+            preview,
+          ).catch(console.error);
+        }
+      }
       showToast('Sent to all players');
     }
     setPostVisible(false);

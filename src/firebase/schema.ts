@@ -20,6 +20,7 @@ export interface Member {
   email: string;
   joinedAt: Timestamp;
   autoIn?: boolean;
+  pushToken?: string;
 }
 
 // /teams/{teamId}/members/{userId}/blackouts/{docId}

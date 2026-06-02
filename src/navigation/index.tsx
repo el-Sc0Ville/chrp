@@ -33,6 +33,7 @@ import { UserProvider, useUserContext } from '../context/UserContext';
 import { navy, teams, fonts, spacing, type TeamKey } from '../theme';
 import { onAuthStateChanged, type User } from '../firebase/auth';
 import { db } from '../firebase';
+import { registerForPushNotifications } from '../firebase/notifications';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -300,6 +301,8 @@ function AppStack() {
           setMockUser(u, isManagerRole);
           setActiveTeamId(firstTeam.teamId as string);
           setActiveTeamPalette(firstTeam.palette as TeamKey);
+          // Register / refresh push token for this user+team
+          registerForPushNotifications(u.uid, firstTeam.teamId as string).catch(console.error);
         }
       } else if (!u) {
         setMockUser(null, false);
