@@ -14,7 +14,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chrp.app",
-      "associatedDomains": ["applinks:chrp-app.firebaseapp.com"]
+      "associatedDomains": ["applinks:chrp-app.firebaseapp.com"],
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["chrp"]
+          }
+        ]
+      }
     },
     "android": {
       "package": "com.chrp.app",

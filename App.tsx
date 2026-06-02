@@ -33,7 +33,9 @@ import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
 
 async function handleDeepLink(url: string): Promise<void> {
-  if (!url.includes('finishSignIn')) return;
+  const isChrpScheme       = url.startsWith('chrp://');
+  const isFirebaseUniversal = url.startsWith('https://chrp-app.firebaseapp.com');
+  if ((!isChrpScheme && !isFirebaseUniversal) || !url.includes('finishSignIn')) return;
   const email = await getPendingEmail();
   if (!email) {
     console.warn('[DeepLink] finishSignIn URL received but no pending email in storage');
