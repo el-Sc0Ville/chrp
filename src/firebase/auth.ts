@@ -25,8 +25,15 @@ const ACTION_CODE_SETTINGS = {
 };
 
 export async function sendMagicLink(email: string): Promise<void> {
-  await sendSignInLinkToEmail(auth, email, ACTION_CODE_SETTINGS);
-  await AsyncStorage.setItem(PENDING_EMAIL_KEY, email);
+  try {
+    console.log('Sending magic link to:', email);
+    await sendSignInLinkToEmail(auth, email, ACTION_CODE_SETTINGS);
+    await AsyncStorage.setItem(PENDING_EMAIL_KEY, email);
+    console.log('Magic link sent successfully');
+  } catch (e) {
+    console.error('sendMagicLink error:', e);
+    throw e;
+  }
 }
 
 export async function confirmMagicLink(email: string, emailLink: string): Promise<void> {

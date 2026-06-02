@@ -36,8 +36,9 @@ export default function AuthScreen() {
     try {
       await sendMagicLink(email.trim());
       setSent(true);
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (e) {
+      console.error('AuthScreen send error:', e);
+      setError(String(e));
     } finally {
       setLoading(false);
     }
