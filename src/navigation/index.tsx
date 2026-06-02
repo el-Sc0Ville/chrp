@@ -276,20 +276,36 @@ function OnboardingNavigator() {
 }
 
 function AppStack() {
-  const { user: mockUser, needsOnboarding, setNeedsOnboarding } = useUserContext();
+  const {
+    user: mockUser,
+    needsOnboarding, setNeedsOnboarding,
+    setMockUser, setActiveTeamId, setActiveTeamPalette,
+  } = useUserContext();
   // undefined = resolving Firebase auth, null = signed out, User = signed in
   const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
     return onAuthStateChanged(async (u) => {
       setFirebaseUser(u);
-      if (u) {
-        // Check whether this user has any team memberships yet
+      if (u && !u.isAnonymous) {
+        // Real Firebase user (magic link, etc.) — populate UserContext immediately
+        // so user.uid and user.displayName are available in all screens
+        setMockUser(u, false); // isManager defaults false; updated below once teams load
         const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
         setNeedsOnboarding(snap.empty);
-      } else {
+        if (!snap.empty) {
+          // Returning user — restore their active team and manager status
+          const isManagerRole = snap.docs.some(d => d.data().role === 'manager');
+          const firstTeam     = snap.docs[0].data();
+          setMockUser(u, isManagerRole);
+          setActiveTeamId(firstTeam.teamId as string);
+          setActiveTeamPalette(firstTeam.palette as TeamKey);
+        }
+      } else if (!u) {
+        setMockUser(null, false);
         setNeedsOnboarding(false);
       }
+      // u.isAnonymous = dev bypass — AuthScreen's setMockUser handles context
     });
   }, []);
 

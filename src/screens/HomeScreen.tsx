@@ -59,7 +59,7 @@ function ManagerHomeScreen() {
 
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
-  const uid       = user?.uid ?? 'anon';
+  const uid       = user?.uid;
 
   const { responses } = useResponses(activeTeamId, nextEvent?.id ?? null);
 
@@ -76,11 +76,14 @@ function ManagerHomeScreen() {
   console.log('Home event id:', nextEvent?.id, 'members:', members.length,
     'counts — in:', avail.in, 'out:', avail.out, 'maybe:', avail.maybe, 'noResp:', avail.noResp);
 
-  const managerResponse: Response = (responses[uid] as Response) ?? null;
+  const managerResponse: Response = (responses[uid ?? ''] as Response) ?? null;
 
   const handleManagerRespond = async (r: Response) => {
-    console.log('Manager respond uid:', user?.uid);
     if (!r || !nextEvent) return;
+    if (!uid) {
+      console.warn('[HomeScreen] cannot write manager response: user.uid is undefined');
+      return;
+    }
     const responseRef = doc(db, 'teams', activeTeamId, 'events', nextEvent.id, 'responses', uid);
     try {
       await setDoc(responseRef, {
@@ -399,10 +402,9 @@ function PlayerHomeScreen() {
   const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
   const hasEvent  = nextEvent !== null;
 
-  // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
-  const uid = user?.uid ?? 'anon';
+  const uid = user?.uid;
   const { responses: firestoreResponses } = useResponses(activeTeamId, nextEvent?.id ?? null);
-  const response: Response = (firestoreResponses[uid] as Response) ?? null;
+  const response: Response = (firestoreResponses[uid ?? ''] as Response) ?? null;
   const inCount  = Object.values(firestoreResponses).filter(r => r === 'in').length;
   const outCount = Object.values(firestoreResponses).filter(r => r === 'out').length;
 
@@ -424,8 +426,11 @@ function PlayerHomeScreen() {
       console.warn('[HomeScreen] handleRespond bailed — r:', r, 'nextEvent:', nextEvent?.id ?? 'null');
       return;
     }
+    if (!uid) {
+      console.warn('[HomeScreen] cannot write response: user.uid is undefined');
+      return;
+    }
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
-    // TODO Phase 2b: replace mockUserId with real Firebase Auth uid
     const responseRef = doc(db, 'teams', activeTeamId, 'events', nextEvent.id, 'responses', uid);
     console.log('[HomeScreen] writing response', r, 'to', responseRef.path);
     try {
