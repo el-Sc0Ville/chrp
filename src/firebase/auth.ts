@@ -17,7 +17,6 @@ const ACTION_CODE_SETTINGS = {
   handleCodeInApp: true,
   iOS: { bundleId: 'com.chrp.app' },
   android: { packageName: 'com.chrp.app', installIfNotAvailable: true },
-  dynamicLinkDomain: undefined,
 };
 
 export async function sendMagicLink(email: string): Promise<void> {
