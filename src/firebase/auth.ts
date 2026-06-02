@@ -13,10 +13,15 @@ import { auth, db } from './config';
 const PENDING_EMAIL_KEY = 'chrp_pending_email';
 
 const ACTION_CODE_SETTINGS = {
-  url: 'https://chrp-app.firebaseapp.com/finishSignIn',
+  url: 'https://chrp-app.web.app/finishSignIn',
   handleCodeInApp: true,
-  iOS: { bundleId: 'com.chrp.app' },
-  android: { packageName: 'com.chrp.app', installIfNotAvailable: true },
+  iOS: {
+    bundleId: 'com.chrp.app',
+  },
+  android: {
+    packageName: 'com.chrp.app',
+    installIfNotAvailable: true,
+  },
 };
 
 export async function sendMagicLink(email: string): Promise<void> {
