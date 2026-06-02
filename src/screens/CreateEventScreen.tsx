@@ -1,21 +1,22 @@
 // B-04 · Create Event (manager-only form)
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, ScrollView, Pressable, Switch,
   KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 import {
   addDoc, collection, serverTimestamp, Timestamp,
-  getDocs, doc, writeBatch,
+  getDocs, doc, writeBatch, getDoc, updateDoc,
 } from 'firebase/firestore';
-import type { Member } from '../firebase/schema';
+import type { Member, Event as FirestoreEvent } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
@@ -23,7 +24,8 @@ import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs;
 
-type CreateEventNavProp = NativeStackNavigationProp<RootStackParamList>;
+type CreateEventNavProp   = NativeStackNavigationProp<RootStackParamList>;
+type CreateEventRouteProp = RouteProp<RootStackParamList, 'CreateEvent'>;
 type EventType = 'game' | 'practice' | 'social';
 
 const EVENT_TYPES: { id: EventType; label: string }[] = [
@@ -73,6 +75,8 @@ function formatTime(d: Date): string {
 export default function CreateEventScreen() {
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation<CreateEventNavProp>();
+  const route      = useRoute<CreateEventRouteProp>();
+  const editEventId = route.params?.editEventId;
   const { user, activeTeamId }   = useUserContext();
 
   // Form state
@@ -84,6 +88,23 @@ export default function CreateEventScreen() {
   const [notes,       setNotes]       = useState('');
   const [recurring,   setRecurring]   = useState(false);
   const [saving,      setSaving]      = useState(false);
+
+  // Load existing event when editing
+  useEffect(() => {
+    if (!editEventId) return;
+    getDoc(doc(db, 'teams', activeTeamId, 'events', editEventId)).then(snap => {
+      if (!snap.exists()) return;
+      const e = snap.data() as FirestoreEvent;
+      if (e.type === 'game' || e.type === 'practice' || e.type === 'social') setEventType(e.type);
+      setEventName(e.title ?? '');
+      setVenue(e.venue ?? '');
+      setNotes(e.notes ?? '');
+      setRecurring(e.recurring ?? false);
+      const start = e.startsAt.toDate();
+      setDate(start);
+      setTime(start);
+    }).catch(err => console.error('[CreateEvent] load failed:', err));
+  }, [editEventId, activeTeamId]);
 
   // Picker visibility
   const [showDate,    setShowDate]    = useState(false);
@@ -99,9 +120,9 @@ export default function CreateEventScreen() {
         date.getFullYear(), date.getMonth(), date.getDate(),
         time.getHours(), time.getMinutes(), 0, 0,
       );
-      const end = new Date(start.getTime() + 90 * 60 * 1000);
+      const end        = new Date(start.getTime() + 90 * 60 * 1000);
       const notesValue = notes.trim();
-      const eventRef = await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
+      const fields = {
         type:      eventType,
         title:     eventName.trim(),
         venue:     venue.trim(),
@@ -109,36 +130,44 @@ export default function CreateEventScreen() {
         startsAt:  Timestamp.fromDate(start),
         endsAt:    Timestamp.fromDate(end),
         recurring,
-        createdBy: user?.uid ?? 'anon',
-        createdAt: serverTimestamp(),
-      });
+      };
 
-      // Auto-in: batch-write responses for members with autoIn enabled
-      // TODO Phase 2b: move this logic to a Firebase Cloud Function trigger on event creation
-      const eventDateStr  = toYMD(start);
-      const membersSnap   = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
-      const batch         = writeBatch(db);
-      for (const memberDoc of membersSnap.docs) {
-        const member = memberDoc.data() as Member;
-        if (!member.autoIn) continue;
-        const blackoutsSnap = await getDocs(
-          collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
-        );
-        const blackedOut = blackoutsSnap.docs.some(bd =>
-          ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
-        );
-        batch.set(
-          doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
-          {
-            userId:      memberDoc.id,
-            displayName: member.displayName,
-            response:    blackedOut ? 'out' : 'in',
-            respondedAt: serverTimestamp(),
-            setByManager: false,
-          },
-        );
+      if (editEventId) {
+        await updateDoc(doc(db, 'teams', activeTeamId, 'events', editEventId), fields);
+      } else {
+        const eventRef = await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
+          ...fields,
+          createdBy: user?.uid ?? 'anon',
+          createdAt: serverTimestamp(),
+        });
+
+        // Auto-in: batch-write responses for members with autoIn enabled
+        // TODO Phase 2b: move this logic to a Firebase Cloud Function trigger on event creation
+        const eventDateStr = toYMD(start);
+        const membersSnap  = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+        const batch        = writeBatch(db);
+        for (const memberDoc of membersSnap.docs) {
+          const member = memberDoc.data() as Member;
+          if (!member.autoIn) continue;
+          const blackoutsSnap = await getDocs(
+            collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
+          );
+          const blackedOut = blackoutsSnap.docs.some(bd =>
+            ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
+          );
+          batch.set(
+            doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
+            {
+              userId:       memberDoc.id,
+              displayName:  member.displayName,
+              response:     blackedOut ? 'out' : 'in',
+              respondedAt:  serverTimestamp(),
+              setByManager: false,
+            },
+          );
+        }
+        await batch.commit();
       }
-      await batch.commit();
 
       navigation.goBack();
     } catch (err) {
@@ -179,7 +208,7 @@ export default function CreateEventScreen() {
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
 
-        <Text style={styles.navTitle}>New event</Text>
+        <Text style={styles.navTitle}>{editEventId ? 'Edit event' : 'New event'}</Text>
 
         <Pressable
           onPress={handleSave}
@@ -187,7 +216,7 @@ export default function CreateEventScreen() {
           hitSlop={12}
         >
           <Text style={[styles.saveText, (!isFormValid || saving) && styles.saveTextDisabled]}>
-            {saving ? 'Saving…' : 'Save & notify'}
+            {saving ? 'Saving…' : editEventId ? 'Save changes' : 'Save & notify'}
           </Text>
         </Pressable>
       </View>
@@ -328,9 +357,10 @@ export default function CreateEventScreen() {
               placeholder="Anything the team should know?"
               placeholderTextColor={navy[400]}
               multiline
+              blurOnSubmit={false}
               numberOfLines={4}
               textAlignVertical="top"
-              returnKeyType="done"
+              returnKeyType="default"
             />
           </View>
 
@@ -363,7 +393,7 @@ export default function CreateEventScreen() {
               ]}
             >
               <Text style={[styles.saveBtnText, (!isFormValid || saving) && styles.saveBtnTextDisabled]}>
-                {saving ? 'Saving…' : 'Save & notify team'}
+                {saving ? 'Saving…' : editEventId ? 'Save changes' : 'Save & notify team'}
               </Text>
             </Pressable>
             <Text style={styles.infoText}>

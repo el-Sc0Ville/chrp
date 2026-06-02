@@ -31,7 +31,7 @@ export type RootStackParamList = {
   Profile: undefined;
   AnnouncementThread: { announcementId: string };
   EventDetail: { eventId: string; title: string; isPast?: boolean };
-  CreateEvent: undefined;
+  CreateEvent: { editEventId?: string } | undefined;
   Subs: undefined;
   Notifications: undefined;
   Blackout: undefined;

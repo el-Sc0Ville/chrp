@@ -40,6 +40,7 @@ export interface Event {
   startsAt: Timestamp;
   endsAt: Timestamp;
   recurring: boolean;
+  status?: 'active' | 'cancelled';
   scoreUs?: number;
   scoreThem?: number;
   notes?: string;

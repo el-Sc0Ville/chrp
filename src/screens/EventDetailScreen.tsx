@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
-  TextInput, KeyboardAvoidingView, Platform, Linking, StyleSheet,
+  TextInput, KeyboardAvoidingView, Platform, Linking, Alert, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -106,6 +106,34 @@ function ManagerEventDetail() {
     }
   };
 
+  const handleEdit = () => {
+    navigation.navigate('CreateEvent', { editEventId: eventId });
+  };
+
+  const handleCancelEvent = () => {
+    Alert.alert(
+      'Cancel this event?',
+      'All players will be notified.',
+      [
+        { text: 'Keep event', style: 'cancel' },
+        {
+          text: 'Cancel event',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await updateDoc(doc(db, 'teams', activeTeamId, 'events', eventId), {
+                status: 'cancelled',
+              });
+              navigation.goBack();
+            } catch (err) {
+              console.error('[EventDetail] cancel event failed:', err);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const { events } = useEvents(activeTeamId);
   const { members } = useMembers(activeTeamId);
   const { responses } = useResponses(activeTeamId, eventId);
@@ -152,7 +180,7 @@ function ManagerEventDetail() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <NavHeader onBack={() => navigation.goBack()} />
+      <NavHeader onBack={() => navigation.goBack()} onEdit={handleEdit} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
@@ -211,6 +239,7 @@ function ManagerEventDetail() {
           <View style={styles.footer}>
             <Pressable
               style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.75 }]}
+              onPress={handleCancelEvent}
             >
               <Text style={styles.cancelBtnText}>Cancel event</Text>
             </Pressable>
@@ -361,7 +390,7 @@ function PlayerEventDetail() {
 
 // ─── Nav header ───────────────────────────────────────────────────────────────
 
-function NavHeader({ onBack }: { onBack: () => void }) {
+function NavHeader({ onBack, onEdit }: { onBack: () => void; onEdit?: () => void }) {
   const { isManager } = useUserContext();
   return (
     <View style={styles.navHeader}>
@@ -373,8 +402,12 @@ function NavHeader({ onBack }: { onBack: () => void }) {
         <Text style={styles.backChevron}>‹</Text>
         <Text style={styles.backLabel}>Schedule</Text>
       </Pressable>
-      {isManager && (
-        <Pressable hitSlop={12}>
+      {isManager && onEdit && (
+        <Pressable
+          onPress={onEdit}
+          style={({ pressed }) => pressed && { opacity: 0.6 }}
+          hitSlop={12}
+        >
           <Text style={styles.editLabel}>Edit</Text>
         </Pressable>
       )}

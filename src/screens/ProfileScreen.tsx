@@ -240,6 +240,44 @@ export default function ProfileScreen() {
               <Text style={styles.teamLabel}>Trashdogs</Text>
             </View>
           </View>
+
+          {/* Availability preferences — inside hero card */}
+          <View style={styles.heroAvailSection}>
+            <View style={styles.heroAvailRow}>
+              <View style={styles.toggleLeft}>
+                <Text style={styles.toggleIcon}>⚡</Text>
+                <View style={styles.toggleTextBlock}>
+                  <Text style={styles.toggleLabel}>Auto-in</Text>
+                  <Text style={styles.toggleSubtitle}>Auto-mark me as 'in' for new events</Text>
+                </View>
+              </View>
+              <Switch
+                value={autoIn}
+                onValueChange={handleAutoInToggle}
+                trackColor={{ false: navy[600], true: TEAM[500] }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={navy[600]}
+              />
+            </View>
+            <View style={styles.heroAvailDivider} />
+            <Pressable
+              style={({ pressed }) => [styles.heroAvailRow, pressed && { opacity: 0.75 }]}
+              onPress={() => navigation.navigate('Blackout')}
+            >
+              <View style={styles.toggleLeft}>
+                <Text style={styles.toggleIcon}>🚫</Text>
+                <View style={styles.toggleTextBlock}>
+                  <Text style={styles.toggleLabel}>Blackout dates</Text>
+                  <Text style={styles.toggleSubtitle}>
+                    {blackoutDates.length === 0
+                      ? 'No dates set'
+                      : `${blackoutDates.length} date${blackoutDates.length !== 1 ? 's' : ''} blacked out`}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.rowChevron}>›</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* ── Settings ── */}
@@ -278,36 +316,6 @@ export default function ProfileScreen() {
               <View style={styles.toggleTextBlock}>
                 <Text style={styles.toggleLabel}>Support Chrp</Text>
                 <Text style={styles.toggleSubtitle}>Free, forever</Text>
-              </View>
-            </View>
-            <Text style={styles.rowChevron}>›</Text>
-          </Pressable>
-        </View>
-
-        {/* ── Availability Preferences ── */}
-        <Text style={styles.sectionLabel}>Availability Preferences</Text>
-        <View style={styles.card}>
-          <ToggleRow
-            icon="⚡"
-            label="Auto-in for new events"
-            subtitle="Automatically mark you as 'in' when new events are created"
-            value={autoIn}
-            onValueChange={handleAutoInToggle}
-          />
-          <View style={styles.rowDivider} />
-          <Pressable
-            style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
-            onPress={() => navigation.navigate('Blackout')}
-          >
-            <View style={styles.toggleLeft}>
-              <Text style={styles.toggleIcon}>🚫</Text>
-              <View style={styles.toggleTextBlock}>
-                <Text style={styles.toggleLabel}>Blackout dates</Text>
-                <Text style={styles.toggleSubtitle}>
-                  {blackoutDates.length === 0
-                    ? 'No dates set'
-                    : `${blackoutDates.length} date${blackoutDates.length !== 1 ? 's' : ''} blacked out`}
-                </Text>
               </View>
             </View>
             <Text style={styles.rowChevron}>›</Text>
@@ -618,8 +626,27 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
     paddingHorizontal: spacing[20],
     paddingTop: spacing[28],
-    paddingBottom: spacing[24],
+    paddingBottom: 0,
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+
+  // ── Availability prefs inside hero card ───────────────────────────────────
+  heroAvailSection: {
+    alignSelf: 'stretch',
+    marginTop: spacing[16],
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.07)',
+  },
+  heroAvailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[12],
+  },
+  heroAvailDivider: {
+    height: 0.5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
 
   // ── Avatar ────────────────────────────────────────────────────────────────
