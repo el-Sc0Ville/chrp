@@ -32,17 +32,26 @@ import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
 
+function extractFirebaseLink(url: string): string {
+  const match = url.match(/[?&]link=([^&]+)/);
+  if (match) {
+    try { return decodeURIComponent(match[1]); } catch { /* fall through */ }
+  }
+  return url;
+}
+
 async function handleDeepLink(url: string): Promise<void> {
-  const isChrpScheme       = url.startsWith('chrp://');
+  const isChrpScheme        = url.startsWith('chrp://');
   const isFirebaseUniversal = url.startsWith('https://chrp-app.firebaseapp.com');
   if ((!isChrpScheme && !isFirebaseUniversal) || !url.includes('finishSignIn')) return;
+  const resolvedUrl = extractFirebaseLink(url);
   const email = await getPendingEmail();
   if (!email) {
     console.warn('[DeepLink] finishSignIn URL received but no pending email in storage');
     return;
   }
   try {
-    await confirmMagicLink(email, url);
+    await confirmMagicLink(email, resolvedUrl);
     console.log('[DeepLink] magic link sign-in complete');
   } catch (err) {
     console.error('[DeepLink] confirmMagicLink failed:', err);
