@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getDocs, collection } from 'firebase/firestore';
 
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -17,15 +18,25 @@ import CreateEventScreen from '../screens/CreateEventScreen';
 import SubsScreen from '../screens/SubsScreen';
 import NotificationCentreScreen from '../screens/NotificationCentreScreen';
 import BlackoutScreen from '../screens/BlackoutScreen';
+
+import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
+import ProfileSetupScreen from '../screens/onboarding/ProfileSetupScreen';
+import JoinOrCreateScreen from '../screens/onboarding/JoinOrCreateScreen';
+import JoinTeamScreen from '../screens/onboarding/JoinTeamScreen';
+import CreateTeamScreen from '../screens/onboarding/CreateTeamScreen';
+import OnboardingCompleteScreen from '../screens/onboarding/OnboardingCompleteScreen';
+
 import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
 import { UserProvider, useUserContext } from '../context/UserContext';
-import { navy, teams, fonts, spacing } from '../theme';
+import { navy, teams, fonts, spacing, type TeamKey } from '../theme';
 import { onAuthStateChanged, type User } from '../firebase/auth';
+import { db } from '../firebase';
 
 export type RootStackParamList = {
   Auth: undefined;
+  Onboarding: undefined;
   Tabs: undefined;
   Gameday: undefined;
   Profile: undefined;
@@ -37,8 +48,18 @@ export type RootStackParamList = {
   Blackout: undefined;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator();
+export type OnboardingStackParamList = {
+  Welcome: undefined;
+  ProfileSetup: undefined;
+  JoinOrCreate: { displayName: string; jerseyNumber: number };
+  JoinTeam: { displayName: string; jerseyNumber: number };
+  CreateTeam: { displayName: string; jerseyNumber: number };
+  OnboardingComplete: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
+};
+
+const Stack           = createNativeStackNavigator<RootStackParamList>();
+const OnboardingStack = createNativeStackNavigator<OnboardingStackParamList>();
+const Tab             = createBottomTabNavigator();
 
 // ─── Tab bar icons ─────────────────────────────────────────────────────────────
 
@@ -128,7 +149,6 @@ function ChrpTabBar({ state, descriptors, navigation }: any) {
           }
         };
 
-        const iconColor = isFocused ? activeTeam[300] : 'rgba(229,234,242,0.45)';
         const labelColor = isFocused ? activeTeam[300] : 'rgba(229,234,242,0.45)';
         const iconBg = isFocused
           ? `rgba(${hexToRgb(activeTeam[500])}, 0.22)`
@@ -242,31 +262,68 @@ function TabsNavigator() {
   );
 }
 
+function OnboardingNavigator() {
+  return (
+    <OnboardingStack.Navigator screenOptions={{ headerShown: false }}>
+      <OnboardingStack.Screen name="Welcome"            component={WelcomeScreen} />
+      <OnboardingStack.Screen name="ProfileSetup"       component={ProfileSetupScreen} />
+      <OnboardingStack.Screen name="JoinOrCreate"       component={JoinOrCreateScreen} />
+      <OnboardingStack.Screen name="JoinTeam"           component={JoinTeamScreen} />
+      <OnboardingStack.Screen name="CreateTeam"         component={CreateTeamScreen} />
+      <OnboardingStack.Screen name="OnboardingComplete" component={OnboardingCompleteScreen} />
+    </OnboardingStack.Navigator>
+  );
+}
+
 function AppStack() {
-  const { user: mockUser } = useUserContext();
+  const { user: mockUser, needsOnboarding, setNeedsOnboarding } = useUserContext();
   // undefined = resolving Firebase auth, null = signed out, User = signed in
   const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
-    return onAuthStateChanged(u => setFirebaseUser(u));
+    return onAuthStateChanged(async (u) => {
+      setFirebaseUser(u);
+      if (u) {
+        // Check whether this user has any team memberships yet
+        const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
+        setNeedsOnboarding(snap.empty);
+      } else {
+        setNeedsOnboarding(false);
+      }
+    });
   }, []);
 
   const resolvedUser = mockUser ?? firebaseUser;
   if (resolvedUser === undefined) return <LoadingScreen />;
 
+  // Still checking Firestore for a real Firebase user
+  if (resolvedUser && !mockUser && needsOnboarding === undefined) return <LoadingScreen />;
+
+  // Mock users (dev bypass) skip onboarding
+  const showOnboarding = !mockUser && needsOnboarding === true;
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {resolvedUser && <Stack.Screen name="Tabs"               component={TabsNavigator} />}
-        {resolvedUser && <Stack.Screen name="Gameday"            component={GamedayScreen} />}
-        {resolvedUser && <Stack.Screen name="Profile"            component={ProfileScreen} />}
-        {resolvedUser && <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />}
-        {resolvedUser && <Stack.Screen name="EventDetail"        component={EventDetailScreen} />}
-        {resolvedUser && <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />}
-        {resolvedUser && <Stack.Screen name="Subs"               component={SubsScreen} />}
-        {resolvedUser && <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />}
-        {resolvedUser && <Stack.Screen name="Blackout"           component={BlackoutScreen} />}
-        {!resolvedUser && <Stack.Screen name="Auth"              component={AuthScreen} />}
+        {resolvedUser && showOnboarding && (
+          <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
+        )}
+        {resolvedUser && !showOnboarding && (
+          <>
+            <Stack.Screen name="Tabs"               component={TabsNavigator} />
+            <Stack.Screen name="Gameday"            component={GamedayScreen} />
+            <Stack.Screen name="Profile"            component={ProfileScreen} />
+            <Stack.Screen name="AnnouncementThread" component={AnnouncementThreadScreen} />
+            <Stack.Screen name="EventDetail"        component={EventDetailScreen} />
+            <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />
+            <Stack.Screen name="Subs"               component={SubsScreen} />
+            <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />
+            <Stack.Screen name="Blackout"           component={BlackoutScreen} />
+          </>
+        )}
+        {!resolvedUser && (
+          <Stack.Screen name="Auth" component={AuthScreen} />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
