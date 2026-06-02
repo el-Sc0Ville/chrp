@@ -11,7 +11,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
-import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import {
+  addDoc, collection, serverTimestamp, Timestamp,
+  getDocs, doc, writeBatch,
+} from 'firebase/firestore';
+import type { Member } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
@@ -43,6 +47,10 @@ const DEFAULT_TIME = (() => {
 })();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function toYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function formatDate(d: Date): string {
   const days   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -93,7 +101,7 @@ export default function CreateEventScreen() {
       );
       const end = new Date(start.getTime() + 90 * 60 * 1000);
       const notesValue = notes.trim();
-      await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
+      const eventRef = await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
         type:      eventType,
         title:     eventName.trim(),
         venue:     venue.trim(),
@@ -104,6 +112,34 @@ export default function CreateEventScreen() {
         createdBy: user?.uid ?? 'anon',
         createdAt: serverTimestamp(),
       });
+
+      // Auto-in: batch-write responses for members with autoIn enabled
+      // TODO Phase 2b: move this logic to a Firebase Cloud Function trigger on event creation
+      const eventDateStr  = toYMD(start);
+      const membersSnap   = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+      const batch         = writeBatch(db);
+      for (const memberDoc of membersSnap.docs) {
+        const member = memberDoc.data() as Member;
+        if (!member.autoIn) continue;
+        const blackoutsSnap = await getDocs(
+          collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
+        );
+        const blackedOut = blackoutsSnap.docs.some(bd =>
+          ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
+        );
+        batch.set(
+          doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
+          {
+            userId:      memberDoc.id,
+            displayName: member.displayName,
+            response:    blackedOut ? 'out' : 'in',
+            respondedAt: serverTimestamp(),
+            setByManager: false,
+          },
+        );
+      }
+      await batch.commit();
+
       navigation.goBack();
     } catch (err) {
       console.error('[CreateEvent] write failed:', err);

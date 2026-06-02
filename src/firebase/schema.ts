@@ -19,6 +19,15 @@ export interface Member {
   role: 'manager' | 'player';
   email: string;
   joinedAt: Timestamp;
+  autoIn?: boolean;
+}
+
+// /teams/{teamId}/members/{userId}/blackouts/{docId}
+export interface BlackoutDate {
+  id: string;
+  dates: string[]; // 'YYYY-MM-DD' strings
+  label?: string;
+  createdAt: Timestamp;
 }
 
 // /teams/{teamId}/events/{eventId}

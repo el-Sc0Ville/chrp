@@ -16,6 +16,7 @@ import EventDetailScreen from '../screens/EventDetailScreen';
 import CreateEventScreen from '../screens/CreateEventScreen';
 import SubsScreen from '../screens/SubsScreen';
 import NotificationCentreScreen from '../screens/NotificationCentreScreen';
+import BlackoutScreen from '../screens/BlackoutScreen';
 import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   CreateEvent: undefined;
   Subs: undefined;
   Notifications: undefined;
+  Blackout: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -263,6 +265,7 @@ function AppStack() {
         {resolvedUser && <Stack.Screen name="CreateEvent"        component={CreateEventScreen} />}
         {resolvedUser && <Stack.Screen name="Subs"               component={SubsScreen} />}
         {resolvedUser && <Stack.Screen name="Notifications"      component={NotificationCentreScreen} />}
+        {resolvedUser && <Stack.Screen name="Blackout"           component={BlackoutScreen} />}
         {!resolvedUser && <Stack.Screen name="Auth"              component={AuthScreen} />}
       </Stack.Navigator>
     </NavigationContainer>

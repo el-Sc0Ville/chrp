@@ -2,15 +2,20 @@
 // Flip IS_MANAGER to preview manager vs player view.
 // Replace hardcoded user constants with Firebase auth when backend is wired.
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
   Switch, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
+import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
+import { useBlackouts } from '../firebase/hooks/useBlackouts';
+import type { RootStackParamList } from '../navigation';
 
 const TEAM = teams.trashdogs;
 
@@ -22,10 +27,12 @@ const USER_INITIALS    = 'PN';
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
+type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
+
 export default function ProfileScreen() {
-  const { isManager } = useUserContext();
+  const { user, isManager, activeTeamId } = useUserContext();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation = useNavigation<ProfileNavProp>();
 
   // Editable profile fields
   const [name, setName]             = useState(INITIAL_NAME);
@@ -44,6 +51,28 @@ export default function ProfileScreen() {
   const [notifications, setNotifications] = useState(true);
   const [availReminders, setAvailReminders] = useState(true);
   const [location, setLocation]           = useState(false);
+
+  // Availability preferences
+  const [autoIn, setAutoIn] = useState(false);
+  const { dates: blackoutDates } = useBlackouts(activeTeamId, user?.uid ?? '');
+
+  useEffect(() => {
+    if (!user?.uid || !activeTeamId) return;
+    getDoc(doc(db, 'teams', activeTeamId, 'members', user.uid))
+      .then(snap => { if (snap.exists()) setAutoIn(snap.data().autoIn ?? false); })
+      .catch(() => {});
+  }, [user?.uid, activeTeamId]);
+
+  const handleAutoInToggle = async (value: boolean) => {
+    setAutoIn(value);
+    if (!user?.uid || !activeTeamId) return;
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), { autoIn: value });
+    } catch (err) {
+      console.error('[ProfileScreen] autoIn update failed:', err);
+      setAutoIn(!value);
+    }
+  };
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -249,6 +278,36 @@ export default function ProfileScreen() {
               <View style={styles.toggleTextBlock}>
                 <Text style={styles.toggleLabel}>Support Chrp</Text>
                 <Text style={styles.toggleSubtitle}>Free, forever</Text>
+              </View>
+            </View>
+            <Text style={styles.rowChevron}>›</Text>
+          </Pressable>
+        </View>
+
+        {/* ── Availability Preferences ── */}
+        <Text style={styles.sectionLabel}>Availability Preferences</Text>
+        <View style={styles.card}>
+          <ToggleRow
+            icon="⚡"
+            label="Auto-in for new events"
+            subtitle="Automatically mark you as 'in' when new events are created"
+            value={autoIn}
+            onValueChange={handleAutoInToggle}
+          />
+          <View style={styles.rowDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
+            onPress={() => navigation.navigate('Blackout')}
+          >
+            <View style={styles.toggleLeft}>
+              <Text style={styles.toggleIcon}>🚫</Text>
+              <View style={styles.toggleTextBlock}>
+                <Text style={styles.toggleLabel}>Blackout dates</Text>
+                <Text style={styles.toggleSubtitle}>
+                  {blackoutDates.length === 0
+                    ? 'No dates set'
+                    : `${blackoutDates.length} date${blackoutDates.length !== 1 ? 's' : ''} blacked out`}
+                </Text>
               </View>
             </View>
             <Text style={styles.rowChevron}>›</Text>
