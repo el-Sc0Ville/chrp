@@ -120,10 +120,12 @@ function ManagerEventDetail() {
           text: 'Cancel event',
           style: 'destructive',
           onPress: async () => {
+            console.log('Cancelling event:', eventId);
             try {
               await updateDoc(doc(db, 'teams', activeTeamId, 'events', eventId), {
                 status: 'cancelled',
               });
+              console.log('Cancel result: success');
               navigation.goBack();
             } catch (err) {
               console.error('[EventDetail] cancel event failed:', err);

@@ -23,7 +23,8 @@ export function useEvents(teamId: string): UseEventsResult {
       q,
       snap => {
         console.log('useEvents: snapshot fired, docs count:', snap.docs.length);
-        setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Event));
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Event);
+        setEvents(all.filter(e => e.status !== 'cancelled'));
         setLoading(false);
         setError(null);
       },
