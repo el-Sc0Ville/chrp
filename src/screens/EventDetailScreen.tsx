@@ -11,7 +11,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
-import { doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { scoreResult, type Score } from '../context/ScoreContext';
@@ -93,7 +93,7 @@ function ManagerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
-  const { activeTeamId } = useUserContext();
+  const { user, activeTeamId } = useUserContext();
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
   const handleSaveScore = async (s: Score) => {
@@ -126,6 +126,15 @@ function ManagerEventDetail() {
                 status: 'cancelled',
               });
               console.log('Cancel result: success');
+              if (event) {
+                await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
+                  body:       `🚫 ${event.title} on ${formatEventDate(event.startsAt)} has been cancelled.`,
+                  authorId:   user?.uid ?? 'manager',
+                  authorName: user?.displayName ?? 'Manager',
+                  pinned:     true,
+                  createdAt:  serverTimestamp(),
+                });
+              }
               navigation.goBack();
             } catch (err) {
               console.error('[EventDetail] cancel event failed:', err);

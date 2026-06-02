@@ -11,7 +11,7 @@ import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { sendMagicLink } from '../firebase/auth';
 import { useUserContext } from '../context/UserContext';
-import { seedDatabase } from '../firebase/seed';
+import { seedDatabase, updateMemberDefaults } from '../firebase/seed';
 
 const TEAM = teams.trashdogs;
 
@@ -20,7 +20,8 @@ export default function AuthScreen() {
   const { setMockUser } = useUserContext();
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
-  const [seedStatus,  setSeedStatus]  = useState<'idle' | 'seeding' | 'done' | 'error'>('idle');
+  const [seedStatus,   setSeedStatus]   = useState<'idle' | 'seeding' | 'done' | 'error'>('idle');
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'updating' | 'done' | 'error'>('idle');
   const [sent,        setSent]        = useState(false);
   const [error,       setError]       = useState<string | null>(null);
   const [showInvite,  setShowInvite]  = useState(false);
@@ -203,6 +204,26 @@ export default function AuthScreen() {
                 {seedStatus === 'seeding' && 'Seeding…'}
                 {seedStatus === 'done'    && 'Done! ✓'}
                 {seedStatus === 'error'   && 'Error — check console'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.devBtn, styles.devSeedBtn, pressed && { opacity: 0.7 }]}
+              disabled={updateStatus === 'updating'}
+              onPress={async () => {
+                setUpdateStatus('updating');
+                try {
+                  await updateMemberDefaults();
+                  setUpdateStatus('done');
+                } catch {
+                  setUpdateStatus('error');
+                }
+              }}
+            >
+              <Text style={styles.devBtnText}>
+                {updateStatus === 'idle'     && 'Update member defaults (dev)'}
+                {updateStatus === 'updating' && 'Updating…'}
+                {updateStatus === 'done'     && 'Done! ✓'}
+                {updateStatus === 'error'    && 'Error — check console'}
               </Text>
             </Pressable>
           </View>

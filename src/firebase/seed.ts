@@ -3,7 +3,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import type { Team, Member, Event, AvailabilityResponse, Announcement, AnnouncementReply, DuesRecord } from './schema';
-
 const TEAM_ID = 'trashdogs';
 
 // ─── Timestamps ───────────────────────────────────────────────────────────────
@@ -24,16 +23,16 @@ function daysFromNow(n: number, hour = 19, minute = 30): Timestamp {
 // ─── Members ──────────────────────────────────────────────────────────────────
 
 const MEMBERS: Omit<Member, 'joinedAt'>[] = [
-  { userId: 'r1',  displayName: 'Pat Normandin',        jerseyNumber: 11, role: 'manager', email: 'pat@trashdogs.ca'       },
-  { userId: 'r2',  displayName: 'Mathieu Gagnon',        jerseyNumber: 29, role: 'manager', email: 'mathieu@trashdogs.ca'   },
-  { userId: 'r3',  displayName: 'Pat Normandin',         jerseyNumber: 11, role: 'player',  email: 'pat.p@trashdogs.ca'     },
-  { userId: 'r4',  displayName: 'Olivier Tremblay',      jerseyNumber:  4, role: 'player',  email: 'olivier@trashdogs.ca'   },
-  { userId: 'r5',  displayName: 'Alexis Bergeron',       jerseyNumber: 19, role: 'player',  email: 'alexis@trashdogs.ca'    },
-  { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', jerseyNumber: 88, role: 'player',  email: 'marc@trashdogs.ca'      },
-  { userId: 'r7',  displayName: 'Émilie Lemieux',        jerseyNumber: 23, role: 'player',  email: 'emilie@trashdogs.ca'    },
-  { userId: 'r8',  displayName: 'Jean-François Caron',   jerseyNumber: 16, role: 'player',  email: 'jf@trashdogs.ca'        },
-  { userId: 'r9',  displayName: 'Stéphane Lapointe',     jerseyNumber: 55, role: 'player',  email: 'stephane@trashdogs.ca'  },
-  { userId: 'r10', displayName: 'Véronique Rivard',      jerseyNumber: 37, role: 'player',  email: 'veronique@trashdogs.ca' },
+  { userId: 'r1',  displayName: 'Pat Normandin',        jerseyNumber: 11, role: 'manager', email: 'pat@trashdogs.ca',       autoIn: true },
+  { userId: 'r2',  displayName: 'Mathieu Gagnon',        jerseyNumber: 29, role: 'manager', email: 'mathieu@trashdogs.ca',   autoIn: true },
+  { userId: 'r3',  displayName: 'Pat Normandin',         jerseyNumber: 11, role: 'player',  email: 'pat.p@trashdogs.ca',     autoIn: true },
+  { userId: 'r4',  displayName: 'Olivier Tremblay',      jerseyNumber:  4, role: 'player',  email: 'olivier@trashdogs.ca',   autoIn: true },
+  { userId: 'r5',  displayName: 'Alexis Bergeron',       jerseyNumber: 19, role: 'player',  email: 'alexis@trashdogs.ca',    autoIn: true },
+  { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', jerseyNumber: 88, role: 'player',  email: 'marc@trashdogs.ca',      autoIn: true },
+  { userId: 'r7',  displayName: 'Émilie Lemieux',        jerseyNumber: 23, role: 'player',  email: 'emilie@trashdogs.ca',    autoIn: true },
+  { userId: 'r8',  displayName: 'Jean-François Caron',   jerseyNumber: 16, role: 'player',  email: 'jf@trashdogs.ca',        autoIn: true },
+  { userId: 'r9',  displayName: 'Stéphane Lapointe',     jerseyNumber: 55, role: 'player',  email: 'stephane@trashdogs.ca',  autoIn: true },
+  { userId: 'r10', displayName: 'Véronique Rivard',      jerseyNumber: 37, role: 'player',  email: 'veronique@trashdogs.ca', autoIn: true },
 ];
 
 // ─── Events ───────────────────────────────────────────────────────────────────
@@ -334,4 +333,13 @@ export async function seedDatabase(): Promise<void> {
     }
     await batch.commit();
   }
+}
+
+// One-time dev utility: set autoIn: true on all existing members without re-seeding
+export async function updateMemberDefaults(): Promise<void> {
+  const batch = writeBatch(db);
+  for (const m of MEMBERS) {
+    batch.update(doc(db, 'teams', TEAM_ID, 'members', m.userId), { autoIn: true });
+  }
+  await batch.commit();
 }

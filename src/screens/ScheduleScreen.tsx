@@ -40,6 +40,7 @@ interface ChrpEvent {
   maybe: number;
   noResp: number;
   playerResponse: PlayerResponse;
+  cancelled: boolean;
 }
 
 interface PastEvent {
@@ -52,6 +53,7 @@ interface PastEvent {
   venue: string;
   scoreUs?: number;
   scoreThem?: number;
+  cancelled: boolean;
 }
 
 // ─── Kind tag styles ──────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ function toDisplayEvent(e: FirestoreEvent): ChrpEvent {
     time: d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase(),
     in: 0, out: 0, maybe: 0, noResp: 0, // TODO Phase 2: wire response counts
     playerResponse: null,
+    cancelled: e.status === 'cancelled',
   };
 }
 
@@ -96,6 +99,7 @@ function toPastEvent(e: FirestoreEvent): PastEvent {
     venue: e.venue,
     scoreUs: e.scoreUs,
     scoreThem: e.scoreThem,
+    cancelled: e.status === 'cancelled',
   };
 }
 
@@ -179,6 +183,14 @@ function ScoreBadge({ score, win }: { score: string; win?: boolean }) {
   );
 }
 
+function CancelledBadge() {
+  return (
+    <View style={styles.cancelledBadge}>
+      <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+    </View>
+  );
+}
+
 function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void }) {
   const { isManager, user, activeTeamId } = useUserContext();
   const { responses } = useResponses(activeTeamId, event.id);
@@ -188,19 +200,28 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.eventRow, pressed && { backgroundColor: navy[700] }]}
+      style={({ pressed }) => [
+        styles.eventRow,
+        event.cancelled
+          ? { opacity: pressed ? 0.4 : 0.55 }
+          : pressed && { backgroundColor: navy[700] },
+      ]}
     >
-      <DateChip weekday={event.weekday} day={event.day} month={event.month} />
+      <DateChip weekday={event.weekday} day={event.day} month={event.month} muted={event.cancelled} />
       <View style={styles.eventInfo}>
-        <KindTag kind={event.kind} />
-        <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
+        <KindTag kind={event.kind} muted={event.cancelled} />
+        <Text style={[styles.eventTitle, event.cancelled && { color: navy[400] }]} numberOfLines={1}>
+          {event.title}
+        </Text>
         <Text style={styles.eventMeta} numberOfLines={1}>
           {event.venue} · {event.time}
         </Text>
       </View>
-      {isManager
-        ? <ManagerPill inCount={inCount} outCount={outCount} />
-        : <PlayerPill response={myResponse} />
+      {event.cancelled
+        ? <CancelledBadge />
+        : isManager
+          ? <ManagerPill inCount={inCount} outCount={outCount} />
+          : <PlayerPill response={myResponse} />
       }
     </Pressable>
   );
@@ -219,12 +240,15 @@ function PastEventRow({ event, onPress }: { event: PastEvent; onPress: () => voi
         <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
         <Text style={styles.eventMeta} numberOfLines={1}>{event.venue}</Text>
       </View>
-      {hasScore && (
-        <ScoreBadge
-          score={`${event.scoreUs}–${event.scoreThem}`}
-          win={scoreResult(event.scoreUs!, event.scoreThem!) === 'win'}
-        />
-      )}
+      {event.cancelled
+        ? <CancelledBadge />
+        : hasScore
+          ? <ScoreBadge
+              score={`${event.scoreUs}–${event.scoreThem}`}
+              win={scoreResult(event.scoreUs!, event.scoreThem!) === 'win'}
+            />
+          : null
+      }
     </Pressable>
   );
 }
@@ -577,6 +601,22 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoMedium,
     fontSize: 11,
     lineHeight: 14,
+  },
+
+  // Cancelled badge
+  cancelledBadge: {
+    borderRadius: radius.xs,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: status.error.subtle,
+    borderWidth: 0.5,
+    borderColor: 'rgba(239,68,68,0.28)',
+  },
+  cancelledBadgeText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 11,
+    lineHeight: 14,
+    color: status.error.pure,
   },
 
   // Past section
