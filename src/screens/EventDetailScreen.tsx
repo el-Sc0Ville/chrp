@@ -160,6 +160,7 @@ function ManagerEventDetail() {
     const g: Record<GroupKey, Player[]> = { in: [], out: [], maybe: [], noResp: [] };
     members.forEach(m => {
       const r = responses[m.userId];
+      if (m.role === 'spare' && !r) return;
       const p: Player = { id: m.userId, name: m.displayName, jersey: m.jerseyNumber };
       if      (r === 'in')    g.in.push(p);
       else if (r === 'out')   g.out.push(p);

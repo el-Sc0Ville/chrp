@@ -148,7 +148,7 @@ export default function CreateEventScreen() {
         const batch        = writeBatch(db);
         for (const memberDoc of membersSnap.docs) {
           const member = memberDoc.data() as Member;
-          if (!member.autoIn) continue;
+          if (!member.autoIn || member.role === 'spare') continue;
           const blackoutsSnap = await getDocs(
             collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
           );

@@ -54,12 +54,18 @@ export default function ProfileScreen() {
 
   // Availability preferences
   const [autoIn, setAutoIn] = useState(false);
+  const [memberRole, setMemberRole] = useState<'manager' | 'player' | 'spare'>(isManager ? 'manager' : 'player');
   const { dates: blackoutDates } = useBlackouts(activeTeamId, user?.uid ?? '');
 
   useEffect(() => {
     if (!user?.uid || !activeTeamId) return;
     getDoc(doc(db, 'teams', activeTeamId, 'members', user.uid))
-      .then(snap => { if (snap.exists()) setAutoIn(snap.data().autoIn ?? false); })
+      .then(snap => {
+        if (snap.exists()) {
+          setAutoIn(snap.data().autoIn ?? false);
+          setMemberRole(snap.data().role ?? (isManager ? 'manager' : 'player'));
+        }
+      })
       .catch(() => {});
   }, [user?.uid, activeTeamId]);
 
@@ -234,7 +240,7 @@ export default function ProfileScreen() {
 
           {/* Role pill + team row */}
           <View style={styles.metaRow}>
-            <RolePill role={USER_ROLE} />
+            <RolePill role={memberRole} />
             <View style={styles.teamRow}>
               <View style={styles.teamSwatch} />
               <Text style={styles.teamLabel}>Trashdogs</Text>
@@ -243,22 +249,36 @@ export default function ProfileScreen() {
 
           {/* Availability preferences — inside hero card */}
           <View style={styles.heroAvailSection}>
-            <View style={styles.heroAvailRow}>
-              <View style={styles.toggleLeft}>
-                <Text style={styles.toggleIcon}>⚡</Text>
-                <View style={styles.toggleTextBlock}>
-                  <Text style={styles.toggleLabel}>Auto-in</Text>
-                  <Text style={styles.toggleSubtitle}>Auto-mark me as 'in' for new events</Text>
+            {memberRole === 'spare' ? (
+              <View style={styles.heroAvailRow}>
+                <View style={styles.toggleLeft}>
+                  <Text style={styles.toggleIcon}>⚡</Text>
+                  <View style={styles.toggleTextBlock}>
+                    <Text style={styles.toggleLabel}>Spare bank</Text>
+                    <Text style={styles.toggleSubtitle}>
+                      You're on the spare bank — you'll be contacted when the team needs a sub
+                    </Text>
+                  </View>
                 </View>
               </View>
-              <Switch
-                value={autoIn}
-                onValueChange={handleAutoInToggle}
-                trackColor={{ false: navy[600], true: TEAM[500] }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor={navy[600]}
-              />
-            </View>
+            ) : (
+              <View style={styles.heroAvailRow}>
+                <View style={styles.toggleLeft}>
+                  <Text style={styles.toggleIcon}>⚡</Text>
+                  <View style={styles.toggleTextBlock}>
+                    <Text style={styles.toggleLabel}>Auto-in</Text>
+                    <Text style={styles.toggleSubtitle}>Auto-mark me as 'in' for new events</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={autoIn}
+                  onValueChange={handleAutoInToggle}
+                  trackColor={{ false: navy[600], true: TEAM[500] }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor={navy[600]}
+                />
+              </View>
+            )}
             <View style={styles.heroAvailDivider} />
             <Pressable
               style={({ pressed }) => [styles.heroAvailRow, pressed && { opacity: 0.75 }]}
@@ -421,13 +441,17 @@ function ToggleRow({
 
 // ─── Role pill ────────────────────────────────────────────────────────────────
 
-function RolePill({ role }: { role: 'manager' | 'player' }) {
-  const isManager = role === 'manager';
+function RolePill({ role }: { role: 'manager' | 'player' | 'spare' }) {
+  const pillStyle = role === 'manager' ? styles.rolePillManager
+    : role === 'spare' ? styles.rolePillSpare
+    : styles.rolePillPlayer;
+  const textStyle = role === 'manager' ? styles.rolePillTextManager
+    : role === 'spare' ? styles.rolePillTextSpare
+    : styles.rolePillTextPlayer;
+  const label = role === 'manager' ? 'Manager' : role === 'spare' ? 'Spare' : 'Player';
   return (
-    <View style={[styles.rolePill, isManager ? styles.rolePillManager : styles.rolePillPlayer]}>
-      <Text style={[styles.rolePillText, isManager ? styles.rolePillTextManager : styles.rolePillTextPlayer]}>
-        {isManager ? 'Manager' : 'Player'}
-      </Text>
+    <View style={[styles.rolePill, pillStyle]}>
+      <Text style={[styles.rolePillText, textStyle]}>{label}</Text>
     </View>
   );
 }
@@ -764,6 +788,11 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.07)',
   },
+  rolePillSpare: {
+    backgroundColor: 'rgba(245,158,11,0.10)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(245,158,11,0.28)',
+  },
   rolePillText: {
     fontFamily: fonts.mono,
     fontSize: 10,
@@ -775,6 +804,9 @@ const styles = StyleSheet.create({
   },
   rolePillTextPlayer: {
     color: navy[400],
+  },
+  rolePillTextSpare: {
+    color: '#F59E0B',
   },
   teamRow: {
     flexDirection: 'row',

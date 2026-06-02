@@ -66,6 +66,7 @@ function ManagerHomeScreen() {
   const avail: AvailCounts = { in: 0, out: 0, maybe: 0, noResp: 0 };
   members.forEach(m => {
     const r = responses[m.userId];
+    if (m.role === 'spare' && !r) return;
     if      (r === 'in')    avail.in++;
     else if (r === 'out')   avail.out++;
     else if (r === 'maybe') avail.maybe++;

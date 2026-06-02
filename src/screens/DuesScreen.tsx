@@ -15,7 +15,8 @@ import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import { useDues } from '../firebase/hooks/useDues';
-import type { DuesRecord } from '../firebase/schema';
+import { useMembers } from '../firebase/hooks/useMembers';
+import type { DuesRecord, Member } from '../firebase/schema';
 
 const TEAM = teams.trashdogs;
 
@@ -74,7 +75,10 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { activeTeamId } = useUserContext();
   const { dues } = useDues(activeTeamId);
-  const players = dues.map(toDuesPlayer);
+  const { members } = useMembers(activeTeamId);
+  const spareMembers = members.filter((m: Member) => m.role === 'spare');
+  const spareIds = new Set(spareMembers.map((m: Member) => m.userId));
+  const players = dues.map(toDuesPlayer).filter(p => !spareIds.has(p.id));
   const [seasonDues, setSeasonDues] = useState(SEASON_DUES);
   const [setAmountVisible, setSetAmountVisible] = useState(false);
   const [actionPlayer, setActionPlayer] = useState<DuesPlayer | null>(null);
@@ -174,6 +178,39 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
             </React.Fragment>
           ))}
         </View>
+
+        {/* ── Spare Bank ── */}
+        {spareMembers.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Spare Bank</Text>
+            <View style={styles.card}>
+              {spareMembers.map((spare: Member, idx: number) => {
+                const parts = spare.displayName.trim().split(' ');
+                const initials = parts.length >= 2
+                  ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+                  : spare.displayName.slice(0, 2).toUpperCase();
+                return (
+                  <React.Fragment key={spare.userId}>
+                    {idx > 0 && <View style={styles.rowDivider} />}
+                    <View style={styles.playerRow}>
+                      <View style={[styles.avatar, styles.avatarSpare]}>
+                        <Text style={styles.avatarText}>{initials}</Text>
+                      </View>
+                      <View style={styles.playerInfo}>
+                        <Text style={styles.playerName}>{spare.displayName}</Text>
+                        <Text style={styles.playerJersey}>#{spare.jerseyNumber}</Text>
+                      </View>
+                      <View style={styles.playerRight}>
+                        <Text style={styles.sparePerGame}>Per game</Text>
+                        <Text style={styles.spareAmount}>$20</Text>
+                      </View>
+                    </View>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* ── Set Amount Sheet ── */}
@@ -766,10 +803,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarSpare: {
+    backgroundColor: navy[700],
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.38)',
+  },
   avatarText: {
     fontFamily: fonts.uiBold,
     fontSize: 13,
     color: TEAM[100],
+  },
+  sparePerGame: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: '#F59E0B',
+    textTransform: 'uppercase',
+  },
+  spareAmount: {
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    color: '#F59E0B',
   },
 
   // ── Status pill ───────────────────────────────────────────────────────────

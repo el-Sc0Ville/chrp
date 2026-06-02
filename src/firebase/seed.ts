@@ -31,8 +31,8 @@ const MEMBERS: Omit<Member, 'joinedAt'>[] = [
   { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', jerseyNumber: 88, role: 'player',  email: 'marc@trashdogs.ca',      autoIn: true },
   { userId: 'r7',  displayName: 'Émilie Lemieux',        jerseyNumber: 23, role: 'player',  email: 'emilie@trashdogs.ca',    autoIn: true },
   { userId: 'r8',  displayName: 'Jean-François Caron',   jerseyNumber: 16, role: 'player',  email: 'jf@trashdogs.ca',        autoIn: true },
-  { userId: 'r9',  displayName: 'Stéphane Lapointe',     jerseyNumber: 55, role: 'player',  email: 'stephane@trashdogs.ca',  autoIn: true },
-  { userId: 'r10', displayName: 'Véronique Rivard',      jerseyNumber: 37, role: 'player',  email: 'veronique@trashdogs.ca', autoIn: true },
+  { userId: 'r9',  displayName: 'Stéphane Lapointe',     jerseyNumber: 55, role: 'spare',   email: 'stephane@trashdogs.ca',  autoIn: false },
+  { userId: 'r10', displayName: 'Véronique Rivard',      jerseyNumber: 37, role: 'spare',   email: 'veronique@trashdogs.ca', autoIn: false },
 ];
 
 // ─── Events ───────────────────────────────────────────────────────────────────
@@ -260,8 +260,6 @@ const DUES: DuesRecord[] = [
   { userId: 'r6',  displayName: 'Marc-Antoine Bouchard', seasonAmount: 500, amountPaid: 0, status: 'pending' },
   { userId: 'r7',  displayName: 'Émilie Lemieux',        seasonAmount: 500, amountPaid: 0, status: 'pending' },
   { userId: 'r8',  displayName: 'Jean-François Caron',   seasonAmount: 500, amountPaid: 0, status: 'pending' },
-  { userId: 'r9',  displayName: 'Stéphane Lapointe',     seasonAmount: 500, amountPaid: 0, status: 'pending' },
-  { userId: 'r10', displayName: 'Véronique Rivard',      seasonAmount: 500, amountPaid: 0, status: 'pending' },
 ];
 
 // ─── Seed function ────────────────────────────────────────────────────────────
@@ -339,6 +337,7 @@ export async function seedDatabase(): Promise<void> {
 export async function updateMemberDefaults(): Promise<void> {
   const batch = writeBatch(db);
   for (const m of MEMBERS) {
+    if (m.role === 'spare') continue;
     batch.update(doc(db, 'teams', TEAM_ID, 'members', m.userId), { autoIn: true });
   }
   await batch.commit();

@@ -14,7 +14,7 @@ import { useMembers } from '../firebase/hooks/useMembers';
 import { useTeam } from '../firebase/hooks/useTeam';
 import type { Member } from '../firebase/schema';
 
-type PlayerRole = 'manager' | 'player';
+type PlayerRole = 'manager' | 'player' | 'spare';
 type TrendDot = 'in' | 'out' | 'maybe' | null;
 
 interface RosterPlayer {
@@ -63,8 +63,8 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const { members, loading } = useMembers(activeTeamId);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
+  const [spareBankExpanded, setSpareBankExpanded] = useState(true);
 
-  // Sync roster from Firestore; local mutations (makeManager etc.) stay in state
   React.useEffect(() => {
     setRoster(members.map(toRosterPlayer));
   }, [members]);
@@ -104,6 +104,26 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     }
   };
 
+  const moveToSpare = async (id: string) => {
+    setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'spare' as PlayerRole } : p));
+    setActionPlayer(null);
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', id), { role: 'spare' });
+    } catch (err) {
+      console.error('[Roster] moveToSpare failed:', err);
+    }
+  };
+
+  const makePlayer = async (id: string) => {
+    setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'player' as PlayerRole } : p));
+    setActionPlayer(null);
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', id), { role: 'player' });
+    } catch (err) {
+      console.error('[Roster] makePlayer failed:', err);
+    }
+  };
+
   const removePlayer = async (id: string) => {
     const wasManager = roster.find(p => p.id === id)?.role === 'manager';
     setRoster(prev => prev.filter(p => p.id !== id));
@@ -118,7 +138,9 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     }
   };
 
-  const managerCount = roster.filter(p => p.role === 'manager').length;
+  const mainRoster   = roster.filter(p => p.role !== 'spare');
+  const spares       = roster.filter(p => p.role === 'spare');
+  const managerCount = mainRoster.filter(p => p.role === 'manager').length;
 
   return (
     <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
@@ -134,7 +156,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
                 <View style={[styles.rowMain, { opacity: 0 }]} />
               </View>
             ))
-          : roster.map(player => (
+          : mainRoster.map(player => (
               <PlayerRow
                 key={player.id}
                 player={player}
@@ -142,10 +164,19 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
               />
             ))
         }
+        {spares.length > 0 && (
+          <SpareBankSection
+            spares={spares}
+            expanded={spareBankExpanded}
+            onToggle={() => setSpareBankExpanded(v => !v)}
+            onLongPress={(p) => setActionPlayer(p)}
+          />
+        )}
       </ScrollView>
       <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
         <Text style={styles.stickyCount}>
-          {roster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+          {mainRoster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+          {spares.length > 0 ? ` · ${spares.length} spare${spares.length !== 1 ? 's' : ''}` : ''}
         </Text>
       </View>
 
@@ -157,9 +188,10 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
       {actionPlayer && (
         <ActionSheet
           player={actionPlayer}
-          canPromote={actionPlayer.role === 'player'}
           onMakeManager={() => makeManager(actionPlayer.id)}
           onDemote={() => demoteToPlayer(actionPlayer.id)}
+          onMoveToSpare={() => moveToSpare(actionPlayer.id)}
+          onMakePlayer={() => makePlayer(actionPlayer.id)}
           onRemove={() => removePlayer(actionPlayer.id)}
           onClose={() => setActionPlayer(null)}
         />
@@ -179,7 +211,9 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
   const roster = members.map(toRosterPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
 
-  const managerCount = roster.filter(p => p.role === 'manager').length;
+  const mainRoster   = roster.filter(p => p.role !== 'spare');
+  const managerCount = mainRoster.filter(p => p.role === 'manager').length;
+  const spareCount   = roster.filter(p => p.role === 'spare').length;
 
   return (
     <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
@@ -199,7 +233,8 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
       </ScrollView>
       <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
         <Text style={styles.stickyCount}>
-          {roster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+          {mainRoster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
+          {spareCount > 0 ? ` · ${spareCount} spare${spareCount !== 1 ? 's' : ''}` : ''}
         </Text>
       </View>
 
@@ -276,17 +311,22 @@ function PlayerRow({
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
 function PlayerAvatar({ player, size = 44 }: { player: RosterPlayer; size?: number }) {
-  const isManager = player.role === 'manager';
+  const avatarStyle = player.role === 'manager' ? styles.avatarManager
+    : player.role === 'spare' ? styles.avatarSpare
+    : styles.avatarPlayer;
+  const initialsStyle = player.role === 'manager' ? styles.avatarInitialsManager
+    : player.role === 'spare' ? styles.avatarInitialsSpare
+    : undefined;
   return (
     <View style={[
       styles.avatar,
       { width: size, height: size, borderRadius: size / 2 },
-      isManager ? styles.avatarManager : styles.avatarPlayer,
+      avatarStyle,
     ]}>
       <Text style={[
         styles.avatarInitials,
         { fontSize: Math.round(size * 0.32) },
-        isManager && styles.avatarInitialsManager,
+        initialsStyle,
       ]}>
         {player.initials}
       </Text>
@@ -297,12 +337,16 @@ function PlayerAvatar({ player, size = 44 }: { player: RosterPlayer; size?: numb
 // ─── Role pill ────────────────────────────────────────────────────────────────
 
 function RolePill({ role }: { role: PlayerRole }) {
-  const isManager = role === 'manager';
+  const pillStyle = role === 'manager' ? styles.rolePillManager
+    : role === 'spare' ? styles.rolePillSpare
+    : styles.rolePillPlayer;
+  const textStyle = role === 'manager' ? styles.rolePillTextManager
+    : role === 'spare' ? styles.rolePillTextSpare
+    : styles.rolePillTextPlayer;
+  const label = role === 'manager' ? 'Manager' : role === 'spare' ? 'Spare' : 'Player';
   return (
-    <View style={[styles.rolePill, isManager ? styles.rolePillManager : styles.rolePillPlayer]}>
-      <Text style={[styles.rolePillText, isManager ? styles.rolePillTextManager : styles.rolePillTextPlayer]}>
-        {isManager ? 'Manager' : 'Player'}
-      </Text>
+    <View style={[styles.rolePill, pillStyle]}>
+      <Text style={[styles.rolePillText, textStyle]}>{label}</Text>
     </View>
   );
 }
@@ -396,16 +440,18 @@ function InviteSheet({
 
 function ActionSheet({
   player,
-  canPromote,
   onMakeManager,
   onDemote,
+  onMoveToSpare,
+  onMakePlayer,
   onRemove,
   onClose,
 }: {
   player: RosterPlayer;
-  canPromote: boolean;
   onMakeManager: () => void;
   onDemote: () => void;
+  onMoveToSpare: () => void;
+  onMakePlayer: () => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
@@ -427,19 +473,36 @@ function ActionSheet({
 
           <View style={styles.actionDivider} />
 
-          {canPromote ? (
-            <Pressable
-              style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
-              onPress={onMakeManager}
-            >
-              <Text style={styles.actionRowText}>Make Manager</Text>
-            </Pressable>
-          ) : (
+          {player.role === 'player' && (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+                onPress={onMakeManager}
+              >
+                <Text style={styles.actionRowText}>Make Manager</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+                onPress={onMoveToSpare}
+              >
+                <Text style={styles.actionRowText}>Move to Spare Bank</Text>
+              </Pressable>
+            </>
+          )}
+          {player.role === 'manager' && (
             <Pressable
               style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
               onPress={onDemote}
             >
               <Text style={styles.actionRowText}>Remove Manager role</Text>
+            </Pressable>
+          )}
+          {player.role === 'spare' && (
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, pressed && { backgroundColor: navy[600] }]}
+              onPress={onMakePlayer}
+            >
+              <Text style={styles.actionRowText}>Make Player</Text>
             </Pressable>
           )}
 
@@ -461,6 +524,41 @@ function ActionSheet({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+// ─── Spare Bank section ───────────────────────────────────────────────────────
+
+function SpareBankSection({
+  spares, expanded, onToggle, onLongPress,
+}: {
+  spares: RosterPlayer[];
+  expanded: boolean;
+  onToggle: () => void;
+  onLongPress: (p: RosterPlayer) => void;
+}) {
+  return (
+    <View style={styles.spareBankWrap}>
+      <Pressable
+        onPress={onToggle}
+        style={({ pressed }) => [styles.spareBankHeader, pressed && { opacity: 0.7 }]}
+      >
+        <Text style={styles.spareBankTitle}>Spare Bank</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[8] }}>
+          <View style={styles.spareBankBadge}>
+            <Text style={styles.spareBankBadgeText}>{spares.length}</Text>
+          </View>
+          <Text style={[styles.spareBankChevron, expanded && styles.spareBankChevronOpen]}>›</Text>
+        </View>
+      </Pressable>
+      {expanded && spares.map(spare => (
+        <PlayerRow
+          key={spare.id}
+          player={spare}
+          onLongPress={() => onLongPress(spare)}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -615,6 +713,11 @@ const styles = StyleSheet.create({
   avatarManager: {
     backgroundColor: TEAM[500],
   },
+  avatarSpare: {
+    backgroundColor: navy[700],
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.38)',
+  },
   avatarInitials: {
     fontFamily: fonts.uiBold,
     fontWeight: '700',
@@ -622,6 +725,9 @@ const styles = StyleSheet.create({
   },
   avatarInitialsManager: {
     color: '#FFFFFF',
+  },
+  avatarInitialsSpare: {
+    color: '#F59E0B',
   },
 
   // ── Role pill ─────────────────────────────────────────────────────────────
@@ -640,6 +746,11 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.07)',
   },
+  rolePillSpare: {
+    backgroundColor: 'rgba(245,158,11,0.10)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(245,158,11,0.28)',
+  },
   rolePillText: {
     fontFamily: fonts.mono,
     fontSize: 10,
@@ -651,6 +762,53 @@ const styles = StyleSheet.create({
   },
   rolePillTextPlayer: {
     color: navy[400],
+  },
+  rolePillTextSpare: {
+    color: '#F59E0B',
+  },
+
+  // ── Spare Bank section ────────────────────────────────────────────────────
+  spareBankWrap: {
+    marginTop: spacing[8],
+  },
+  spareBankHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[4],
+    borderTopWidth: 0.5,
+    borderTopColor: navy[600],
+  },
+  spareBankTitle: {
+    fontFamily: fonts.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: navy[400],
+  },
+  spareBankBadge: {
+    paddingHorizontal: spacing[8],
+    paddingVertical: 2,
+    borderRadius: radius.xs,
+    backgroundColor: navy[600],
+    borderWidth: 0.5,
+    borderColor: navy[500],
+  },
+  spareBankBadgeText: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    color: navy[400],
+  },
+  spareBankChevron: {
+    fontFamily: fonts.display,
+    fontSize: 18,
+    lineHeight: 20,
+    color: navy[400],
+    transform: [{ rotate: '90deg' }],
+  },
+  spareBankChevronOpen: {
+    transform: [{ rotate: '270deg' }],
   },
 
   // ── Trend dots ────────────────────────────────────────────────────────────

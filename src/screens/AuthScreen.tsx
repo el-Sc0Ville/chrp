@@ -179,11 +179,21 @@ export default function AuthScreen() {
                 style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
                 onPress={async () => {
                   const { user } = await signInAnonymously(auth);
-                  const mockUser = { ...user, uid: 'r3', displayName: 'Sophie Tremblay' };
+                  const mockUser = { ...user, uid: 'r3', displayName: 'Pat Normandin' };
                   setMockUser(mockUser as typeof user, false);
                 }}
               >
                 <Text style={styles.devBtnText}>Enter as Player (dev)</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.devBtn, pressed && { opacity: 0.7 }]}
+                onPress={async () => {
+                  const { user } = await signInAnonymously(auth);
+                  const mockUser = { ...user, uid: 'r9', displayName: 'Stéphane Lapointe' };
+                  setMockUser(mockUser as typeof user, false);
+                }}
+              >
+                <Text style={styles.devBtnText}>Enter as Spare (dev)</Text>
               </Pressable>
             </View>
             <Pressable

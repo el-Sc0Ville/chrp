@@ -16,7 +16,7 @@ export interface Member {
   userId: string;
   displayName: string;
   jerseyNumber: number;
-  role: 'manager' | 'player';
+  role: 'manager' | 'player' | 'spare';
   email: string;
   joinedAt: Timestamp;
   autoIn?: boolean;
