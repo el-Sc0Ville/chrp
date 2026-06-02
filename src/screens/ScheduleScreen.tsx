@@ -197,6 +197,7 @@ function EventRow({ event, onPress }: { event: ChrpEvent; onPress: () => void })
   const inCount    = Object.values(responses).filter(r => r === 'in').length;
   const outCount   = Object.values(responses).filter(r => r === 'out').length;
   const myResponse = (responses[user?.uid ?? ''] as PlayerResponse) ?? null;
+  console.log('Player response check:', user?.uid, responses);
   return (
     <Pressable
       onPress={onPress}

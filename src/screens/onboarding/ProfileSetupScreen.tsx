@@ -4,8 +4,10 @@ import {
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { updateProfile } from 'firebase/auth';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
+import { auth } from '../../firebase';
 import { navy, fonts, teams, spacing, radius } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'ProfileSetup'>;
@@ -16,10 +18,18 @@ export default function ProfileSetupScreen({ navigation }: Props) {
   const [jerseyNumber, setJerseyNumber] = useState('');
   const canContinue = displayName.trim().length > 0;
 
-  function handleContinue() {
+  async function handleContinue() {
     if (!canContinue) return;
+    const name = displayName.trim();
+    if (auth.currentUser) {
+      try {
+        await updateProfile(auth.currentUser, { displayName: name });
+      } catch (err) {
+        console.error('[ProfileSetup] updateProfile failed:', err);
+      }
+    }
     navigation.navigate('JoinOrCreate', {
-      displayName: displayName.trim(),
+      displayName: name,
       jerseyNumber: parseInt(jerseyNumber, 10) || 0,
     });
   }
