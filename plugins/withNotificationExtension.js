@@ -316,6 +316,8 @@ function withExtensionTarget(config) {
         s.IPHONEOS_DEPLOYMENT_TARGET             = '"16.0"';
         s.ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES  = 'NO';
         s.CODE_SIGN_STYLE                        = 'Automatic';
+        s.DEVELOPMENT_TEAM                       = '9AR4YP352M';
+        s.PRODUCT_BUNDLE_IDENTIFIER              = '"com.chrp.app.notificationextension"';
         // Override the plist path that addTarget() set incorrectly
         s.INFOPLIST_FILE = `"${EXTENSION_NAME}/Info.plist"`;
         s.CODE_SIGN_ENTITLEMENTS = `"${EXTENSION_NAME}/${EXTENSION_NAME}.entitlements"`;
