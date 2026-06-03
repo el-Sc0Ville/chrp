@@ -318,7 +318,7 @@ function withExtensionTarget(config) {
         s.CODE_SIGN_STYLE                        = 'Automatic';
         s.DEVELOPMENT_TEAM                       = '9AR4YP352M';
         s.PRODUCT_BUNDLE_IDENTIFIER              = '"com.chrp.app.notificationextension"';
-        s.CODE_SIGN_IDENTITY                     = '"iPhone Distribution"';
+        s.CODE_SIGN_IDENTITY                     = '"Apple Development"';
         // Override the plist path that addTarget() set incorrectly
         s.INFOPLIST_FILE = `"${EXTENSION_NAME}/Info.plist"`;
         s.CODE_SIGN_ENTITLEMENTS = `"${EXTENSION_NAME}/${EXTENSION_NAME}.entitlements"`;
