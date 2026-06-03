@@ -315,13 +315,14 @@ function withExtensionTarget(config) {
 
         s.SWIFT_VERSION                          = '5.0';
         s.IPHONEOS_DEPLOYMENT_TARGET             = '"16.0"';
-        s.ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES       = 'NO';
-        s.CODE_SIGN_STYLE                             = 'Automatic';
-        s.AUTOMATICALLY_MANAGE_SIGNING                = 'YES';
-        s.DEVELOPMENT_TEAM                            = '9AR4YP352M';
-        s.PRODUCT_BUNDLE_IDENTIFIER                   = '"com.chrp.app.notificationextension"';
-        s.CODE_SIGN_IDENTITY             = '"iPhone Developer"';
-        s.PROVISIONING_PROFILE_SPECIFIER = '""';
+        s.ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES  = 'NO';
+        s.CODE_SIGN_STYLE                        = 'Manual';
+        s.AUTOMATICALLY_MANAGE_SIGNING           = 'NO';
+        s.DEVELOPMENT_TEAM                       = '9AR4YP352M';
+        s.PRODUCT_BUNDLE_IDENTIFIER              = '"com.chrp.app.notificationextension"';
+        s.CODE_SIGN_IDENTITY                     = '"iPhone Developer"';
+        s.PROVISIONING_PROFILE                   = '"12b1418c-4ade-41c7-8bcc-842fc883ab7f"';
+        s.PROVISIONING_PROFILE_SPECIFIER         = '"ChrpNotificationExtension AdHoc"';
         // Override the plist path that addTarget() set incorrectly
         s.INFOPLIST_FILE = `"${EXTENSION_NAME}/Info.plist"`;
         s.CODE_SIGN_ENTITLEMENTS = `"${EXTENSION_NAME}/${EXTENSION_NAME}.entitlements"`;
@@ -395,12 +396,24 @@ function withProvisioningProfile(config) {
       );
       fs.mkdirSync(profileDir, { recursive: true });
 
+      const profileData = Buffer.from(b64, 'base64');
+
+      // Write by name (human-readable fallback)
       const profilePath = path.join(
         profileDir,
         'ChrpNotificationExtension.mobileprovision',
       );
-      fs.writeFileSync(profilePath, Buffer.from(b64, 'base64'));
+      fs.writeFileSync(profilePath, profileData);
+
+      // Write by UUID — iOS/Xcode resolves profiles by UUID filename
+      const uuidPath = path.join(
+        profileDir,
+        '12b1418c-4ade-41c7-8bcc-842fc883ab7f.mobileprovision',
+      );
+      fs.writeFileSync(uuidPath, profileData);
+
       console.log(`[withNotificationExtension] Installed provisioning profile → ${profilePath}`);
+      console.log(`[withNotificationExtension] Installed provisioning profile → ${uuidPath}`);
 
       return config;
     },
