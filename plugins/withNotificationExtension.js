@@ -20,6 +20,7 @@ const {
 } = require('@expo/config-plugins');
 const path = require('path');
 const fs   = require('fs');
+const os   = require('os');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -315,10 +316,13 @@ function withExtensionTarget(config) {
         s.SWIFT_VERSION                          = '5.0';
         s.IPHONEOS_DEPLOYMENT_TARGET             = '"16.0"';
         s.ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES  = 'NO';
-        s.CODE_SIGN_STYLE                        = 'Automatic';
+        s.CODE_SIGN_STYLE                        = 'Manual';
+        s.AUTOMATICALLY_MANAGE_SIGNING           = 'NO';
         s.DEVELOPMENT_TEAM                       = '9AR4YP352M';
         s.PRODUCT_BUNDLE_IDENTIFIER              = '"com.chrp.app.notificationextension"';
-        s.CODE_SIGN_IDENTITY                     = '"Apple Development"';
+        s.CODE_SIGN_IDENTITY                     = '"iPhone Distribution"';
+        s.PROVISIONING_PROFILE                   = '"61f85bda-ed28-4591-afaa-05566a2f5d17"';
+        s.PROVISIONING_PROFILE_SPECIFIER         = '"ChrpNotificationExtension AdHoc"';
         // Override the plist path that addTarget() set incorrectly
         s.INFOPLIST_FILE = `"${EXTENSION_NAME}/Info.plist"`;
         s.CODE_SIGN_ENTITLEMENTS = `"${EXTENSION_NAME}/${EXTENSION_NAME}.entitlements"`;
@@ -364,6 +368,92 @@ function withMainAppEntitlements(config) {
   });
 }
 
+// ─── Step 4: Install provisioning profile from env var ───────────────────────
+//
+// Set EXTENSION_PROVISIONING_PROFILE to the base64-encoded contents of the
+// ChrpNotificationExtension .mobileprovision file in the EAS Build secret store.
+// When present the plugin:
+//   1. Decodes and writes the profile to the standard macOS provisioning
+//      profiles directory so Xcode can locate it during the cloud build.
+//   2. Switches the extension target to Manual signing and sets
+//      PROVISIONING_PROFILE_SPECIFIER to match the profile's Name field.
+
+const PROFILE_NAME = 'ChrpNotificationExtension AdHoc';
+
+function withProvisioningProfile(config) {
+  // ── 4a. Write the .mobileprovision file (dangerous mod, runs first) ────────
+  config = withDangerousMod(config, [
+    'ios',
+    async (config) => {
+      const b64 = process.env.EXTENSION_PROVISIONING_PROFILE;
+      if (!b64) return config; // no-op in local dev
+
+      const profileDir = path.join(
+        os.homedir(),
+        'Library',
+        'MobileDevice',
+        'Provisioning Profiles',
+      );
+      fs.mkdirSync(profileDir, { recursive: true });
+
+      const profileData = Buffer.from(b64, 'base64');
+
+      // Write by name (human-readable fallback)
+      const profilePath = path.join(
+        profileDir,
+        'ChrpNotificationExtension.mobileprovision',
+      );
+      fs.writeFileSync(profilePath, profileData);
+
+      // Write by UUID — iOS/Xcode resolves profiles by UUID filename
+      const uuidPath = path.join(
+        profileDir,
+        '61f85bda-ed28-4591-afaa-05566a2f5d17.mobileprovision',
+      );
+      fs.writeFileSync(uuidPath, profileData);
+
+      console.log(`[withNotificationExtension] Installed provisioning profile → ${profilePath}`);
+      console.log(`[withNotificationExtension] Installed provisioning profile → ${uuidPath}`);
+
+      return config;
+    },
+  ]);
+
+  // ── 4b. Switch extension target to Manual signing ─────────────────────────
+  config = withXcodeProject(config, (config) => {
+    if (!process.env.EXTENSION_PROVISIONING_PROFILE) return config;
+
+    const project       = config.modResults;
+    const configSection = project.pbxXCBuildConfigurationSection();
+    const configListSection = project.pbxXCConfigurationList();
+
+    // Find the extension target's configuration list
+    const nativeTargets = project.pbxNativeTargetSection();
+    const extEntry = Object.entries(nativeTargets).find(
+      ([, t]) =>
+        t &&
+        typeof t === 'object' &&
+        (t.name === EXTENSION_NAME || t.name === `"${EXTENSION_NAME}"`),
+    );
+    if (!extEntry) return config;
+
+    const [, extTarget] = extEntry;
+    const configList = configListSection[extTarget.buildConfigurationList];
+    if (!configList) return config;
+
+    for (const entry of configList.buildConfigurations) {
+      const cfg = configSection[entry.value];
+      if (!cfg) continue;
+      cfg.buildSettings.CODE_SIGN_STYLE                = 'Manual';
+      cfg.buildSettings.PROVISIONING_PROFILE_SPECIFIER = `"${PROFILE_NAME}"`;
+    }
+
+    return config;
+  });
+
+  return config;
+}
+
 // ─── Compose ──────────────────────────────────────────────────────────────────
 
 module.exports = function withNotificationExtension(config) {
@@ -371,5 +461,6 @@ module.exports = function withNotificationExtension(config) {
     withExtensionFiles,
     withExtensionTarget,
     withMainAppEntitlements,
+    withProvisioningProfile,
   ]);
 };
