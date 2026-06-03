@@ -291,7 +291,7 @@ function withExtensionTarget(config) {
 
     // ── 4. Add Swift source to the Sources phase ───────────────────────────
     project.addSourceFile(
-      `${EXTENSION_NAME}/${EXTENSION_NAME}/NotificationViewController.swift`,
+      'NotificationViewController.swift',
       { target: extTarget.uuid },
       groupKey,
     );
