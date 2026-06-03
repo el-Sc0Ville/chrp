@@ -20,7 +20,8 @@
           {
             "CFBundleURLSchemes": ["chrp"]
           }
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -46,6 +47,12 @@
         }
       ],
       ["./plugins/withNotificationExtension"]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "16e2f5c6-2e3a-4dad-9b51-8b485329db64"
+      }
+    },
+    "owner": "el-sc0ville"
   }
 }
