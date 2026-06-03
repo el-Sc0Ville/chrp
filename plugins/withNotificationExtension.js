@@ -377,7 +377,7 @@ function withMainAppEntitlements(config) {
 //   2. Switches the extension target to Manual signing and sets
 //      PROVISIONING_PROFILE_SPECIFIER to match the profile's Name field.
 
-const PROFILE_NAME = 'ChrpNotificationExtension Development';
+const PROFILE_NAME = 'ChrpNotificationExtension AdHoc';
 
 function withProvisioningProfile(config) {
   // ── 4a. Write the .mobileprovision file (dangerous mod, runs first) ────────
