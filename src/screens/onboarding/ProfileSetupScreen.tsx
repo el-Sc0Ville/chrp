@@ -8,12 +8,14 @@ import { updateProfile } from 'firebase/auth';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { auth } from '../../firebase';
+import { useUserContext } from '../../context/UserContext';
 import { navy, fonts, teams, spacing, radius } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'ProfileSetup'>;
 
 export default function ProfileSetupScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { setMockUser } = useUserContext();
   const [displayName, setDisplayName] = useState('');
   const [jerseyNumber, setJerseyNumber] = useState('');
   const canContinue = displayName.trim().length > 0;
@@ -24,6 +26,9 @@ export default function ProfileSetupScreen({ navigation }: Props) {
     if (auth.currentUser) {
       try {
         await updateProfile(auth.currentUser, { displayName: name });
+        // Sync the updated displayName into UserContext immediately so all
+        // screens see the correct name without waiting for an auth refresh.
+        setMockUser({ ...auth.currentUser, displayName: name } as typeof auth.currentUser, false);
       } catch (err) {
         console.error('[ProfileSetup] updateProfile failed:', err);
       }

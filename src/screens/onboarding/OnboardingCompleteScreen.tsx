@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { useUserContext } from '../../context/UserContext';
+import { registerForPushNotifications } from '../../firebase/notifications';
+import { auth } from '../../firebase';
 import { navy, fonts, teams, spacing, radius } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'OnboardingComplete'>;
@@ -34,7 +36,14 @@ export default function OnboardingCompleteScreen({ route }: Props) {
           { backgroundColor: accent[500] },
           pressed && styles.btnPressed,
         ]}
-        onPress={() => completeOnboarding(teamId, palette, isManager)}
+        onPress={() => {
+          const uid = auth.currentUser?.uid;
+          if (uid) {
+            console.log('Push token registration for:', uid, teamId);
+            registerForPushNotifications(uid, teamId).catch(console.error);
+          }
+          completeOnboarding(teamId, palette, isManager);
+        }}
       >
         <Text style={styles.btnText}>Let's go</Text>
       </Pressable>
