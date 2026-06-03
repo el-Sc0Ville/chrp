@@ -28,22 +28,33 @@ export async function registerForPushNotifications(
       }
     }
 
-    // Register lock-screen action buttons for availability requests
+    // Register action buttons for availability requests.
+    // isAuthenticationRequired: false → buttons work on the lock screen
+    // without Face ID / Touch ID, matching UNNotificationActionOptions.
     await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', [
       {
         identifier: 'IN',
         buttonTitle: '✅ In',
-        options: { opensAppToForeground: false },
+        options: {
+          opensAppToForeground: false,
+          isAuthenticationRequired: false,
+        },
       },
       {
         identifier: 'OUT',
         buttonTitle: '❌ Out',
-        options: { opensAppToForeground: false },
+        options: {
+          opensAppToForeground: false,
+          isAuthenticationRequired: false,
+        },
       },
       {
         identifier: 'MAYBE',
         buttonTitle: '🟡 Maybe',
-        options: { opensAppToForeground: false },
+        options: {
+          opensAppToForeground: false,
+          isAuthenticationRequired: false,
+        },
       },
     ]);
 
