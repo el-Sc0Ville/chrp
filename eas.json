@@ -6,10 +6,8 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "autoIncrement": true,
       "ios": {
-        "simulator": false,
-        "autoCredentials": true
+        "simulator": false
       }
     },
     "preview": {
