@@ -321,7 +321,7 @@ function withExtensionTarget(config) {
         s.DEVELOPMENT_TEAM                       = '9AR4YP352M';
         s.PRODUCT_BUNDLE_IDENTIFIER              = '"com.chrp.app.notificationextension"';
         s.CODE_SIGN_IDENTITY                     = '"iPhone Developer"';
-        s.PROVISIONING_PROFILE                   = '"12b1418c-4ade-41c7-8bcc-842fc883ab7f"';
+        s.PROVISIONING_PROFILE                   = '"61f85bda-ed28-4591-afaa-05566a2f5d17"';
         s.PROVISIONING_PROFILE_SPECIFIER         = '"ChrpNotificationExtension AdHoc"';
         // Override the plist path that addTarget() set incorrectly
         s.INFOPLIST_FILE = `"${EXTENSION_NAME}/Info.plist"`;
@@ -408,7 +408,7 @@ function withProvisioningProfile(config) {
       // Write by UUID — iOS/Xcode resolves profiles by UUID filename
       const uuidPath = path.join(
         profileDir,
-        '12b1418c-4ade-41c7-8bcc-842fc883ab7f.mobileprovision',
+        '61f85bda-ed28-4591-afaa-05566a2f5d17.mobileprovision',
       );
       fs.writeFileSync(uuidPath, profileData);
 
