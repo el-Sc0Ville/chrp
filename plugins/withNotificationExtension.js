@@ -220,7 +220,6 @@ function withExtensionFiles(config) {
         config.modRequest.projectRoot,
         'ios',
         EXTENSION_NAME,
-        EXTENSION_NAME,
       );
       fs.mkdirSync(extDir, { recursive: true });
 
@@ -325,8 +324,8 @@ function withExtensionTarget(config) {
         s.PROVISIONING_PROFILE                   = '"61f85bda-ed28-4591-afaa-05566a2f5d17"';
         s.PROVISIONING_PROFILE_SPECIFIER         = '"ChrpNotificationExtension AdHoc"';
         // Override the plist path that addTarget() set incorrectly
-        s.INFOPLIST_FILE = `"${EXTENSION_NAME}/${EXTENSION_NAME}/Info.plist"`;
-        s.CODE_SIGN_ENTITLEMENTS = `"${EXTENSION_NAME}/${EXTENSION_NAME}/${EXTENSION_NAME}.entitlements"`;
+        s.INFOPLIST_FILE = `"${EXTENSION_NAME}/Info.plist"`;
+        s.CODE_SIGN_ENTITLEMENTS = `"${EXTENSION_NAME}/${EXTENSION_NAME}.entitlements"`;
         // Ensure MARKETING_VERSION / CURRENT_PROJECT_VERSION track the host app
         s.MARKETING_VERSION      = '"$(MARKETING_VERSION)"';
         s.CURRENT_PROJECT_VERSION = '"$(CURRENT_PROJECT_VERSION)"';
