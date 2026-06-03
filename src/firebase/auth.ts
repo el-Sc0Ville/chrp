@@ -45,9 +45,11 @@ export async function confirmMagicLink(email: string, emailLink: string): Promis
 
   // Create user profile on first sign-in
   const uid = credential.user.uid;
+  console.log('[confirmMagicLink] checking /users/', uid);
   const userRef = doc(db, 'users', uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) {
+    console.log('[confirmMagicLink] creating user profile at /users/', uid);
     await setDoc(userRef, {
       email,
       displayName: '',

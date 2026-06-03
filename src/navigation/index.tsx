@@ -292,7 +292,9 @@ function AppStack() {
         // Real Firebase user (magic link, etc.) — populate UserContext immediately
         // so user.uid and user.displayName are available in all screens
         setMockUser(u, false); // isManager defaults false; updated below once teams load
+        console.log('Auth state: user found, checking onboarding...', u.uid);
         const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
+        console.log('Onboarding check — /users/{uid}/teams docs:', snap.size, 'needsOnboarding:', snap.empty);
         setNeedsOnboarding(snap.empty);
         if (!snap.empty) {
           // Returning user — restore their active team and manager status
@@ -315,11 +317,14 @@ function AppStack() {
   const resolvedUser = mockUser ?? firebaseUser;
   if (resolvedUser === undefined) return <LoadingScreen />;
 
-  // Still checking Firestore for a real Firebase user
-  if (resolvedUser && !mockUser && needsOnboarding === undefined) return <LoadingScreen />;
+  // Still waiting on Firestore onboarding check for a real (non-anonymous) Firebase user.
+  // Cannot use !mockUser here — setMockUser is called for real users too (to populate uid),
+  // so mockUser is non-null for both dev bypass AND real users.
+  const isRealFirebaseUser = firebaseUser !== null && firebaseUser?.isAnonymous === false;
+  if (resolvedUser && isRealFirebaseUser && needsOnboarding === undefined) return <LoadingScreen />;
 
-  // Mock users (dev bypass) skip onboarding
-  const showOnboarding = !mockUser && needsOnboarding === true;
+  // Dev-bypass (anonymous) users skip onboarding; real users show it when no team found
+  const showOnboarding = isRealFirebaseUser && needsOnboarding === true;
 
   return (
     <NavigationContainer>
