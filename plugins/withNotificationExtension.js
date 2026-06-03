@@ -320,7 +320,7 @@ function withExtensionTarget(config) {
         s.AUTOMATICALLY_MANAGE_SIGNING           = 'NO';
         s.DEVELOPMENT_TEAM                       = '9AR4YP352M';
         s.PRODUCT_BUNDLE_IDENTIFIER              = '"com.chrp.app.notificationextension"';
-        s.CODE_SIGN_IDENTITY                     = '"iPhone Developer"';
+        s.CODE_SIGN_IDENTITY                     = '"iPhone Distribution"';
         s.PROVISIONING_PROFILE                   = '"61f85bda-ed28-4591-afaa-05566a2f5d17"';
         s.PROVISIONING_PROFILE_SPECIFIER         = '"ChrpNotificationExtension AdHoc"';
         // Override the plist path that addTarget() set incorrectly
