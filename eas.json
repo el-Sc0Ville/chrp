@@ -7,14 +7,21 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "credentialsSource": "remote"
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "credentialsSource": "remote"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "credentialsSource": "remote"
+      }
     }
   },
   "submit": {
