@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
@@ -57,6 +57,8 @@ export type OnboardingStackParamList = {
   CreateTeam: { displayName: string; jerseyNumber: number };
   OnboardingComplete: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
 };
+
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const Stack           = createNativeStackNavigator<RootStackParamList>();
 const OnboardingStack = createNativeStackNavigator<OnboardingStackParamList>();
@@ -327,7 +329,7 @@ function AppStack() {
   const showOnboarding = isRealFirebaseUser && needsOnboarding === true;
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {resolvedUser && showOnboarding && (
           <Stack.Screen name="Onboarding" component={OnboardingNavigator} />

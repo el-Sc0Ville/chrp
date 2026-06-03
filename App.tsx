@@ -2,6 +2,10 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from './src/firebase';
+import { navigationRef } from './src/navigation';
 import {
   useFonts,
   SpaceGrotesk_300Light,
@@ -31,6 +35,44 @@ import {
 import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
+
+async function handleNotificationResponse(response: Notifications.NotificationResponse) {
+  const { actionIdentifier, notification } = response;
+  const data = notification.request.content.data as {
+    eventId?: string;
+    teamId?: string;
+    userId?: string;
+    displayName?: string;
+  };
+  const { eventId, teamId, userId, displayName } = data;
+  if (!eventId || !teamId || !userId) return;
+
+  if (
+    actionIdentifier === 'IN' ||
+    actionIdentifier === 'OUT' ||
+    actionIdentifier === 'MAYBE'
+  ) {
+    const responseValue = actionIdentifier.toLowerCase() as 'in' | 'out' | 'maybe';
+    await setDoc(
+      doc(db, 'teams', teamId, 'events', eventId, 'responses', userId),
+      {
+        userId,
+        ...(displayName ? { displayName } : {}),
+        response: responseValue,
+        respondedAt: serverTimestamp(),
+        setByManager: false,
+      },
+      { merge: true },
+    ).catch(err => console.error('[Notification] Firestore write failed:', err));
+    return;
+  }
+
+  if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+    if (navigationRef.isReady()) {
+      navigationRef.navigate('EventDetail', { eventId, title: '' });
+    }
+  }
+}
 
 function extractFirebaseLink(url: string): string {
   const match = url.match(/[?&]link=([^&]+)/);
@@ -69,7 +111,19 @@ export default function App() {
 
     // Warm-start: app already running when deep link arrives
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
-    return () => sub.remove();
+
+    // Cold-start: process any notification response that launched the app
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (response) handleNotificationResponse(response);
+    });
+
+    // Warm: user taps or interacts with a notification while app is running/backgrounded
+    const notifSub = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+
+    return () => {
+      sub.remove();
+      notifSub.remove();
+    };
   }, []);
 
   const [fontsLoaded] = useFonts({

@@ -28,6 +28,25 @@ export async function registerForPushNotifications(
       }
     }
 
+    // Register lock-screen action buttons for availability requests
+    await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', [
+      {
+        identifier: 'IN',
+        buttonTitle: '✅ In',
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: 'OUT',
+        buttonTitle: '❌ Out',
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: 'MAYBE',
+        buttonTitle: '🟡 Maybe',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+
     const token = await Notifications.getExpoPushTokenAsync({
       projectId: '16e2f5c6-2e3a-4dad-9b51-8b485329db64',
     });

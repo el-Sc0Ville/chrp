@@ -180,6 +180,12 @@ export default function CreateEventScreen() {
               m.pushToken,
               `New event: ${fields.title}`,
               `📅 ${dateLabel} at ${fields.venue}. Are you in?`,
+              {
+                eventId: eventRef.id,
+                teamId: activeTeamId,
+                userId: memberDoc.id,
+                displayName: m.displayName,
+              },
             ).catch(console.error);
           }
         }
