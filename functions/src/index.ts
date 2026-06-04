@@ -44,7 +44,7 @@ async function sendBatchNotifications(messages: ExpoMessage[]): Promise<void> {
   }
 }
 
-export const sendAvailabilityReminders = onSchedule('every 1 hours', async () => {
+export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minutes', region: 'northamerica-northeast1' }, async () => {
   const now = new Date();
   const windowStart = new Date(now.getTime() + 47 * 60 * 60 * 1000);
   const windowEnd = new Date(now.getTime() + 49 * 60 * 60 * 1000);
@@ -102,7 +102,7 @@ export const sendAvailabilityReminders = onSchedule('every 1 hours', async () =>
 });
 
 export const onEventCreated = onDocumentCreated(
-  'teams/{teamId}/events/{eventId}',
+  { document: 'teams/{teamId}/events/{eventId}', region: 'northamerica-northeast1' },
   async (event) => {
     const { teamId, eventId } = event.params;
     const eventData = event.data?.data();
