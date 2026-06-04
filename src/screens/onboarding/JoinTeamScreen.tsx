@@ -29,9 +29,11 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
 
     setLoading(true);
     try {
+      console.log('Looking up invite code:', code);
       const snap = await getDocs(
         query(collection(db, 'teams'), where('inviteCode', '==', upper), limit(1)),
       );
+      console.log('Query result:', snap.docs.length);
       if (snap.empty) {
         Alert.alert('Invalid code', "That invite code doesn't look right. Check with your team manager.");
         setLoading(false);

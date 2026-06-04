@@ -19,11 +19,12 @@ import type { RootStackParamList } from '../navigation';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
-// ─── Hardcoded current user ───────────────────────────────────────────────────
-const INITIAL_NAME     = 'Pat Normandin';
-const INITIAL_JERSEY   = '17';
-const USER_ROLE: 'manager' | 'player' = 'manager';
-const USER_INITIALS    = 'PN';
+function getInitials(n: string): string {
+  const parts = n.trim().split(/\s+/);
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : n.slice(0, 2).toUpperCase() || '?';
+}
 
 // ─── Root export ──────────────────────────────────────────────────────────────
 
@@ -35,11 +36,11 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ProfileNavProp>();
 
-  // Editable profile fields
-  const [name, setName]             = useState(INITIAL_NAME);
-  const [jersey, setJersey]         = useState(INITIAL_JERSEY);
-  const [savedName, setSavedName]   = useState(INITIAL_NAME);
-  const [savedJersey, setSavedJersey] = useState(INITIAL_JERSEY);
+  // Editable profile fields — seeded from Firebase Auth / member doc
+  const [name, setName]             = useState(user?.displayName ?? '');
+  const [jersey, setJersey]         = useState('');
+  const [savedName, setSavedName]   = useState(user?.displayName ?? '');
+  const [savedJersey, setSavedJersey] = useState('');
 
   // Edit mode
   const [isEditingName, setIsEditingName]     = useState(false);
@@ -63,8 +64,14 @@ export default function ProfileScreen() {
     getDoc(doc(db, 'teams', activeTeamId, 'members', user.uid))
       .then(snap => {
         if (snap.exists()) {
-          setAutoIn(snap.data().autoIn ?? false);
-          setMemberRole(snap.data().role ?? (isManager ? 'manager' : 'player'));
+          const data = snap.data();
+          setAutoIn(data.autoIn ?? false);
+          setMemberRole(data.role ?? (isManager ? 'manager' : 'player'));
+          if (data.jerseyNumber != null) {
+            const j = String(data.jerseyNumber);
+            setJersey(j);
+            setSavedJersey(j);
+          }
         }
       })
       .catch(() => {});
@@ -183,7 +190,7 @@ export default function ProfileScreen() {
             onPress={() => showToast('Photo upload coming soon')}
           >
             <View style={[styles.avatar, { backgroundColor: TEAM[500], shadowColor: TEAM[500] }]}>
-              <Text style={[styles.avatarInitials, { color: TEAM.on }]}>{USER_INITIALS}</Text>
+              <Text style={[styles.avatarInitials, { color: TEAM.on }]}>{getInitials(name)}</Text>
             </View>
             <View style={styles.cameraOverlay}>
               <Text style={styles.cameraIcon}>📷</Text>
