@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDocs, collection } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -51,9 +52,9 @@ export type RootStackParamList = {
 
 export type OnboardingStackParamList = {
   Welcome: undefined;
-  ProfileSetup: undefined;
+  ProfileSetup: { pendingInviteCode?: string; teamName?: string; teamId?: string; teamPalette?: TeamKey } | undefined;
   JoinOrCreate: { displayName: string; jerseyNumber: number };
-  JoinTeam: { displayName: string; jerseyNumber: number };
+  JoinTeam: { displayName: string; jerseyNumber: number; teamId: string; teamName: string; teamPalette: TeamKey };
   CreateTeam: { displayName: string; jerseyNumber: number };
   OnboardingComplete: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
 };
@@ -308,11 +309,29 @@ function AppStack() {
           // Register / refresh push token for this user+team
           registerForPushNotifications(u.uid, firstTeam.teamId as string).catch(console.error);
         }
+      } else if (u && u.isAnonymous) {
+        const pendingCode = await AsyncStorage.getItem('chrp_pending_invite_code');
+        if (pendingCode) {
+          // Invite flow: anonymous sign-in with a pending invite code
+          setMockUser(u, false);
+          setNeedsOnboarding(true);
+        } else {
+          // Check if this anonymous user already completed onboarding (returning invite user)
+          const teamsSnap = await getDocs(collection(db, 'users', u.uid, 'teams'));
+          if (!teamsSnap.empty) {
+            const isManagerRole = teamsSnap.docs.some(d => d.data().role === 'manager');
+            const firstTeam = teamsSnap.docs[0].data();
+            setMockUser(u, isManagerRole);
+            setActiveTeamId(firstTeam.teamId as string);
+            setActiveTeamPalette(firstTeam.palette as TeamKey);
+            setNeedsOnboarding(false);
+          }
+          // If empty: dev bypass — AuthScreen's setMockUser handles context
+        }
       } else if (!u) {
         setMockUser(null, false);
         setNeedsOnboarding(false);
       }
-      // u.isAnonymous = dev bypass — AuthScreen's setMockUser handles context
     });
   }, []);
 
@@ -325,8 +344,8 @@ function AppStack() {
   const isRealFirebaseUser = firebaseUser !== null && firebaseUser?.isAnonymous === false;
   if (resolvedUser && isRealFirebaseUser && needsOnboarding === undefined) return <LoadingScreen />;
 
-  // Dev-bypass (anonymous) users skip onboarding; real users show it when no team found
-  const showOnboarding = isRealFirebaseUser && needsOnboarding === true;
+  // Show onboarding when needsOnboarding is true (covers both real and anonymous invite users)
+  const showOnboarding = needsOnboarding === true;
 
   return (
     <NavigationContainer ref={navigationRef}>

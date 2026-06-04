@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, signal, spacing, radius } from '../theme';
 import { signInAnonymously } from 'firebase/auth';
 import { getDocs, query, collection, where, limit } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase/config';
 import { db } from '../firebase';
 import { sendMagicLink } from '../firebase/auth';
@@ -62,10 +63,17 @@ export default function AuthScreen() {
       console.log('Query result:', snap.docs.length);
       if (snap.empty) {
         setRedeemError("That invite code doesn't look right. Check with your team manager.");
-      } else {
-        const teamName = snap.docs[0].data()['name'] as string;
-        Alert.alert('Team found!', `Enter your email above to sign in and join ${teamName}.`);
+        return;
       }
+      const teamDoc  = snap.docs[0];
+      const teamData = teamDoc.data();
+      // Save invite context so WelcomeScreen can skip ahead to ProfileSetup
+      await AsyncStorage.setItem('chrp_pending_invite_code',    upper);
+      await AsyncStorage.setItem('chrp_pending_team_id',        teamDoc.id);
+      await AsyncStorage.setItem('chrp_pending_team_name',      teamData['name'] as string);
+      await AsyncStorage.setItem('chrp_pending_team_palette',   (teamData['palette'] as string) ?? 'trashdogs');
+      // Sign in anonymously — onAuthStateChanged detects pending invite and sets needsOnboarding
+      await signInAnonymously(auth);
     } catch (err) {
       console.error('[AuthScreen] redeem error:', err);
       setRedeemError('Something went wrong. Please try again.');

@@ -3,8 +3,11 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { setDoc, doc, serverTimestamp, getDocs, query, collection, where, limit } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './src/firebase';
+import { auth } from './src/firebase/config';
 import { navigationRef } from './src/navigation';
 import {
   useFonts,
@@ -68,6 +71,39 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
   }
 };
 
+async function handleJoinDeepLink(url: string): Promise<void> {
+  const match = url.match(/[?&]code=([A-Z0-9]{1,6})/i);
+  if (!match) return;
+  const code = match[1].toUpperCase().padEnd(0).slice(0, 6);
+  if (code.length !== 6) return;
+
+  try {
+    console.log('[JoinDeepLink] looking up code:', code);
+    const snap = await getDocs(
+      query(collection(db, 'teams'), where('inviteCode', '==', code), limit(1)),
+    );
+    if (snap.empty) {
+      console.warn('[JoinDeepLink] invite code not found:', code);
+      return;
+    }
+    const teamDoc  = snap.docs[0];
+    const teamData = teamDoc.data();
+
+    await AsyncStorage.setItem('chrp_pending_invite_code',  code);
+    await AsyncStorage.setItem('chrp_pending_team_id',      teamDoc.id);
+    await AsyncStorage.setItem('chrp_pending_team_name',    teamData['name'] as string);
+    await AsyncStorage.setItem('chrp_pending_team_palette', (teamData['palette'] as string) ?? 'trashdogs');
+
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+      // onAuthStateChanged in AppStack will call setMockUser + setNeedsOnboarding(true)
+    }
+    console.log('[JoinDeepLink] invite saved, signed in anonymously');
+  } catch (err) {
+    console.error('[JoinDeepLink] error:', err);
+  }
+}
+
 function extractFirebaseLink(url: string): string {
   const match = url.match(/[?&]link=([^&]+)/);
   if (match) {
@@ -77,6 +113,12 @@ function extractFirebaseLink(url: string): string {
 }
 
 async function handleDeepLink(url: string): Promise<void> {
+  // Invite join link: chrp://join?code=XXXXXX or https://chrp-app.web.app/join?code=XXXXXX
+  if (url.includes('//join') || url.includes('/join?code=')) {
+    await handleJoinDeepLink(url);
+    return;
+  }
+
   const isChrpScheme        = url.startsWith('chrp://');
   const isFirebaseUniversal = url.startsWith('https://chrp-app.firebaseapp.com');
   if ((!isChrpScheme && !isFirebaseUniversal) || !url.includes('finishSignIn')) return;

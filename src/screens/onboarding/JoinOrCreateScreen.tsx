@@ -1,15 +1,54 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getDocs, query, collection, where, limit } from 'firebase/firestore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
-import { navy, fonts, teams, spacing, radius } from '../../theme';
+import { db } from '../../firebase';
+import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'JoinOrCreate'>;
 
 export default function JoinOrCreateScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { displayName, jerseyNumber } = route.params;
+
+  const [codeVisible,  setCodeVisible]  = useState(false);
+  const [invCode,      setInvCode]      = useState('');
+  const [codeLoading,  setCodeLoading]  = useState(false);
+  const [codeError,    setCodeError]    = useState<string | null>(null);
+
+  const handleJoinWithCode = async () => {
+    const upper = invCode.trim().toUpperCase();
+    if (upper.length < 6 || codeLoading) return;
+    setCodeLoading(true);
+    setCodeError(null);
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'teams'), where('inviteCode', '==', upper), limit(1)),
+      );
+      if (snap.empty) {
+        setCodeError("That invite code doesn't look right. Check with your team manager.");
+        return;
+      }
+      const teamDoc = snap.docs[0];
+      const data    = teamDoc.data();
+      navigation.navigate('JoinTeam', {
+        displayName,
+        jerseyNumber,
+        teamId:      teamDoc.id,
+        teamName:    data['name'] as string,
+        teamPalette: (data['palette'] ?? 'trashdogs') as TeamKey,
+      });
+    } catch (err) {
+      console.error('[JoinOrCreate] invite lookup failed:', err);
+      setCodeError('Something went wrong. Please try again.');
+    } finally {
+      setCodeLoading(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing[16]) }]}>
@@ -19,17 +58,54 @@ export default function JoinOrCreateScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.cards}>
-        <Pressable
-          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-          onPress={() => navigation.navigate('JoinTeam', { displayName, jerseyNumber })}
-        >
-          <Text style={styles.cardIcon}>🎟️</Text>
-          <View style={styles.cardBody}>
-            <Text style={styles.cardTitle}>Join a team</Text>
-            <Text style={styles.cardSub}>I have an invite code</Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
+        <View>
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+            onPress={() => { setCodeVisible(v => !v); setCodeError(null); setInvCode(''); }}
+          >
+            <Text style={styles.cardIcon}>🎟️</Text>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>Join a team</Text>
+              <Text style={styles.cardSub}>I have an invite code</Text>
+            </View>
+            <Text style={styles.chevron}>{codeVisible ? '˄' : '›'}</Text>
+          </Pressable>
+
+          {codeVisible && (
+            <View style={styles.codePanel}>
+              <TextInput
+                style={styles.codeInput}
+                value={invCode}
+                onChangeText={t => { setInvCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '')); setCodeError(null); }}
+                placeholder="XXXXXX"
+                placeholderTextColor={navy[500]}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                autoFocus
+                maxLength={6}
+                returnKeyType="done"
+                onSubmitEditing={handleJoinWithCode}
+              />
+              {codeError !== null && (
+                <Text style={styles.codeError}>{codeError}</Text>
+              )}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.codeBtn,
+                  (invCode.length === 6 && !codeLoading) && styles.codeBtnActive,
+                  pressed && invCode.length === 6 && !codeLoading && { opacity: 0.82 },
+                ]}
+                onPress={handleJoinWithCode}
+                disabled={invCode.length < 6 || codeLoading}
+              >
+                {codeLoading
+                  ? <ActivityIndicator color="#FFF" />
+                  : <Text style={styles.codeBtnText}>Join team</Text>
+                }
+              </Pressable>
+            </View>
+          )}
+        </View>
 
         <Pressable
           style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -109,5 +185,52 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: navy[400],
     lineHeight: 28,
+  },
+
+  // ── Inline code entry ─────────────────────────────────────────────────────
+  codePanel: {
+    backgroundColor: navy[800],
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: navy[600],
+    borderBottomLeftRadius: radius.l,
+    borderBottomRightRadius: radius.l,
+    padding: spacing[16],
+    gap: spacing[12],
+  },
+  codeInput: {
+    backgroundColor: navy[700],
+    borderWidth: 1,
+    borderColor: navy[600],
+    borderRadius: radius.m,
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[14],
+    color: '#FFFFFF',
+    fontFamily: fonts.mono,
+    fontSize: 24,
+    letterSpacing: 8,
+    textAlign: 'center',
+  },
+  codeError: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: '#FF6B6B',
+    textAlign: 'center',
+  },
+  codeBtn: {
+    borderRadius: radius.m,
+    paddingVertical: spacing[14],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    backgroundColor: navy[700],
+  },
+  codeBtnActive: {
+    backgroundColor: teams.trashdogs[500],
+  },
+  codeBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 });

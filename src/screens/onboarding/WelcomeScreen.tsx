@@ -1,14 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
-import { navy, fonts, teams, spacing, radius } from '../../theme';
+import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Welcome'>;
 
+const INVITE_KEYS = [
+  'chrp_pending_invite_code',
+  'chrp_pending_team_id',
+  'chrp_pending_team_name',
+  'chrp_pending_team_palette',
+] as const;
+
 export default function WelcomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [code, teamId, teamName, teamPalette] = await AsyncStorage.multiGet(INVITE_KEYS)
+        .then(pairs => pairs.map(p => p[1]));
+
+      if (code && teamId && teamName) {
+        await AsyncStorage.multiRemove([...INVITE_KEYS]);
+        navigation.replace('ProfileSetup', {
+          pendingInviteCode: code,
+          teamId,
+          teamName,
+          teamPalette: (teamPalette ?? 'trashdogs') as TeamKey,
+        });
+        return;
+      }
+      setReady(true);
+    })();
+  }, []);
+
+  if (!ready) return null;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, spacing[16]) }]}>

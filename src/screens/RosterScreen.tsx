@@ -435,7 +435,7 @@ function InviteSheet({
 
   const handleShare = () => {
     Share.share({
-      message: `Join my team on Chrp! Download the app and enter code: ${inviteCode}`,
+      message: `Join my team on Chrp!\nhttps://chrp-app.web.app/join?code=${inviteCode}`,
     });
   };
 

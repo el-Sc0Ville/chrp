@@ -10,11 +10,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { auth, db } from '../../firebase';
 import { useUserContext } from '../../context/UserContext';
-import { navy, fonts, teams, spacing, radius } from '../../theme';
+import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'ProfileSetup'>;
 
-export default function ProfileSetupScreen({ navigation }: Props) {
+export default function ProfileSetupScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { setMockUser, activeTeamId, activeTeamPalette, needsOnboarding } = useUserContext();
   const TEAM = teams[activeTeamPalette];
@@ -41,10 +41,21 @@ export default function ProfileSetupScreen({ navigation }: Props) {
         console.error('[ProfileSetup] updateProfile failed:', err);
       }
     }
-    navigation.navigate('JoinOrCreate', {
-      displayName: name,
-      jerseyNumber: parseInt(jerseyNumber, 10) || 0,
-    });
+    const params = route.params;
+    if (params?.teamId) {
+      navigation.navigate('JoinTeam', {
+        displayName:  name,
+        jerseyNumber: parseInt(jerseyNumber, 10) || 0,
+        teamId:       params.teamId,
+        teamName:     params.teamName ?? '',
+        teamPalette:  (params.teamPalette ?? 'trashdogs') as TeamKey,
+      });
+    } else {
+      navigation.navigate('JoinOrCreate', {
+        displayName:  name,
+        jerseyNumber: parseInt(jerseyNumber, 10) || 0,
+      });
+    }
   }
 
   return (
