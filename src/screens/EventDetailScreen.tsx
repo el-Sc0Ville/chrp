@@ -45,18 +45,32 @@ function formatGCalDate(d: Date): string {
   return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
 
-function addEventToCalendar(firestoreEvent: FirestoreEvent): void {
+function buildCalendarUrl(firestoreEvent: FirestoreEvent): string {
   const startDate = firestoreEvent.startsAt.toDate();
   const endDate   = firestoreEvent.endsAt.toDate();
-  const url = [
+  return [
     'https://calendar.google.com/calendar/render?action=TEMPLATE',
     `&text=${encodeURIComponent(firestoreEvent.title)}`,
     `&dates=${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`,
     `&location=${encodeURIComponent(firestoreEvent.venue ?? '')}`,
     `&details=${encodeURIComponent(firestoreEvent.notes ?? '')}`,
   ].join('');
+}
+
+function addEventToCalendar(firestoreEvent: FirestoreEvent): void {
   // TODO Phase 2b: use expo-calendar in custom dev build for native calendar integration
-  Linking.openURL(url);
+  Linking.openURL(buildCalendarUrl(firestoreEvent));
+}
+
+function updateEventInCalendar(firestoreEvent: FirestoreEvent): void {
+  Alert.alert(
+    'Update calendar entry',
+    'This will add an updated entry to your calendar. You may want to remove the old one.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Continue', onPress: () => Linking.openURL(buildCalendarUrl(firestoreEvent)) },
+    ],
+  );
 }
 
 // ─── Toggle config ────────────────────────────────────────────────────────────
@@ -216,12 +230,18 @@ function ManagerEventDetail() {
           </View>
         )}
         {!isPast && (
-          <View style={styles.scoreActionRow}>
+          <View style={[styles.scoreActionRow, { flexDirection: 'row', gap: spacing[8] }]}>
             <Pressable
-              style={({ pressed }) => [styles.ghostBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [styles.ghostBtn, { flex: 1, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
               onPress={() => event && addEventToCalendar(event)}
             >
               <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Add to calendar</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, { flex: 1, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
+              onPress={() => event && updateEventInCalendar(event)}
+            >
+              <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Update calendar</Text>
             </Pressable>
           </View>
         )}
@@ -368,6 +388,12 @@ function PlayerEventDetail() {
               onPress={() => event && addEventToCalendar(event)}
             >
               <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Add to calendar</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
+              onPress={() => event && updateEventInCalendar(event)}
+            >
+              <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Update calendar</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.ghostBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}

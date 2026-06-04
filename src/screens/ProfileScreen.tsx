@@ -72,6 +72,9 @@ export default function ProfileScreen() {
             setJersey(j);
             setSavedJersey(j);
           }
+          setNotifications(data.notificationsEnabled ?? true);
+          setAvailReminders(data.remindersEnabled ?? true);
+          setLocation(data.locationEnabled ?? false);
         }
       })
       .catch(() => {});
@@ -112,6 +115,28 @@ export default function ProfileScreen() {
     showToast('Saved!');
   };
 
+  const handleNotificationsToggle = async (value: boolean) => {
+    setNotifications(value);
+    if (!user?.uid || !activeTeamId) return;
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), { notificationsEnabled: value });
+    } catch (err) {
+      console.error('[ProfileScreen] notificationsEnabled update failed:', err);
+      setNotifications(!value);
+    }
+  };
+
+  const handleRemindersToggle = async (value: boolean) => {
+    setAvailReminders(value);
+    if (!user?.uid || !activeTeamId) return;
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), { remindersEnabled: value });
+    } catch (err) {
+      console.error('[ProfileScreen] remindersEnabled update failed:', err);
+      setAvailReminders(!value);
+    }
+  };
+
   const handleLocationToggle = (value: boolean) => {
     if (value) {
       Alert.alert(
@@ -119,11 +144,26 @@ export default function ProfileScreen() {
         "Chrp uses your location on gameday to show travel time to the rink and let your teammates see who's nearby.",
         [
           { text: 'Not now', style: 'cancel' },
-          { text: 'Continue', onPress: () => setLocation(true) },
+          {
+            text: 'Continue',
+            onPress: async () => {
+              setLocation(true);
+              if (!user?.uid || !activeTeamId) return;
+              try {
+                await updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), { locationEnabled: true });
+              } catch (err) {
+                console.error('[ProfileScreen] locationEnabled update failed:', err);
+                setLocation(false);
+              }
+            },
+          },
         ],
       );
     } else {
       setLocation(false);
+      if (!user?.uid || !activeTeamId) return;
+      updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), { locationEnabled: false })
+        .catch(err => console.error('[ProfileScreen] locationEnabled update failed:', err));
     }
   };
 
@@ -319,7 +359,7 @@ export default function ProfileScreen() {
             label="Notifications"
             subtitle="All Chrp alerts — events, announcements, gameday"
             value={notifications}
-            onValueChange={setNotifications}
+            onValueChange={handleNotificationsToggle}
           />
           <View style={styles.rowDivider} />
           <ToggleRow
@@ -327,7 +367,7 @@ export default function ProfileScreen() {
             label="Availability reminders"
             subtitle="Nudges when you haven't responded to an upcoming event"
             value={availReminders}
-            onValueChange={setAvailReminders}
+            onValueChange={handleRemindersToggle}
           />
           <View style={styles.rowDivider} />
           <ToggleRow

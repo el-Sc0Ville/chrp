@@ -112,6 +112,7 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
           if (member['autoIn'] === false || member['role'] === 'spare') continue;
           if (respondedIds.has(memberDoc.id)) continue;
           if (!member['pushToken']) continue;
+          if (member['remindersEnabled'] === false) continue;
 
           notifications.push({
             to: member['pushToken'],
@@ -148,6 +149,7 @@ export const onEventCreated = onDocumentCreated(
     for (const memberDoc of membersSnap.docs) {
       const member = memberDoc.data();
       if (!member['pushToken']) continue;
+      if (member['notificationsEnabled'] === false) continue;
 
       notifications.push({
         to: member['pushToken'],

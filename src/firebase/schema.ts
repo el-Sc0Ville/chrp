@@ -22,6 +22,9 @@ export interface Member {
   joinedAt: Timestamp;
   autoIn?: boolean;
   pushToken?: string;
+  notificationsEnabled?: boolean;
+  remindersEnabled?: boolean;
+  locationEnabled?: boolean;
 }
 
 // /teams/{teamId}/members/{userId}/blackouts/{docId}
