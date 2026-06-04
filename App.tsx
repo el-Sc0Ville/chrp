@@ -36,43 +36,37 @@ import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
 
-async function handleNotificationResponse(response: Notifications.NotificationResponse) {
-  const { actionIdentifier, notification } = response;
-  const data = notification.request.content.data as {
+const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
+  const actionIdentifier = response.actionIdentifier;
+  const data = response.notification.request.content.data as {
     eventId?: string;
     teamId?: string;
     userId?: string;
     displayName?: string;
   };
-  const { eventId, teamId, userId, displayName } = data;
-  if (!eventId || !teamId || !userId) return;
 
-  if (
-    actionIdentifier === 'IN' ||
-    actionIdentifier === 'OUT' ||
-    actionIdentifier === 'MAYBE'
-  ) {
-    const responseValue = actionIdentifier.toLowerCase() as 'in' | 'out' | 'maybe';
-    await setDoc(
-      doc(db, 'teams', teamId, 'events', eventId, 'responses', userId),
-      {
-        userId,
-        ...(displayName ? { displayName } : {}),
-        response: responseValue,
-        respondedAt: serverTimestamp(),
-        setByManager: false,
-      },
-      { merge: true },
-    ).catch(err => console.error('[Notification] Firestore write failed:', err));
+  console.log('Notification response received:', actionIdentifier, data);
+
+  if (!data.eventId || !data.teamId || !data.userId) {
+    console.warn('Missing notification data, cannot write response');
     return;
   }
 
-  if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-    if (navigationRef.isReady()) {
-      navigationRef.navigate('EventDetail', { eventId, title: '' });
-    }
+  if (actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+    const response_value = actionIdentifier.toLowerCase();
+    await setDoc(
+      doc(db, 'teams', data.teamId, 'events', data.eventId, 'responses', data.userId),
+      {
+        response: response_value,
+        respondedAt: serverTimestamp(),
+        setByManager: false,
+        displayName: data.displayName ?? 'Player',
+        userId: data.userId,
+      },
+    ).catch(err => console.error('[Notification] Firestore write failed:', err));
+    console.log('Notification response written:', response_value);
   }
-}
+};
 
 function extractFirebaseLink(url: string): string {
   const match = url.match(/[?&]link=([^&]+)/);
