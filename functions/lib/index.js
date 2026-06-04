@@ -127,6 +127,8 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                         continue;
                     if (!member['pushToken'])
                         continue;
+                    if (member['remindersEnabled'] === false)
+                        continue;
                     notifications.push({
                         to: member['pushToken'],
                         sound: 'default',
@@ -157,6 +159,8 @@ exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{
     for (const memberDoc of membersSnap.docs) {
         const member = memberDoc.data();
         if (!member['pushToken'])
+            continue;
+        if (member['notificationsEnabled'] === false)
             continue;
         notifications.push({
             to: member['pushToken'],
