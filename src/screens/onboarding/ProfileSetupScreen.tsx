@@ -4,8 +4,8 @@ import {
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { updateProfile } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { updateProfile, updateEmail } from 'firebase/auth';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { auth, db } from '../../firebase';
@@ -20,6 +20,7 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
   const TEAM = teams[activeTeamPalette];
   const [displayName, setDisplayName] = useState('');
   const [jerseyNumber, setJerseyNumber] = useState('');
+  const [email, setEmail] = useState('');
   const canContinue = displayName.trim().length > 0;
 
   async function handleContinue() {
@@ -39,6 +40,17 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
         }
       } catch (err) {
         console.error('[ProfileSetup] updateProfile failed:', err);
+      }
+
+      const trimmedEmail = email.trim();
+      if (trimmedEmail) {
+        // TODO Phase 2b: use email to send magic link for account recovery
+        await setDoc(
+          doc(db, 'users', auth.currentUser.uid),
+          { email: trimmedEmail },
+          { merge: true },
+        ).catch(() => {});
+        await updateEmail(auth.currentUser, trimmedEmail).catch(() => {});
       }
     }
     const params = route.params;
@@ -98,10 +110,31 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
                 value={jerseyNumber}
                 onChangeText={t => setJerseyNumber(t.replace(/[^0-9]/g, ''))}
                 keyboardType="number-pad"
-                returnKeyType="done"
+                returnKeyType="next"
                 maxLength={2}
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                Email{' '}
+                <Text style={styles.fieldLabelOptional}>(optional)</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. alex@example.com"
+                placeholderTextColor={navy[500]}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
                 onSubmitEditing={handleContinue}
               />
+              <Text style={styles.fieldCaption}>
+                Add your email to recover your account if you ever lose access
+              </Text>
             </View>
           </View>
         </ScrollView>
@@ -162,6 +195,13 @@ const styles = StyleSheet.create({
     color: navy[500],
     textTransform: 'none',
     letterSpacing: 0,
+  },
+  fieldCaption: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    lineHeight: 17,
+    color: navy[500],
+    marginTop: spacing[4],
   },
   input: {
     backgroundColor: navy[800],
