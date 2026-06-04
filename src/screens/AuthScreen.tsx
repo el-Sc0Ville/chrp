@@ -2,13 +2,15 @@
 
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  View, Text, TextInput, Pressable, StyleSheet, Alert,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, signal, spacing, radius } from '../theme';
 import { signInAnonymously } from 'firebase/auth';
+import { getDocs, query, collection, where, limit } from 'firebase/firestore';
 import { auth } from '../firebase/config';
+import { db } from '../firebase';
 import { sendMagicLink } from '../firebase/auth';
 import { useUserContext } from '../context/UserContext';
 import { seedDatabase, updateMemberDefaults } from '../firebase/seed';
@@ -23,8 +25,10 @@ export default function AuthScreen() {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'updating' | 'done' | 'error'>('idle');
   const [sent,        setSent]        = useState(false);
   const [error,       setError]       = useState<string | null>(null);
-  const [showInvite,  setShowInvite]  = useState(false);
-  const [inviteCode,  setInviteCode]  = useState('');
+  const [showInvite,    setShowInvite]    = useState(false);
+  const [inviteCode,    setInviteCode]    = useState('');
+  const [redeemLoading, setRedeemLoading] = useState(false);
+  const [redeemError,   setRedeemError]   = useState<string | null>(null);
   const [devTapCount, setDevTapCount] = useState(0);
   const [showDevPanel, setShowDevPanel] = useState(false);
   const devTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,6 +48,31 @@ export default function AuthScreen() {
   };
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const handleRedeem = async () => {
+    const upper = inviteCode.trim().toUpperCase();
+    if (upper.length < 6 || redeemLoading) return;
+    setRedeemLoading(true);
+    setRedeemError(null);
+    try {
+      console.log('Looking up invite code:', inviteCode);
+      const snap = await getDocs(
+        query(collection(db, 'teams'), where('inviteCode', '==', upper), limit(1)),
+      );
+      console.log('Query result:', snap.docs.length);
+      if (snap.empty) {
+        setRedeemError("That invite code doesn't look right. Check with your team manager.");
+      } else {
+        const teamName = snap.docs[0].data()['name'] as string;
+        Alert.alert('Team found!', `Enter your email above to sign in and join ${teamName}.`);
+      }
+    } catch (err) {
+      console.error('[AuthScreen] redeem error:', err);
+      setRedeemError('Something went wrong. Please try again.');
+    } finally {
+      setRedeemLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!isValidEmail || loading) return;
@@ -167,13 +196,20 @@ export default function AuthScreen() {
                   style={({ pressed }) => [
                     styles.redeemBtn,
                     { backgroundColor: TEAM[500], shadowColor: TEAM[500] },
-                    inviteCode.length < 6 && styles.redeemBtnDisabled,
-                    pressed && inviteCode.length === 6 && { opacity: 0.85 },
+                    (inviteCode.length < 6 || redeemLoading) && styles.redeemBtnDisabled,
+                    pressed && inviteCode.length === 6 && !redeemLoading && { opacity: 0.85 },
                   ]}
-                  disabled={inviteCode.length < 6}
+                  onPress={handleRedeem}
+                  disabled={inviteCode.length < 6 || redeemLoading}
                 >
-                  <Text style={[styles.redeemBtnText, { color: TEAM.on }]}>Redeem invite</Text>
+                  {redeemLoading
+                    ? <ActivityIndicator color={TEAM.on} size="small" />
+                    : <Text style={[styles.redeemBtnText, { color: TEAM.on }]}>Redeem invite</Text>
+                  }
                 </Pressable>
+                {redeemError !== null && (
+                  <Text style={styles.redeemError}>{redeemError}</Text>
+                )}
               </View>
             )}
           </View>
@@ -415,6 +451,13 @@ const styles = StyleSheet.create({
   },
   redeemBtnText: {
     fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600',
+  },
+  redeemError: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: status.error.pure,
+    marginTop: spacing[8],
+    textAlign: 'center',
   },
 
   // ── Dev bypass ───────────────────────────────────────────────────────────
