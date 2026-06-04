@@ -167,11 +167,24 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
           />
         )}
       </ScrollView>
-      <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
+      <View style={[styles.stickyBar, styles.stickyBarRow, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
         <Text style={styles.stickyCount}>
           {mainRoster.length} players · {managerCount} manager{managerCount !== 1 ? 's' : ''}
           {spares.length > 0 ? ` · ${spares.length} spare${spares.length !== 1 ? 's' : ''}` : ''}
         </Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.inviteBtn,
+            {
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+            },
+            pressed && { opacity: 0.7 },
+          ]}
+          onPress={() => setInviteVisible(true)}
+        >
+          <Text style={[styles.inviteBtnText, { color: TEAM[300] }]}>+ Invite</Text>
+        </Pressable>
       </View>
 
       <InviteSheet
@@ -422,7 +435,7 @@ function InviteSheet({
 
   const handleShare = () => {
     Share.share({
-      message: `Download Chrp and enter code: ${inviteCode}`,
+      message: `Join my team on Chrp! Download the app and enter code: ${inviteCode}`,
     });
   };
 
@@ -843,12 +856,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[20],
     backgroundColor: navy[800],
   },
+  stickyBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   stickyCount: {
     fontFamily: fonts.mono,
     fontSize: 11,
     letterSpacing: 1.0,
     color: navy[400],
     textAlign: 'center',
+    flex: 1,
   },
 
   // ── Bottom sheet (shared) ─────────────────────────────────────────────────
