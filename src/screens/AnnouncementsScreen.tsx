@@ -17,7 +17,7 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { useUserContext } from '../context/UserContext';
 import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 const MAX_CHARS = 500;
 
 interface DisplayAnn {
@@ -77,7 +77,8 @@ export default function AnnouncementsScreen({ embedded }: { embedded?: boolean }
 function ManagerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user, activeTeamId } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { announcements: firestoreAnnouncements } = useAnnouncements(activeTeamId);
   const announcements = firestoreAnnouncements.map(toDisplayAnn);
   const [postVisible, setPostVisible]   = useState(false);
@@ -161,10 +162,10 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Announcements</Text>
           <Pressable
-            style={({ pressed }) => [styles.postBtn, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.postBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.75 }]}
             onPress={openPost}
           >
-            <Text style={styles.postBtnText}>Post</Text>
+            <Text style={[styles.postBtnText, { color: TEAM.on }]}>Post</Text>
           </Pressable>
         </View>
       )}
@@ -173,10 +174,10 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
       {embedded && (
         <View style={styles.embeddedPostRow}>
           <Pressable
-            style={({ pressed }) => [styles.postBtn, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.postBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.75 }]}
             onPress={openPost}
           >
-            <Text style={styles.postBtnText}>Post</Text>
+            <Text style={[styles.postBtnText, { color: TEAM.on }]}>Post</Text>
           </Pressable>
         </View>
       )}
@@ -224,7 +225,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
       {/* ── Toast ── */}
       {toast !== null && (
         <View
-          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)` }]}
           pointerEvents="none"
         >
           <Text style={styles.toastText}>{toast}</Text>
@@ -308,11 +309,13 @@ function AnnouncementCard({
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        unread && styles.cardUnread,
+        unread && { backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)` },
         pressed && { opacity: 0.88 },
         style,
       ]}
@@ -321,21 +324,21 @@ function AnnouncementCard({
       delayLongPress={400}
     >
       {announcement.isPinned && (
-        <View style={styles.pinnedBanner}>
-          <Text style={styles.pinnedBannerText}>📌  Pinned</Text>
+        <View style={[styles.pinnedBanner, { backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.14)`, borderBottomColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.22)` }]}>
+          <Text style={[styles.pinnedBannerText, { color: TEAM[300] }]}>📌  Pinned</Text>
         </View>
       )}
 
       {/* Author row */}
       <View style={styles.cardHeader}>
-        <View style={styles.authorAvatar}>
-          <Text style={styles.authorAvatarText}>{announcement.authorInitials}</Text>
+        <View style={[styles.authorAvatar, { backgroundColor: TEAM[700], borderColor: TEAM[500] }]}>
+          <Text style={[styles.authorAvatarText, { color: TEAM[100] }]}>{announcement.authorInitials}</Text>
         </View>
         <View style={styles.authorMeta}>
           <Text style={styles.authorName}>{announcement.authorName}</Text>
           <Text style={styles.cardTimestamp}>{announcement.timestamp}</Text>
         </View>
-        {unread && <View style={styles.unreadDot} />}
+        {unread && <View style={[styles.unreadDot, { backgroundColor: TEAM[300] }]} />}
       </View>
 
       {/* Body */}
@@ -364,6 +367,8 @@ function PostSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [body, setBody]       = useState(initialBody);
   const [pinned, setPinned]   = useState(initialPinned);
 
@@ -425,12 +430,13 @@ function PostSheet({
               <Pressable
                 style={({ pressed }) => [
                   styles.sendBtn,
+                  { backgroundColor: TEAM[500] },
                   !canSubmit && styles.sendBtnDisabled,
                   pressed && canSubmit && { opacity: 0.8 },
                 ]}
                 onPress={() => canSubmit && onSubmit(body.trim(), pinned)}
               >
-                <Text style={styles.sendBtnText}>
+                <Text style={[styles.sendBtnText, { color: TEAM.on }]}>
                   {mode === 'edit' ? 'Save changes' : 'Send to all players'}
                 </Text>
               </Pressable>

@@ -18,7 +18,7 @@ import { useDues } from '../firebase/hooks/useDues';
 import { useMembers } from '../firebase/hooks/useMembers';
 import type { DuesRecord, Member } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 // Per-player season dues fallback
 const SEASON_DUES = 500;
@@ -73,7 +73,8 @@ export default function DuesScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { dues } = useDues(activeTeamId);
   const { members } = useMembers(activeTeamId);
   const spareMembers = members.filter((m: Member) => m.role === 'spare');
@@ -105,20 +106,26 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Dues</Text>
           <Pressable
-            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.65 }]}
+            style={({ pressed }) => [styles.ghostBtn, {
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+            }, pressed && { opacity: 0.65 }]}
             onPress={() => setSetAmountVisible(true)}
           >
-            <Text style={styles.ghostBtnText}>Set amount</Text>
+            <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Set amount</Text>
           </Pressable>
         </View>
       )}
       {embedded && (
         <View style={styles.embeddedHeaderRow}>
           <Pressable
-            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.65 }]}
+            style={({ pressed }) => [styles.ghostBtn, {
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+            }, pressed && { opacity: 0.65 }]}
             onPress={() => setSetAmountVisible(true)}
           >
-            <Text style={styles.ghostBtnText}>Set amount</Text>
+            <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Set amount</Text>
           </Pressable>
         </View>
       )}
@@ -148,7 +155,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
             </View>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+            <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: TEAM[500] }]} />
           </View>
         </View>
 
@@ -254,7 +261,8 @@ const PAYMENT_HISTORY = [
 
 function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { user, activeTeamId } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { dues } = useDues(activeTeamId);
   const uid = user?.uid ?? 'anon';
   const selfRecord = dues.find(d => d.userId === uid);
@@ -312,10 +320,10 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
           </View>
 
           <Pressable
-            style={({ pressed }) => [styles.payBtn, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [styles.payBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.8 }]}
             onPress={() => showToast('Payment coming in V2')}
           >
-            <Text style={styles.payBtnText}>Pay now</Text>
+            <Text style={[styles.payBtnText, { color: TEAM.on }]}>Pay now</Text>
           </Pressable>
         </View>
 
@@ -358,9 +366,11 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
 function PlayerAvatar({ player }: { player: DuesPlayer }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{player.initials}</Text>
+    <View style={[styles.avatar, { backgroundColor: TEAM[700], borderColor: TEAM[500] }]}>
+      <Text style={[styles.avatarText, { color: TEAM[100] }]}>{player.initials}</Text>
     </View>
   );
 }
@@ -392,6 +402,8 @@ function SetAmountSheet({
   onSave: (amount: number) => void;
   onClose: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const [raw, setRaw] = useState(String(current));
 
@@ -410,7 +422,7 @@ function SetAmountSheet({
               <Text style={styles.sheetTitle}>Set dues amount</Text>
               <Text style={styles.sheetSub}>Per player, for this season</Text>
 
-              <View style={styles.amountInputWrap}>
+              <View style={[styles.amountInputWrap, { borderColor: TEAM[700] }]}>
                 <Text style={styles.amountDollar}>$</Text>
                 <TextInput
                   style={styles.amountInput}
@@ -425,10 +437,10 @@ function SetAmountSheet({
               </View>
 
               <Pressable
-                style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.8 }]}
+                style={({ pressed }) => [styles.saveBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.8 }]}
                 onPress={handleSave}
               >
-                <Text style={styles.saveBtnText}>Save</Text>
+                <Text style={[styles.saveBtnText, { color: TEAM.on }]}>Save</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -448,7 +460,8 @@ function PlayerEditSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [owedRaw,         setOwedRaw]         = useState(String(player.seasonAmount));
   const [paidRaw,         setPaidRaw]         = useState(String(player.paidAmount));
   const [notes,           setNotes]           = useState(player.notes ?? '');
@@ -518,7 +531,7 @@ function PlayerEditSheet({
 
               {/* Amount owed */}
               <Text style={styles.fieldLabel}>AMOUNT OWED</Text>
-              <View style={[styles.amountInputWrap, styles.fieldSpacing]}>
+              <View style={[styles.amountInputWrap, styles.fieldSpacing, { borderColor: TEAM[700] }]}>
                 <Text style={styles.amountDollar}>$</Text>
                 <TextInput
                   style={styles.amountInput}
@@ -536,7 +549,7 @@ function PlayerEditSheet({
                 <Text style={styles.fieldLabel}>AMOUNT PAID</Text>
                 <StatusPill status={computedStatus} />
               </View>
-              <View style={styles.amountInputWrap}>
+              <View style={[styles.amountInputWrap, { borderColor: TEAM[700] }]}>
                 <Text style={styles.amountDollar}>$</Text>
                 <TextInput
                   style={styles.amountInput}
@@ -578,7 +591,7 @@ function PlayerEditSheet({
                       onPress={() => setShowDatePicker(false)}
                       style={({ pressed }) => [styles.pickerDone, pressed && { opacity: 0.7 }]}
                     >
-                      <Text style={styles.pickerDoneText}>Done</Text>
+                      <Text style={[styles.pickerDoneText, { color: TEAM[300] }]}>Done</Text>
                     </Pressable>
                   )}
                 </View>
@@ -600,12 +613,13 @@ function PlayerEditSheet({
               <Pressable
                 style={({ pressed }) => [
                   styles.saveBtn,
+                  { backgroundColor: TEAM[500] },
                   (pressed || saving) && { opacity: 0.75 },
                 ]}
                 onPress={handleSave}
                 disabled={saving}
               >
-                <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
+                <Text style={[styles.saveBtnText, { color: TEAM.on }]}>{saving ? 'Saving…' : 'Save'}</Text>
               </Pressable>
             </View>
           </Pressable>

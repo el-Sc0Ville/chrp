@@ -13,7 +13,7 @@ import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 // TODO Phase 2: check real expo-location permission; prompt if not granted
 const locationGranted = true;
@@ -56,7 +56,8 @@ const GAMEDAY_PLAYERS: GamedayPlayer[] = [
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function GamedayScreen() {
-  const { isManager } = useUserContext();
+  const { isManager, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [toast, setToast] = useState<string | null>(null);
@@ -81,8 +82,8 @@ export default function GamedayScreen() {
           onPress={() => navigation.goBack()}
           hitSlop={12}
         >
-          <Text style={styles.backChevron}>‹</Text>
-          <Text style={styles.backBtnText}>Back</Text>
+          <Text style={[styles.backChevron, { color: TEAM[300] }]}>‹</Text>
+          <Text style={[styles.backBtnText, { color: TEAM[300] }]}>Back</Text>
         </Pressable>
         <Text style={styles.pageTitle}>Gameday</Text>
       </View>
@@ -109,8 +110,11 @@ export default function GamedayScreen() {
         {/* ── Game card ── */}
         <View style={styles.gameCard}>
           <View style={styles.gameCardTop}>
-            <View style={styles.tonightPill}>
-              <Text style={styles.tonightPillText}>Tonight</Text>
+            <View style={[styles.tonightPill, {
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.18)`,
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
+            }]}>
+              <Text style={[styles.tonightPillText, { color: TEAM[300] }]}>Tonight</Text>
             </View>
             <View style={styles.atVenueBadge}>
               <View style={styles.atVenueDot} />
@@ -119,7 +123,7 @@ export default function GamedayScreen() {
           </View>
           <Text style={styles.opponentText}>vs. {TONIGHT_GAME.opponent}</Text>
           <View style={styles.gameMetaRow}>
-            <Text style={styles.gameTime}>{TONIGHT_GAME.time}</Text>
+            <Text style={[styles.gameTime, { color: TEAM[300] }]}>{TONIGHT_GAME.time}</Text>
             <Text style={styles.gameMetaSep}>·</Text>
             <Pressable
               style={({ pressed }) => [pressed && { opacity: 0.7 }]}
@@ -147,10 +151,17 @@ export default function GamedayScreen() {
           count={notYet.length}
           rightAction={isManager ? (
             <Pressable
-              style={({ pressed }) => [styles.latecomersBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [
+                styles.latecomersBtn,
+                {
+                  borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+                  backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+                },
+                pressed && { opacity: 0.6 },
+              ]}
               onPress={() => showToast('Coming in V2')}
             >
-              <Text style={styles.latecomersBtnText}>Message latecomers</Text>
+              <Text style={[styles.latecomersBtnText, { color: TEAM[300] }]}>Message latecomers</Text>
             </Pressable>
           ) : null}
         />
@@ -168,7 +179,10 @@ export default function GamedayScreen() {
       {/* ── Toast ── */}
       {toast !== null && (
         <View
-          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          style={[styles.toast, {
+            bottom: Math.max(insets.bottom, spacing[12]) + spacing[16],
+            borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+          }]}
           pointerEvents="none"
         >
           <Text style={styles.toastText}>{toast}</Text>
@@ -192,6 +206,8 @@ function SectionHeader({
   pulse?: boolean;
   rightAction?: React.ReactNode;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -209,7 +225,7 @@ function SectionHeader({
   return (
     <View style={styles.sectionHeaderWrap}>
       <View style={styles.sectionHeaderLeft}>
-        {pulse && <Animated.View style={[styles.pulseDot, { opacity: pulseAnim }]} />}
+        {pulse && <Animated.View style={[styles.pulseDot, { opacity: pulseAnim, backgroundColor: TEAM[300] }]} />}
         <Text style={styles.sectionLabelText}>{label}</Text>
         <View style={styles.sectionCountPill}>
           <Text style={styles.sectionCountText}>{count}</Text>
@@ -223,10 +239,12 @@ function SectionHeader({
 // ─── Player row ───────────────────────────────────────────────────────────────
 
 function PlayerRow({ player }: { player: GamedayPlayer }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.playerRow}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{player.initials}</Text>
+      <View style={[styles.avatar, { backgroundColor: TEAM[700], borderColor: TEAM[500] }]}>
+        <Text style={[styles.avatarText, { color: TEAM[100] }]}>{player.initials}</Text>
       </View>
       <View style={styles.playerInfo}>
         <Text style={styles.playerName}>{player.name}</Text>

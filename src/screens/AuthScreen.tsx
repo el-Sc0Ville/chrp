@@ -1,6 +1,6 @@
 // Auth gate — passwordless magic link sign-in + team invite code flow.
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
@@ -13,11 +13,10 @@ import { sendMagicLink } from '../firebase/auth';
 import { useUserContext } from '../context/UserContext';
 import { seedDatabase, updateMemberDefaults } from '../firebase/seed';
 
-const TEAM = teams.trashdogs;
-
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { setMockUser } = useUserContext();
+  const { setMockUser, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
   const [seedStatus,   setSeedStatus]   = useState<'idle' | 'seeding' | 'done' | 'error'>('idle');
@@ -26,6 +25,23 @@ export default function AuthScreen() {
   const [error,       setError]       = useState<string | null>(null);
   const [showInvite,  setShowInvite]  = useState(false);
   const [inviteCode,  setInviteCode]  = useState('');
+  const [devTapCount, setDevTapCount] = useState(0);
+  const [showDevPanel, setShowDevPanel] = useState(false);
+  const devTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleWordmarkTap = () => {
+    if (!__DEV__) return;
+    setDevTapCount(prev => {
+      const next = prev + 1;
+      if (devTapTimer.current) clearTimeout(devTapTimer.current);
+      if (next >= 5) {
+        setShowDevPanel(true);
+        return 0;
+      }
+      devTapTimer.current = setTimeout(() => setDevTapCount(0), 2000);
+      return next;
+    });
+  };
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
@@ -55,13 +71,13 @@ export default function AuthScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Wordmark ── */}
-        <View style={styles.wordmarkArea}>
+        <Pressable style={styles.wordmarkArea} onPress={handleWordmarkTap}>
           <Text style={styles.wordmark}>
             <Text style={styles.wordmarkCh}>Ch</Text>
             <Text style={styles.wordmarkRp}>rp</Text>
           </Text>
           <Text style={styles.tagline}>Your team. One tap away.</Text>
-        </View>
+        </Pressable>
 
         {/* ── Sign-in card ── */}
         <View style={styles.card}>
@@ -87,6 +103,7 @@ export default function AuthScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.sendBtn,
+                { backgroundColor: TEAM[500], shadowColor: TEAM[500] },
                 (!isValidEmail || loading) && styles.sendBtnDisabled,
                 pressed && isValidEmail && !loading && { opacity: 0.85 },
               ]}
@@ -95,7 +112,7 @@ export default function AuthScreen() {
             >
               {loading
                 ? <ActivityIndicator color={TEAM.on} size="small" />
-                : <Text style={styles.sendBtnText}>Send me a link</Text>
+                : <Text style={[styles.sendBtnText, { color: TEAM.on }]}>Send me a link</Text>
               }
             </Pressable>
           )}
@@ -110,7 +127,7 @@ export default function AuthScreen() {
                 onPress={() => setSent(false)}
                 style={({ pressed }) => [styles.resendBtn, pressed && { opacity: 0.7 }]}
               >
-                <Text style={styles.resendBtnText}>Use a different email</Text>
+                <Text style={[styles.resendBtnText, { color: TEAM[300] }]}>Use a different email</Text>
               </Pressable>
             </View>
           )}
@@ -120,10 +137,17 @@ export default function AuthScreen() {
         {!sent && (
           <View style={styles.joinArea}>
             <Pressable
-              style={({ pressed }) => [styles.joinBtn, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [
+                styles.joinBtn,
+                {
+                  borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.35)`,
+                  backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+                },
+                pressed && { opacity: 0.7 },
+              ]}
               onPress={() => setShowInvite(v => !v)}
             >
-              <Text style={styles.joinBtnText}>Join a team instead</Text>
+              <Text style={[styles.joinBtnText, { color: TEAM[300] }]}>Join a team instead</Text>
             </Pressable>
 
             {showInvite && (
@@ -142,20 +166,27 @@ export default function AuthScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.redeemBtn,
+                    { backgroundColor: TEAM[500], shadowColor: TEAM[500] },
                     inviteCode.length < 6 && styles.redeemBtnDisabled,
                     pressed && inviteCode.length === 6 && { opacity: 0.85 },
                   ]}
                   disabled={inviteCode.length < 6}
                 >
-                  <Text style={styles.redeemBtnText}>Redeem invite</Text>
+                  <Text style={[styles.redeemBtnText, { color: TEAM.on }]}>Redeem invite</Text>
                 </Pressable>
               </View>
             )}
           </View>
         )}
-        {/* ── Dev bypass ── */}
-        {__DEV__ && (
+        {/* ── Dev bypass — tap wordmark 5× to reveal ── */}
+        {__DEV__ && showDevPanel && (
           <View style={styles.devArea}>
+            <Pressable
+              style={({ pressed }) => [styles.devDismiss, pressed && { opacity: 0.6 }]}
+              onPress={() => setShowDevPanel(false)}
+            >
+              <Text style={styles.devDismissText}>✕</Text>
+            </Pressable>
             <Text style={styles.devLabel}>dev shortcuts</Text>
             <View style={styles.devRow}>
               <Pressable
@@ -313,9 +344,7 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     height: 52, borderRadius: radius.l,
-    backgroundColor: TEAM[500],
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: TEAM[500],
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
   },
@@ -324,7 +353,6 @@ const styles = StyleSheet.create({
   },
   sendBtnText: {
     fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600',
-    color: TEAM.on,
   },
 
   // ── Sent confirmation state ───────────────────────────────────────────────
@@ -342,7 +370,7 @@ const styles = StyleSheet.create({
   },
   resendBtn: { paddingVertical: spacing[4] },
   resendBtnText: {
-    fontFamily: fonts.uiMedium, fontSize: 14, color: TEAM[300],
+    fontFamily: fonts.uiMedium, fontSize: 14,
   },
 
   // ── Join a team ───────────────────────────────────────────────────────────
@@ -350,12 +378,9 @@ const styles = StyleSheet.create({
   joinBtn: {
     paddingVertical: spacing[14], paddingHorizontal: spacing[24],
     borderRadius: radius.l, borderWidth: 1,
-    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.35)`,
-    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
   },
   joinBtnText: {
     fontFamily: fonts.uiSemiBold, fontSize: 14, fontWeight: '600',
-    color: TEAM[300],
   },
 
   // ── Invite code card ──────────────────────────────────────────────────────
@@ -381,9 +406,8 @@ const styles = StyleSheet.create({
   },
   redeemBtn: {
     height: 52, borderRadius: radius.l,
-    backgroundColor: TEAM[500],
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: TEAM[500], shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
   },
   redeemBtnDisabled: {
@@ -391,10 +415,18 @@ const styles = StyleSheet.create({
   },
   redeemBtnText: {
     fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600',
-    color: TEAM.on,
   },
 
   // ── Dev bypass ───────────────────────────────────────────────────────────
+  devDismiss: {
+    alignSelf: 'flex-end',
+    padding: spacing[4],
+  },
+  devDismissText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: navy[400],
+  },
   devArea: {
     alignItems: 'center',
     marginTop: spacing[32],

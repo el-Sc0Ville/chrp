@@ -8,6 +8,7 @@ export interface Team {
   sport: string;
   palette: TeamKey;
   managerIds: string[];
+  inviteCode?: string;
   createdAt: Timestamp;
 }
 

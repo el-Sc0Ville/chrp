@@ -23,7 +23,7 @@ import { useResponses } from '../firebase/hooks/useResponses';
 import { useTeam } from '../firebase/hooks/useTeam';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 
 type EventDetailRouteProp = RouteProp<RootStackParamList, 'EventDetail'>;
@@ -67,18 +67,6 @@ const TOGGLE_OPTS: { id: NonNullable<PlayerResponse>; label: string; glyph: stri
   { id: 'maybe', label: 'Maybe',  glyph: '?' },
 ];
 
-const RESPONSE_TINTS: Record<NonNullable<PlayerResponse>, string> = {
-  in:    TEAM[500],
-  out:   status.error.pure,
-  maybe: status.alert.pure,
-};
-
-const RESPONSE_ON: Record<NonNullable<PlayerResponse>, string> = {
-  in:    TEAM.on,
-  out:   '#FFFFFF',
-  maybe: '#0B1220',
-};
-
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function EventDetailScreen() {
@@ -95,7 +83,8 @@ function ManagerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
-  const { user, activeTeamId } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
 
   const handleSaveScore = async (s: Score) => {
@@ -217,10 +206,10 @@ function ManagerEventDetail() {
         {isPast && (
           <View style={styles.scoreActionRow}>
             <Pressable
-              style={({ pressed }) => [styles.enterScoreBtn, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [styles.enterScoreBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.50)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)` }, pressed && { opacity: 0.8 }]}
               onPress={() => setScoreSheetVisible(true)}
             >
-              <Text style={styles.enterScoreBtnText}>
+              <Text style={[styles.enterScoreBtnText, { color: TEAM[300] }]}>
                 {event?.scoreUs !== undefined ? 'Edit score' : '+ Enter score'}
               </Text>
             </Pressable>
@@ -229,10 +218,10 @@ function ManagerEventDetail() {
         {!isPast && (
           <View style={styles.scoreActionRow}>
             <Pressable
-              style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [styles.ghostBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
               onPress={() => event && addEventToCalendar(event)}
             >
-              <Text style={styles.ghostBtnText}>Add to calendar</Text>
+              <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Add to calendar</Text>
             </Pressable>
           </View>
         )}
@@ -299,7 +288,8 @@ function PlayerEventDetail() {
   const navigation = useNavigation<EventDetailNavProp>();
   const route = useRoute<EventDetailRouteProp>();
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
-  const { user, activeTeamId } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
 
   const { events }                       = useEvents(activeTeamId);
   const { members }                      = useMembers(activeTeamId);
@@ -374,16 +364,16 @@ function PlayerEventDetail() {
         {!isPast && (
           <View style={styles.footer}>
             <Pressable
-              style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [styles.ghostBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
               onPress={() => event && addEventToCalendar(event)}
             >
-              <Text style={styles.ghostBtnText}>Add to calendar</Text>
+              <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Add to calendar</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [styles.ghostBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
               onPress={() => navigation.navigate('Subs')}
             >
-              <Text style={styles.ghostBtnText}>Need a sub?</Text>
+              <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Need a sub?</Text>
             </Pressable>
           </View>
         )}
@@ -401,7 +391,7 @@ function PlayerEventDetail() {
       />
       {toast !== null && (
         <View
-          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)` }]}
           pointerEvents="none"
         >
           <Text style={styles.toastText}>{toast}</Text>
@@ -418,7 +408,8 @@ function PlayerEventDetail() {
 // ─── Nav header ───────────────────────────────────────────────────────────────
 
 function NavHeader({ onBack, onEdit }: { onBack: () => void; onEdit?: () => void }) {
-  const { isManager } = useUserContext();
+  const { isManager, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.navHeader}>
       <Pressable
@@ -426,8 +417,8 @@ function NavHeader({ onBack, onEdit }: { onBack: () => void; onEdit?: () => void
         style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
         hitSlop={12}
       >
-        <Text style={styles.backChevron}>‹</Text>
-        <Text style={styles.backLabel}>Schedule</Text>
+        <Text style={[styles.backChevron, { color: TEAM[300] }]}>‹</Text>
+        <Text style={[styles.backLabel, { color: TEAM[300] }]}>Schedule</Text>
       </Pressable>
       {isManager && onEdit && (
         <Pressable
@@ -435,7 +426,7 @@ function NavHeader({ onBack, onEdit }: { onBack: () => void; onEdit?: () => void
           style={({ pressed }) => pressed && { opacity: 0.6 }}
           hitSlop={12}
         >
-          <Text style={styles.editLabel}>Edit</Text>
+          <Text style={[styles.editLabel, { color: TEAM[300] }]}>Edit</Text>
         </Pressable>
       )}
     </View>
@@ -461,7 +452,8 @@ function EventSummary({ event, fallbackTitle }: {
   event: FirestoreEvent | null;
   fallbackTitle: string;
 }) {
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { team } = useTeam(activeTeamId);
   const title     = event?.title   ?? fallbackTitle;
   const typeBadge = (event?.type   ?? 'game').toUpperCase();
@@ -476,19 +468,19 @@ function EventSummary({ event, fallbackTitle }: {
   return (
     <View style={styles.eventSummary}>
       <View style={styles.teamPill}>
-        <View style={styles.teamDot} />
-        <Text style={styles.teamPillText}>{team?.name ?? 'Trash Dogs'}</Text>
+        <View style={[styles.teamDot, { backgroundColor: TEAM[300] }]} />
+        <Text style={[styles.teamPillText, { color: TEAM[300] }]}>{team?.name ?? 'Trash Dogs'}</Text>
       </View>
 
-      <View style={styles.kindBadge}>
-        <Text style={styles.kindBadgeText}>{typeBadge}</Text>
+      <View style={[styles.kindBadge, { backgroundColor: TEAM[900] }]}>
+        <Text style={[styles.kindBadgeText, { color: TEAM[300] }]}>{typeBadge}</Text>
       </View>
 
       <Text style={styles.eventName} numberOfLines={2}>{title}</Text>
 
       {(dateStr || timeStr) && (
         <View style={styles.dateTimeRow}>
-          {dateStr ? <Text style={styles.dateText}>{dateStr}</Text> : null}
+          {dateStr ? <Text style={[styles.dateText, { color: TEAM[300] }]}>{dateStr}</Text> : null}
           {dateStr && timeStr ? <Text style={styles.dateTimeSep}>·</Text> : null}
           {timeStr ? <Text style={styles.timeText}>{timeStr}</Text> : null}
         </View>
@@ -561,6 +553,8 @@ function ScoreSheet({
   onSave: (s: Score) => void;
   onClose: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const [us,   setUs]   = useState('');
   const [them, setThem] = useState('');
@@ -641,12 +635,13 @@ function ScoreSheet({
             <Pressable
               style={({ pressed }) => [
                 styles.saveScoreBtn,
+                hasValues && { backgroundColor: TEAM[500], shadowColor: TEAM[500] },
                 !hasValues && styles.saveScoreBtnDisabled,
                 pressed && hasValues && { opacity: 0.85 },
               ]}
               onPress={hasValues ? () => { onSave({ us: usNum, them: themNum }); onClose(); } : undefined}
             >
-              <Text style={[styles.saveScoreBtnText, !hasValues && styles.saveScoreBtnTextDisabled]}>
+              <Text style={[styles.saveScoreBtnText, hasValues && { color: TEAM.on }, !hasValues && styles.saveScoreBtnTextDisabled]}>
                 Save score
               </Text>
             </Pressable>
@@ -668,6 +663,8 @@ function AvailGroup({
   showRemind?: boolean;
   onEditPlayer?: (player: Player) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -683,8 +680,8 @@ function AvailGroup({
         </View>
         <View style={styles.groupRight}>
           {showRemind && (
-            <TouchableOpacity style={styles.remindInlineBtn} hitSlop={8}>
-              <Text style={styles.remindInlineText}>Remind</Text>
+            <TouchableOpacity style={[styles.remindInlineBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.50)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)` }]} hitSlop={8}>
+              <Text style={[styles.remindInlineText, { color: TEAM[300] }]}>Remind</Text>
             </TouchableOpacity>
           )}
           <Text style={[styles.groupChevron, expanded && styles.groupChevronOpen]}>›</Text>
@@ -701,10 +698,12 @@ function AvailGroup({
 }
 
 function PlayerRow({ player, onEditPlayer }: { player: Player; onEditPlayer?: (player: Player) => void }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.playerRow}>
       <View style={styles.jerseyBadge}>
-        <Text style={styles.jerseyText}>#{player.jersey}</Text>
+        <Text style={[styles.jerseyText, { color: TEAM[300] }]}>#{player.jersey}</Text>
       </View>
       <Text style={styles.playerName}>{player.name}</Text>
       {player.respondedAt && (
@@ -775,6 +774,8 @@ function SubRequestSheet({
   onYes: () => void;
   onDismiss: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
@@ -789,16 +790,16 @@ function SubRequestSheet({
             Want us to let your manager know you need a replacement for {gameName}?
           </Text>
           <Pressable
-            style={({ pressed }) => [styles.subRequestYesBtn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.subRequestYesBtn, { backgroundColor: TEAM[500], shadowColor: TEAM[500] }, pressed && { opacity: 0.85 }]}
             onPress={onYes}
           >
-            <Text style={styles.subRequestYesBtnText}>Yes, request a sub</Text>
+            <Text style={[styles.subRequestYesBtnText, { color: TEAM.on }]}>Yes, request a sub</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.subRequestNoBtn, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.subRequestNoBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
             onPress={onDismiss}
           >
-            <Text style={styles.subRequestNoBtnText}>No thanks</Text>
+            <Text style={[styles.subRequestNoBtnText, { color: TEAM[300] }]}>No thanks</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -814,6 +815,18 @@ function InOutMaybeToggle({
   response: PlayerResponse;
   onRespond: (r: NonNullable<PlayerResponse>) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  const RESPONSE_TINTS: Record<NonNullable<PlayerResponse>, string> = {
+    in:    TEAM[500],
+    out:   status.error.pure,
+    maybe: status.alert.pure,
+  };
+  const RESPONSE_ON: Record<NonNullable<PlayerResponse>, string> = {
+    in:    TEAM.on,
+    out:   '#FFFFFF',
+    maybe: '#0B1220',
+  };
   const activeIdx = TOGGLE_OPTS.findIndex(o => o.id === response);
 
   return (

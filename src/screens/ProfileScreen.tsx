@@ -17,7 +17,7 @@ import { useUserContext } from '../context/UserContext';
 import { useBlackouts } from '../firebase/hooks/useBlackouts';
 import type { RootStackParamList } from '../navigation';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 // ─── Hardcoded current user ───────────────────────────────────────────────────
 const INITIAL_NAME     = 'Pat Normandin';
@@ -30,7 +30,8 @@ const USER_INITIALS    = 'PN';
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { user, isManager, activeTeamId } = useUserContext();
+  const { user, isManager, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ProfileNavProp>();
 
@@ -143,15 +144,18 @@ export default function ProfileScreen() {
             onPress={() => navigation.goBack()}
             hitSlop={12}
           >
-            <Text style={styles.backChevron}>‹</Text>
-            <Text style={styles.backBtnText}>Back</Text>
+            <Text style={[styles.backChevron, { color: TEAM[300] }]}>‹</Text>
+            <Text style={[styles.backBtnText, { color: TEAM[300] }]}>Back</Text>
           </Pressable>
           {isDirty && (
             <Pressable
-              style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [styles.saveBtn, {
+                borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+                backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)`,
+              }, pressed && { opacity: 0.7 }]}
               onPress={handleSave}
             >
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={[styles.saveBtnText, { color: TEAM[300] }]}>Save</Text>
             </Pressable>
           )}
         </View>
@@ -178,8 +182,8 @@ export default function ProfileScreen() {
             style={styles.avatarWrap}
             onPress={() => showToast('Photo upload coming soon')}
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarInitials}>{USER_INITIALS}</Text>
+            <View style={[styles.avatar, { backgroundColor: TEAM[500], shadowColor: TEAM[500] }]}>
+              <Text style={[styles.avatarInitials, { color: TEAM.on }]}>{USER_INITIALS}</Text>
             </View>
             <View style={styles.cameraOverlay}>
               <Text style={styles.cameraIcon}>📷</Text>
@@ -196,7 +200,7 @@ export default function ProfileScreen() {
           >
             {isEditingName ? (
               <TextInput
-                style={styles.nameInput}
+                style={[styles.nameInput, { borderBottomColor: TEAM[300] }]}
                 value={name}
                 onChangeText={setName}
                 autoFocus
@@ -220,7 +224,7 @@ export default function ProfileScreen() {
           >
             {isEditingJersey ? (
               <TextInput
-                style={styles.jerseyInput}
+                style={[styles.jerseyInput, { color: TEAM[300], borderBottomColor: TEAM[300] }]}
                 value={jersey}
                 onChangeText={text =>
                   setJersey(text.replace(/[^0-9]/g, '').slice(0, 2))
@@ -234,16 +238,16 @@ export default function ProfileScreen() {
                 onSubmitEditing={() => setIsEditingJersey(false)}
               />
             ) : (
-              <Text style={styles.jerseyText}>#{jersey}</Text>
+              <Text style={[styles.jerseyText, { color: TEAM[300] }]}>#{jersey}</Text>
             )}
           </Pressable>
 
           {/* Role pill + team row */}
           <View style={styles.metaRow}>
-            <RolePill role={memberRole} />
+            <RolePill role={memberRole} teamPalette={activeTeamPalette} />
             <View style={styles.teamRow}>
-              <View style={styles.teamSwatch} />
-              <Text style={styles.teamLabel}>Trashdogs</Text>
+              <View style={[styles.teamSwatch, { backgroundColor: TEAM[300] }]} />
+              <Text style={[styles.teamLabel, { color: TEAM[300] }]}>Trashdogs</Text>
             </View>
           </View>
 
@@ -419,6 +423,8 @@ function ToggleRow({
   value: boolean;
   onValueChange: (v: boolean) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.toggleRow}>
       <View style={styles.toggleLeft}>
@@ -441,11 +447,17 @@ function ToggleRow({
 
 // ─── Role pill ────────────────────────────────────────────────────────────────
 
-function RolePill({ role }: { role: 'manager' | 'player' | 'spare' }) {
-  const pillStyle = role === 'manager' ? styles.rolePillManager
+function RolePill({ role, teamPalette }: { role: 'manager' | 'player' | 'spare'; teamPalette?: string }) {
+  const { activeTeamPalette } = useUserContext();
+  const palette = (teamPalette ?? activeTeamPalette) as keyof typeof teams;
+  const TEAM = teams[palette];
+  const pillStyle = role === 'manager' ? [styles.rolePillManager, {
+    backgroundColor: TEAM[900],
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.32)`,
+  }]
     : role === 'spare' ? styles.rolePillSpare
     : styles.rolePillPlayer;
-  const textStyle = role === 'manager' ? styles.rolePillTextManager
+  const textStyle = role === 'manager' ? [styles.rolePillTextManager, { color: TEAM[300] }]
     : role === 'spare' ? styles.rolePillTextSpare
     : styles.rolePillTextPlayer;
   const label = role === 'manager' ? 'Manager' : role === 'spare' ? 'Spare' : 'Player';
@@ -472,6 +484,8 @@ function TipJarSheet({
   onDismiss: () => void;
   showToast: (msg: string) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
 
   const handleTip = () => {
@@ -502,11 +516,14 @@ function TipJarSheet({
             {TIP_OPTIONS.map(({ amount, emoji }) => (
               <Pressable
                 key={amount}
-                style={({ pressed }) => [styles.tipBtn, pressed && { opacity: 0.8 }]}
+                style={({ pressed }) => [styles.tipBtn, {
+                  backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+                  borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
+                }, pressed && { opacity: 0.8 }]}
                 onPress={handleTip}
               >
                 <Text style={styles.tipBtnEmoji}>{emoji}</Text>
-                <Text style={styles.tipBtnAmount}>{amount}</Text>
+                <Text style={[styles.tipBtnAmount, { color: TEAM[300] }]}>{amount}</Text>
               </Pressable>
             ))}
           </View>

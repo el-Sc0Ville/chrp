@@ -15,7 +15,7 @@ import { useUserContext } from '../context/UserContext';
 import { useReplies } from '../firebase/hooks/useReplies';
 import type { Announcement, AnnouncementReply } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,8 @@ export default function AnnouncementThreadScreen() {
   const insets     = useSafeAreaInsets();
   const route      = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user, activeTeamId }   = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
 
   const { announcementId } = route.params as { announcementId: string };
 
@@ -115,15 +116,15 @@ export default function AnnouncementThreadScreen() {
         >
 
           {/* ── Original post ── */}
-          <View style={styles.originalCard}>
+          <View style={[styles.originalCard, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)` }]}>
             {announcement.pinned && (
-              <View style={styles.pinnedBanner}>
-                <Text style={styles.pinnedBannerText}>📌  Pinned</Text>
+              <View style={[styles.pinnedBanner, { backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.14)`, borderBottomColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.22)` }]}>
+                <Text style={[styles.pinnedBannerText, { color: TEAM[300] }]}>📌  Pinned</Text>
               </View>
             )}
             <View style={styles.cardHeader}>
-              <View style={styles.authorAvatar}>
-                <Text style={styles.authorAvatarText}>{getInitials(announcement.authorName)}</Text>
+              <View style={[styles.authorAvatar, { backgroundColor: TEAM[700], borderColor: TEAM[500] }]}>
+                <Text style={[styles.authorAvatarText, { color: TEAM[100] }]}>{getInitials(announcement.authorName)}</Text>
               </View>
               <View style={styles.authorMeta}>
                 <Text style={styles.authorName}>{announcement.authorName}</Text>
@@ -163,10 +164,10 @@ export default function AnnouncementThreadScreen() {
             returnKeyType="default"
           />
           <Pressable
-            style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled]}
+            style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled, { backgroundColor: TEAM[500] }]}
             onPress={sendReply}
           >
-            <Text style={styles.sendBtnText}>↑</Text>
+            <Text style={[styles.sendBtnText, { color: TEAM.on }]}>↑</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -177,13 +178,15 @@ export default function AnnouncementThreadScreen() {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function NavHeader({ onBack }: { onBack: () => void }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.navHeader}>
       <Pressable
         style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
         onPress={onBack}
       >
-        <Text style={styles.backBtnText}>‹ Back</Text>
+        <Text style={[styles.backBtnText, { color: TEAM[300] }]}>‹ Back</Text>
       </Pressable>
       <Text style={styles.navTitle} numberOfLines={1}>Thread</Text>
       <View style={styles.backBtn} />
@@ -192,10 +195,12 @@ function NavHeader({ onBack }: { onBack: () => void }) {
 }
 
 function ReplyRow({ reply }: { reply: AnnouncementReply }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.replyRow}>
-      <View style={styles.replyAvatar}>
-        <Text style={styles.replyAvatarText}>{getInitials(reply.authorName)}</Text>
+      <View style={[styles.replyAvatar, { backgroundColor: TEAM[700], borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.30)` }]}>
+        <Text style={[styles.replyAvatarText, { color: TEAM[100] }]}>{getInitials(reply.authorName)}</Text>
       </View>
       <View style={styles.replyContent}>
         <View style={styles.replyMeta}>

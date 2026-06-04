@@ -4,21 +4,19 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDocs, query, collection, where, limit } from 'firebase/firestore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { db, auth } from '../../firebase';
+import { useUserContext } from '../../context/UserContext';
 import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'JoinTeam'>;
 
-// TODO Phase 2b: look up team by invite code from Firestore
-const INVITE_CODES: Record<string, { teamId: string; teamName: string; palette: TeamKey }> = {
-  TRASH1: { teamId: 'trashdogs', teamName: 'Trash Dogs', palette: 'trashdogs' },
-};
-
 export default function JoinTeamScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { displayName, jerseyNumber } = route.params;
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,18 +24,24 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
 
   async function handleJoin() {
     const upper = code.trim().toUpperCase();
-    const match = INVITE_CODES[upper];
-    if (!match) {
-      Alert.alert('Invalid code', 'That invite code doesn\'t look right. Check with your team manager.');
-      return;
-    }
-
     const user = auth.currentUser;
     if (!user) return;
 
     setLoading(true);
     try {
-      const { teamId, teamName, palette } = match;
+      const snap = await getDocs(
+        query(collection(db, 'teams'), where('inviteCode', '==', upper), limit(1)),
+      );
+      if (snap.empty) {
+        Alert.alert('Invalid code', "That invite code doesn't look right. Check with your team manager.");
+        setLoading(false);
+        return;
+      }
+      const teamDoc = snap.docs[0];
+      const teamId   = teamDoc.id;
+      const teamData = teamDoc.data();
+      const teamName = teamData['name'] as string;
+      const palette  = teamData['palette'] as TeamKey;
 
       await setDoc(doc(db, 'teams', teamId, 'members', user.uid), {
         userId: user.uid,
@@ -92,6 +96,7 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
       <Pressable
         style={({ pressed }) => [
           styles.btn,
+          canJoin && !loading && { backgroundColor: TEAM[500] },
           (!canJoin || loading) && styles.btnDisabled,
           pressed && canJoin && !loading && styles.btnPressed,
         ]}
@@ -147,7 +152,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   btn: {
-    backgroundColor: teams.trashdogs[500],
     borderRadius: radius.m,
     paddingVertical: spacing[16],
     alignItems: 'center',

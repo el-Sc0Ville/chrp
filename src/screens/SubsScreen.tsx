@@ -16,7 +16,7 @@ import { useSubRequests } from '../firebase/hooks/useSubRequests';
 import { useEvents } from '../firebase/hooks/useEvents';
 import type { SubRequest as FirestoreSubRequest } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 const SPARE_FEE = 20; // $ per game
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -163,7 +163,8 @@ export default function SubsScreen() {
 function ManagerSubsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
   const requests     = firestoreRequests.map(toDisplaySubRequest);
   const [findSubTarget,  setFindSubTarget]  = useState<SubRequest | null>(null);
@@ -207,13 +208,13 @@ function ManagerSubsScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backBtnText}>‹ Team</Text>
+          <Text style={[styles.backBtnText, { color: TEAM[300] }]}>‹ Team</Text>
         </Pressable>
         <View style={styles.navCenter}>
           <Text style={styles.navTitle}>Sub requests</Text>
           {openRequests.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{openRequests.length}</Text>
+            <View style={[styles.badge, { backgroundColor: TEAM[500] }]}>
+              <Text style={[styles.badgeText, { color: TEAM.on }]}>{openRequests.length}</Text>
             </View>
           )}
         </View>
@@ -300,6 +301,8 @@ function ManagerSubsScreen() {
 // ─── Manager sub-components ───────────────────────────────────────────────────
 
 function ManagerRequestRow({ request, onFindSub }: { request: SubRequest; onFindSub: () => void }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.requestRow}>
       <View style={styles.requestTop}>
@@ -324,10 +327,13 @@ function ManagerRequestRow({ request, onFindSub }: { request: SubRequest; onFind
         </View>
       </View>
       <Pressable
-        style={({ pressed }) => [styles.findSubBtn, pressed && { opacity: 0.8 }]}
+        style={({ pressed }) => [styles.findSubBtn, {
+          backgroundColor: TEAM[500],
+          shadowColor: TEAM[500],
+        }, pressed && { opacity: 0.8 }]}
         onPress={onFindSub}
       >
-        <Text style={styles.findSubBtnText}>Find a sub</Text>
+        <Text style={[styles.findSubBtnText, { color: TEAM.on }]}>Find a sub</Text>
       </Pressable>
     </View>
   );
@@ -363,6 +369,8 @@ function FindSubSheet({
   onInvite: (s: Spare) => void;
   onClose: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -392,10 +400,13 @@ function FindSubSheet({
                         </Text>
                       </View>
                       <Pressable
-                        style={[styles.inviteBtn, invited && styles.inviteBtnSent]}
+                        style={[styles.inviteBtn, {
+                          borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+                          backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)`,
+                        }, invited && styles.inviteBtnSent]}
                         onPress={() => !invited && onInvite(spare)}
                       >
-                        <Text style={[styles.inviteBtnText, invited && styles.inviteBtnTextSent]}>
+                        <Text style={[styles.inviteBtnText, { color: TEAM[300] }, invited && styles.inviteBtnTextSent]}>
                           {invited ? '✓ Sent' : 'Invite'}
                         </Text>
                       </Pressable>
@@ -420,7 +431,8 @@ function FindSubSheet({
 function PlayerSubsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user, activeTeamId } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
   const { events: allEvents } = useEvents(activeTeamId);
   const ownRequests = firestoreRequests
@@ -484,7 +496,7 @@ function PlayerSubsScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backBtnText}>‹ Back</Text>
+          <Text style={[styles.backBtnText, { color: TEAM[300] }]}>‹ Back</Text>
         </Pressable>
         <Text style={styles.navTitle}>Need a sub?</Text>
         <View style={styles.navSpacer} />
@@ -561,12 +573,14 @@ function PlayerSubsScreen() {
 // ─── Player sub-components ────────────────────────────────────────────────────
 
 function PlayerEventRow({ event, onRequest }: { event: UpcomingEvent; onRequest: () => void }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.playerEventRow}>
-      <View style={styles.dateChip}>
-        <Text style={styles.dateWeekday}>{event.weekday}</Text>
+      <View style={[styles.dateChip, { backgroundColor: TEAM[700] }]}>
+        <Text style={[styles.dateWeekday, { color: TEAM[300] }]}>{event.weekday}</Text>
         <Text style={styles.dateDay}>{event.day}</Text>
-        <Text style={styles.dateMonth}>{event.month}</Text>
+        <Text style={[styles.dateMonth, { color: TEAM[300] }]}>{event.month}</Text>
       </View>
       <View style={styles.playerEventInfo}>
         <Text style={styles.playerEventOpponent} numberOfLines={1}>{event.opponent}</Text>
@@ -578,10 +592,13 @@ function PlayerEventRow({ event, onRequest }: { event: UpcomingEvent; onRequest:
         )}
       </View>
       <Pressable
-        style={({ pressed }) => [styles.requestSubBtn, pressed && { opacity: 0.75 }]}
+        style={({ pressed }) => [styles.requestSubBtn, {
+          borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+          backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)`,
+        }, pressed && { opacity: 0.75 }]}
         onPress={onRequest}
       >
-        <Text style={styles.requestSubBtnText}>Request sub</Text>
+        <Text style={[styles.requestSubBtnText, { color: TEAM[300] }]}>Request sub</Text>
       </Pressable>
     </View>
   );
@@ -622,6 +639,8 @@ function RequestSubSheet({
   onSubmit: () => void;
   onClose: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -635,7 +654,7 @@ function RequestSubSheet({
               {/* Game summary */}
               <View style={styles.sheetGameCard}>
                 <Text style={styles.sheetGameOpponent}>{event.opponent}</Text>
-                <Text style={styles.sheetGameMeta}>
+                <Text style={[styles.sheetGameMeta, { color: TEAM[300] }]}>
                   {event.weekday} {event.day} {event.month} · {event.time}
                 </Text>
                 <Text style={styles.sheetGameVenue}>{event.venue}</Text>
@@ -656,10 +675,13 @@ function RequestSubSheet({
               </View>
 
               <Pressable
-                style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }]}
+                style={({ pressed }) => [styles.submitBtn, {
+                  backgroundColor: TEAM[500],
+                  shadowColor: TEAM[500],
+                }, pressed && { opacity: 0.85 }]}
                 onPress={onSubmit}
               >
-                <Text style={styles.submitBtnText}>Send request to manager</Text>
+                <Text style={[styles.submitBtnText, { color: TEAM.on }]}>Send request to manager</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -672,9 +694,11 @@ function RequestSubSheet({
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
 function PlayerAvatar({ initials }: { initials: string }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
-    <View style={styles.playerAvatar}>
-      <Text style={styles.playerAvatarText}>{initials}</Text>
+    <View style={[styles.playerAvatar, { backgroundColor: TEAM[700], borderColor: TEAM[500] }]}>
+      <Text style={[styles.playerAvatarText, { color: TEAM[100] }]}>{initials}</Text>
     </View>
   );
 }

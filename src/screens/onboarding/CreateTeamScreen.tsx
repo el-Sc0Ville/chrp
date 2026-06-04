@@ -37,16 +37,17 @@ export default function CreateTeamScreen({ navigation, route }: Props) {
 
     setLoading(true);
     try {
-      // TODO Phase 2b: generate unique invite code and store on team document
-      const teamRef = doc(collection(db, 'teams'));
-      const teamId  = teamRef.id;
-      const name    = teamName.trim();
+      const teamRef   = doc(collection(db, 'teams'));
+      const teamId    = teamRef.id;
+      const name      = teamName.trim();
+      const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
       await setDoc(teamRef, {
         name,
         sport,
         palette,
         managerIds: [user.uid],
+        inviteCode,
         createdAt: serverTimestamp(),
       });
 

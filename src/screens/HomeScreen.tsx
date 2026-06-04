@@ -23,7 +23,7 @@ import { useUserTeams } from '../firebase/hooks/useUserTeams';
 
 type Response = 'in' | 'out' | 'maybe' | null;
 
-const TEAM = teams.trashdogs; // used by StyleSheet.create() — dynamic overrides applied inline in components
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 interface AvailCounts {
   in: number;
@@ -784,6 +784,8 @@ function AnnouncementsSection({
   onViewAll: () => void;
   onNavigateTo: (id: string) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const latest = announcements.slice(0, 2);
 
   return (
@@ -791,7 +793,7 @@ function AnnouncementsSection({
       <View style={styles.announcementsHeader}>
         <Text style={styles.announcementsLabel}>From your manager</Text>
         <TouchableOpacity onPress={onViewAll}>
-          <Text style={styles.announcementsAll}>All →</Text>
+          <Text style={[styles.announcementsAll, { color: TEAM[300] }]}>All →</Text>
         </TouchableOpacity>
       </View>
       {latest.length === 0 && (
@@ -808,7 +810,10 @@ function AnnouncementsSection({
           activeOpacity={0.75}
           onPress={() => onNavigateTo(ann.id)}
         >
-          <View style={styles.announcementIcon}>
+          <View style={[styles.announcementIcon, {
+            backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.22)`,
+            borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+          }]}>
             <Text>📣</Text>
           </View>
           <View style={styles.announcementBody}>
@@ -884,6 +889,8 @@ function SubRequestSheet({
   onYes: () => void;
   onDismiss: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
@@ -898,16 +905,22 @@ function SubRequestSheet({
             Want us to let your manager know you need a replacement for {gameName}?
           </Text>
           <Pressable
-            style={({ pressed }) => [styles.subRequestYesBtn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.subRequestYesBtn, {
+              backgroundColor: TEAM[500],
+              shadowColor: TEAM[500],
+            }, pressed && { opacity: 0.85 }]}
             onPress={onYes}
           >
-            <Text style={styles.subRequestYesBtnText}>Yes, request a sub</Text>
+            <Text style={[styles.subRequestYesBtnText, { color: TEAM.on }]}>Yes, request a sub</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.subRequestNoBtn, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.subRequestNoBtn, {
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+            }, pressed && { opacity: 0.75 }]}
             onPress={onDismiss}
           >
-            <Text style={styles.subRequestNoBtnText}>No thanks</Text>
+            <Text style={[styles.subRequestNoBtnText, { color: TEAM[300] }]}>No thanks</Text>
           </Pressable>
         </Pressable>
       </Pressable>

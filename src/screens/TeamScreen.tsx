@@ -15,7 +15,7 @@ import RosterScreen from './RosterScreen';
 import AnnouncementsScreen from './AnnouncementsScreen';
 import DuesScreen from './DuesScreen';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 type SubTab = 'roster' | 'announcements' | 'dues';
 
@@ -29,7 +29,8 @@ const SUB_TABS: { id: SubTab | 'subs'; label: string; navigate?: string }[] = [
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { team } = useTeam(activeTeamId);
   const [activeTab, setActiveTab] = useState<SubTab>('roster');
 
@@ -42,9 +43,9 @@ export default function TeamScreen() {
       <View style={styles.header}>
         <View>
           <View style={styles.teamPill}>
-            <View style={styles.teamDot} />
-            <Text style={styles.teamPillText}>{team?.name ?? 'Trash Dogs'}</Text>
-            <Text style={styles.teamPillChevron}>›</Text>
+            <View style={[styles.teamDot, { backgroundColor: TEAM[300] }]} />
+            <Text style={[styles.teamPillText, { color: TEAM[300] }]}>{team?.name ?? 'Trash Dogs'}</Text>
+            <Text style={[styles.teamPillChevron, { color: TEAM[300] }]}>›</Text>
           </View>
           <Text style={styles.pageTitle}>Team</Text>
         </View>
@@ -58,7 +59,13 @@ export default function TeamScreen() {
           return (
             <Pressable
               key={tab.id}
-              style={[styles.subTab, active && styles.subTabActive]}
+              style={[
+                styles.subTab,
+                active && {
+                  backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.18)`,
+                  borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+                },
+              ]}
               onPress={() => {
                 if (tab.navigate) {
                   navigation.navigate(tab.navigate);
@@ -67,7 +74,7 @@ export default function TeamScreen() {
                 }
               }}
             >
-              <Text style={[styles.subTabText, active && styles.subTabTextActive]}>
+              <Text style={[styles.subTabText, active && { color: TEAM[300], fontFamily: fonts.uiSemiBold }]}>
                 {tab.label}
               </Text>
             </Pressable>

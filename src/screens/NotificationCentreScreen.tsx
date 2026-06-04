@@ -17,8 +17,9 @@ import {
   type DateGroup,
 } from '../context/NotificationContext';
 import { useGameResponse, type PlayerResponse } from '../context/GameResponseContext';
+import { useUserContext } from '../context/UserContext';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 const DATE_GROUPS: { key: DateGroup; label: string }[] = [
   { key: 'today',     label: 'Today'     },
@@ -26,13 +27,7 @@ const DATE_GROUPS: { key: DateGroup; label: string }[] = [
   { key: 'earlier',   label: 'Earlier'   },
 ];
 
-// ─── Response button config ───────────────────────────────────────────────────
-
-const RESP_CONFIG: { id: NonNullable<PlayerResponse>; label: string; glyph: string; fill: string; on: string }[] = [
-  { id: 'in',    label: 'In',    glyph: '✓', fill: TEAM[500],         on: TEAM.on   },
-  { id: 'out',   label: 'Out',   glyph: '✕', fill: status.error.pure, on: '#FFFFFF' },
-  { id: 'maybe', label: 'Maybe', glyph: '?', fill: status.alert.pure, on: '#0B1220' },
-];
+// RESP_CONFIG is computed inside AvailabilityCard using the dynamic TEAM palette
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +36,8 @@ export default function NotificationCentreScreen() {
   const navigation = useNavigation<any>();
   const { notifications, markRead, markAllRead, unreadCount } = useNotifications();
   const { responses, setResponse } = useGameResponse();
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [subGameName,     setSubGameName]     = useState('');
@@ -104,7 +101,7 @@ export default function NotificationCentreScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backBtnText}>‹ Back</Text>
+          <Text style={[styles.backBtnText, { color: TEAM[300] }]}>‹ Back</Text>
         </Pressable>
         <Text style={styles.navTitle}>Notifications</Text>
         <Pressable
@@ -112,7 +109,7 @@ export default function NotificationCentreScreen() {
           onPress={markAllRead}
           disabled={unreadCount === 0}
         >
-          <Text style={[styles.markAllText, unreadCount === 0 && styles.markAllDisabled]}>
+          <Text style={[styles.markAllText, { color: TEAM[300] }, unreadCount === 0 && styles.markAllDisabled]}>
             Mark all read
           </Text>
         </Pressable>
@@ -157,7 +154,7 @@ export default function NotificationCentreScreen() {
       />
       {toast !== null && (
         <View
-          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]}
+          style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)` }]}
           pointerEvents="none"
         >
           <Text style={styles.toastText}>{toast}</Text>
@@ -177,19 +174,27 @@ function AvailabilityCard({
   onMarkRead: () => void;
   onRespond: (r: NonNullable<PlayerResponse>) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  const RESP_CONFIG: { id: NonNullable<PlayerResponse>; label: string; glyph: string; fill: string; on: string }[] = [
+    { id: 'in',    label: 'In',    glyph: '✓', fill: TEAM[500],         on: TEAM.on   },
+    { id: 'out',   label: 'Out',   glyph: '✕', fill: status.error.pure, on: '#FFFFFF' },
+    { id: 'maybe', label: 'Maybe', glyph: '?', fill: status.alert.pure, on: '#0B1220' },
+  ];
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
         notif.read ? styles.cardRead : styles.cardUnread,
+        !notif.read && { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.22)` },
         pressed && styles.cardPressed,
       ]}
       onPress={onMarkRead}
     >
-      {!notif.read && <View style={styles.cardAccent} />}
+      {!notif.read && <View style={[styles.cardAccent, { backgroundColor: TEAM[500] }]} />}
       <View style={styles.cardInner}>
         <View style={styles.cardHeader}>
-          <View style={styles.iconWrap}>
+          <View style={[styles.iconWrap, { backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.14)`, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)` }]}>
             <Text style={styles.iconText}>🏒</Text>
           </View>
           <View style={styles.cardMeta}>
@@ -241,19 +246,22 @@ function AnnouncementCard({
   notif: AnnouncementNotif;
   onPress: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
         notif.read ? styles.cardRead : styles.cardUnread,
+        !notif.read && { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.22)` },
         pressed && styles.cardPressed,
       ]}
       onPress={onPress}
     >
-      {!notif.read && <View style={styles.cardAccent} />}
+      {!notif.read && <View style={[styles.cardAccent, { backgroundColor: TEAM[500] }]} />}
       <View style={styles.cardInner}>
         <View style={styles.cardHeader}>
-          <View style={styles.iconWrap}>
+          <View style={[styles.iconWrap, { backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.14)`, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)` }]}>
             <Text style={styles.iconText}>📢</Text>
           </View>
           <View style={styles.cardMeta}>
@@ -262,7 +270,7 @@ function AnnouncementCard({
           </View>
           <Text style={styles.timestamp}>{notif.timestamp}</Text>
         </View>
-        <Text style={styles.tapHint}>Tap to read thread →</Text>
+        <Text style={[styles.tapHint, { color: TEAM[300] }]}>Tap to read thread →</Text>
       </View>
     </Pressable>
   );
@@ -276,16 +284,19 @@ function SubFilledCard({
   notif: SubFilledNotif;
   onPress: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
         notif.read ? styles.cardRead : styles.cardUnread,
+        !notif.read && { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.22)` },
         pressed && styles.cardPressed,
       ]}
       onPress={onPress}
     >
-      {!notif.read && <View style={styles.cardAccent} />}
+      {!notif.read && <View style={[styles.cardAccent, { backgroundColor: TEAM[500] }]} />}
       <View style={styles.cardInner}>
         <View style={styles.cardHeader}>
           <View style={[styles.iconWrap, styles.iconWrapGreen]}>
@@ -314,6 +325,8 @@ function SubRequestSheet({
   onYes: () => void;
   onDismiss: () => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
@@ -328,16 +341,16 @@ function SubRequestSheet({
             Want us to let your manager know you need a replacement for {gameName}?
           </Text>
           <Pressable
-            style={({ pressed }) => [styles.subRequestYesBtn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.subRequestYesBtn, { backgroundColor: TEAM[500], shadowColor: TEAM[500] }, pressed && { opacity: 0.85 }]}
             onPress={onYes}
           >
-            <Text style={styles.subRequestYesBtnText}>Yes, request a sub</Text>
+            <Text style={[styles.subRequestYesBtnText, { color: TEAM.on }]}>Yes, request a sub</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.subRequestNoBtn, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.subRequestNoBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` }, pressed && { opacity: 0.75 }]}
             onPress={onDismiss}
           >
-            <Text style={styles.subRequestNoBtnText}>No thanks</Text>
+            <Text style={[styles.subRequestNoBtnText, { color: TEAM[300] }]}>No thanks</Text>
           </Pressable>
         </Pressable>
       </Pressable>

@@ -1,9 +1,9 @@
 // Roster screen — B-07 Manager Roster / C-07 Player Roster.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert,
+  View, Text, ScrollView, Pressable, Modal, Share, Clipboard, StyleSheet, Alert,
 } from 'react-native';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -25,9 +25,6 @@ interface RosterPlayer {
   role: PlayerRole;
   trend: [TrendDot, TrendDot, TrendDot, TrendDot, TrendDot];
 }
-
-const TEAM = teams.trashdogs;
-
 
 function toRosterPlayer(m: Member): RosterPlayer {
   const parts = m.displayName.trim().split(/\s+/);
@@ -59,8 +56,10 @@ export default function RosterScreen({ embedded }: { embedded?: boolean }) {
 
 function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { user, activeTeamId } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { members, loading } = useMembers(activeTeamId);
+  const { team } = useTeam(activeTeamId);
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [spareBankExpanded, setSpareBankExpanded] = useState(true);
@@ -70,12 +69,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   }, [members]);
   const [actionPlayer, setActionPlayer] = useState<RosterPlayer | null>(null);
 
-  const inviteCode = useMemo(() => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    return Array.from({ length: 6 }, () =>
-      chars[Math.floor(Math.random() * chars.length)]
-    ).join('');
-  }, []);
+  const inviteCode = team?.inviteCode ?? '';
 
   const makeManager = async (id: string) => {
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'manager' as PlayerRole } : p));
@@ -183,6 +177,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
       <InviteSheet
         visible={inviteVisible}
         inviteCode={inviteCode}
+        teamName={team?.name ?? ''}
         onClose={() => setInviteVisible(false)}
       />
       {actionPlayer && (
@@ -206,7 +201,8 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
 
 function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { members, loading } = useMembers(activeTeamId);
   const roster = members.map(toRosterPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
@@ -251,22 +247,30 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 function RosterHeader({ isManager, onInvite }: { isManager: boolean; onInvite?: () => void }) {
-  const { activeTeamId } = useUserContext();
+  const { activeTeamId, activeTeamPalette } = useUserContext();
   const { team } = useTeam(activeTeamId);
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
-        <View style={styles.teamDot} />
-        <Text style={styles.teamName}>{team?.name ?? 'Trash Dogs'}</Text>
+        <View style={[styles.teamDot, { backgroundColor: TEAM[300] }]} />
+        <Text style={[styles.teamName, { color: TEAM[300] }]}>{team?.name ?? ''}</Text>
       </View>
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Roster</Text>
         {isManager && (
           <Pressable
-            style={({ pressed }) => [styles.inviteBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.inviteBtn,
+              {
+                borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+                backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+              },
+              pressed && { opacity: 0.7 },
+            ]}
             onPress={onInvite}
           >
-            <Text style={styles.inviteBtnText}>+ Invite</Text>
+            <Text style={[styles.inviteBtnText, { color: TEAM[300] }]}>+ Invite</Text>
           </Pressable>
         )}
       </View>
@@ -311,12 +315,16 @@ function PlayerRow({
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
 function PlayerAvatar({ player, size = 44 }: { player: RosterPlayer; size?: number }) {
-  const avatarStyle = player.role === 'manager' ? styles.avatarManager
-    : player.role === 'spare' ? styles.avatarSpare
-    : styles.avatarPlayer;
-  const initialsStyle = player.role === 'manager' ? styles.avatarInitialsManager
-    : player.role === 'spare' ? styles.avatarInitialsSpare
-    : undefined;
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  const avatarStyle = player.role === 'manager'
+    ? { backgroundColor: TEAM[500] }
+    : player.role === 'spare'
+    ? styles.avatarSpare
+    : { backgroundColor: TEAM[700], borderWidth: 1, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)` };
+  const initialsColor = player.role === 'manager' ? '#FFFFFF'
+    : player.role === 'spare' ? '#F59E0B'
+    : TEAM[300];
   return (
     <View style={[
       styles.avatar,
@@ -325,8 +333,7 @@ function PlayerAvatar({ player, size = 44 }: { player: RosterPlayer; size?: numb
     ]}>
       <Text style={[
         styles.avatarInitials,
-        { fontSize: Math.round(size * 0.32) },
-        initialsStyle,
+        { fontSize: Math.round(size * 0.32), color: initialsColor },
       ]}>
         {player.initials}
       </Text>
@@ -337,16 +344,24 @@ function PlayerAvatar({ player, size = 44 }: { player: RosterPlayer; size?: numb
 // ─── Role pill ────────────────────────────────────────────────────────────────
 
 function RolePill({ role }: { role: PlayerRole }) {
-  const pillStyle = role === 'manager' ? styles.rolePillManager
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  const pillStyle = role === 'manager'
+    ? { backgroundColor: TEAM[900], borderWidth: 0.5, borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.32)` }
     : role === 'spare' ? styles.rolePillSpare
     : styles.rolePillPlayer;
-  const textStyle = role === 'manager' ? styles.rolePillTextManager
-    : role === 'spare' ? styles.rolePillTextSpare
-    : styles.rolePillTextPlayer;
+  const textColor = role === 'manager' ? TEAM[300]
+    : role === 'spare' ? '#F59E0B'
+    : undefined;
+  const textStyle = role === 'spare' ? styles.rolePillTextSpare
+    : role === 'player' ? styles.rolePillTextPlayer
+    : undefined;
   const label = role === 'manager' ? 'Manager' : role === 'spare' ? 'Spare' : 'Player';
   return (
     <View style={[styles.rolePill, pillStyle]}>
-      <Text style={[styles.rolePillText, textStyle]}>{label}</Text>
+      <Text style={[styles.rolePillText, textStyle, textColor ? { color: textColor } : undefined]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -386,23 +401,28 @@ function TrendDots({ trend, size = 7 }: { trend: TrendDot[]; size?: number }) {
 function InviteSheet({
   visible,
   inviteCode,
+  teamName,
   onClose,
 }: {
   visible: boolean;
   inviteCode: string;
+  teamName: string;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
+    Clipboard.setString(inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = () => {
     Share.share({
-      message: `Join Trashdogs on Chrp! Code: ${inviteCode} — https://chrp.app/join/${inviteCode}`,
+      message: `Download Chrp and enter code: ${inviteCode}`,
     });
   };
 
@@ -411,24 +431,45 @@ function InviteSheet({
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
         <Pressable onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
           <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Invite to Trashdogs</Text>
-          <Text style={styles.sheetSub}>Share this code or link with your teammates</Text>
+          <Text style={styles.sheetTitle}>Invite players</Text>
+          <Text style={styles.sheetSub}>Share this code with teammates to join {teamName}</Text>
 
-          <View style={styles.inviteCodeBox}>
-            <Text style={styles.inviteCodeText}>{inviteCode}</Text>
+          <View style={[
+            styles.inviteCodeBox,
+            {
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)`,
+            },
+          ]}>
+            <Text style={[styles.inviteCodeText, { color: TEAM[300] }]}>{inviteCode || '——'}</Text>
           </View>
 
           <Pressable
-            style={({ pressed }) => [styles.sheetBtn, styles.sheetBtnGhost, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.sheetBtn,
+              styles.sheetBtnGhost,
+              {
+                borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+                backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+              },
+              pressed && { opacity: 0.7 },
+            ]}
             onPress={handleCopy}
           >
-            <Text style={styles.sheetBtnGhostText}>{copied ? '✓ Copied!' : 'Copy invite link'}</Text>
+            <Text style={[styles.sheetBtnGhostText, { color: TEAM[300] }]}>
+              {copied ? '✓ Copied!' : 'Copy code'}
+            </Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.sheetBtn, styles.sheetBtnFilled, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [
+              styles.sheetBtn,
+              { backgroundColor: TEAM[500], shadowColor: TEAM[500],
+                shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 4 },
+              pressed && { opacity: 0.85 },
+            ]}
             onPress={handleShare}
           >
-            <Text style={styles.sheetBtnFilledText}>Share</Text>
+            <Text style={[styles.sheetBtnFilledText, { color: TEAM.on }]}>Share</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -611,13 +652,11 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: TEAM[300],
   },
   teamName: {
     fontFamily: fonts.mono,
     fontSize: 10.5,
     letterSpacing: 1.2,
-    color: TEAM[300],
   },
   headerRow: {
     flexDirection: 'row',
@@ -633,14 +672,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[6],
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
-    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
   },
   inviteBtnText: {
     fontFamily: fonts.uiSemiBold,
     fontSize: 13,
     fontWeight: '600',
-    color: TEAM[300],
   },
 
   // ── Scroll ───────────────────────────────────────────────────────────────
@@ -705,14 +741,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  avatarPlayer: {
-    backgroundColor: TEAM[700],
-    borderWidth: 1,
-    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)`,
-  },
-  avatarManager: {
-    backgroundColor: TEAM[500],
-  },
+  avatarPlayer: {},
+  avatarManager: {},
   avatarSpare: {
     backgroundColor: navy[700],
     borderWidth: 1,
@@ -721,13 +751,6 @@ const styles = StyleSheet.create({
   avatarInitials: {
     fontFamily: fonts.uiBold,
     fontWeight: '700',
-    color: TEAM[300],
-  },
-  avatarInitialsManager: {
-    color: '#FFFFFF',
-  },
-  avatarInitialsSpare: {
-    color: '#F59E0B',
   },
 
   // ── Role pill ─────────────────────────────────────────────────────────────
@@ -736,11 +759,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radius.xs,
   },
-  rolePillManager: {
-    backgroundColor: TEAM[900],
-    borderWidth: 0.5,
-    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.32)`,
-  },
+  rolePillManager: {},
   rolePillPlayer: {
     backgroundColor: navy[600],
     borderWidth: 0.5,
@@ -757,9 +776,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     fontWeight: '600',
   },
-  rolePillTextManager: {
-    color: TEAM[300],
-  },
+  rolePillTextManager: {},
   rolePillTextPlayer: {
     color: navy[400],
   },
@@ -876,10 +893,8 @@ const styles = StyleSheet.create({
 
   // ── Invite code ───────────────────────────────────────────────────────────
   inviteCodeBox: {
-    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
     borderRadius: radius.l,
     borderWidth: 1,
-    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)`,
     paddingVertical: spacing[20],
     paddingHorizontal: spacing[24],
     marginBottom: spacing[20],
@@ -889,7 +904,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: 34,
     fontWeight: '600',
-    color: TEAM[300],
     letterSpacing: 10,
   },
 
@@ -903,28 +917,17 @@ const styles = StyleSheet.create({
   },
   sheetBtnGhost: {
     borderWidth: 1,
-    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
-    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
   },
-  sheetBtnFilled: {
-    backgroundColor: TEAM[500],
-    shadowColor: TEAM[500],
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 4,
-  },
+  sheetBtnFilled: {},
   sheetBtnGhostText: {
     fontFamily: fonts.uiSemiBold,
     fontSize: 15,
     fontWeight: '600',
-    color: TEAM[300],
   },
   sheetBtnFilledText: {
     fontFamily: fonts.uiSemiBold,
     fontSize: 15,
     fontWeight: '600',
-    color: TEAM.on,
   },
 
   // ── Action sheet rows ─────────────────────────────────────────────────────

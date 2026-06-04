@@ -18,8 +18,7 @@ import { useResponses } from '../firebase/hooks/useResponses';
 import { useTeam } from '../firebase/hooks/useTeam';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
-const TEAM = teams.trashdogs;
-
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -56,13 +55,7 @@ interface PastEvent {
   cancelled: boolean;
 }
 
-// ─── Kind tag styles ──────────────────────────────────────────────────────────
-
-const KIND_COLORS: Record<EventKind, { bg: string; text: string }> = {
-  game:     { bg: TEAM[900],            text: TEAM[300] },
-  practice: { bg: ice[900],             text: ice[300] },
-  social:   { bg: status.alert.subtle,  text: status.alert.pure },
-};
+// KIND_COLORS is computed inside KindTag using the dynamic TEAM palette
 
 // ─── Firestore → display adapters ────────────────────────────────────────────
 
@@ -110,16 +103,25 @@ function DateChip({
 }: {
   weekday: string; day: string; month: string; muted?: boolean;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
-    <View style={[styles.dateChip, muted && styles.dateChipMuted]}>
-      <Text style={[styles.dateWeekday, muted && styles.dateLabelMuted]}>{weekday}</Text>
+    <View style={[styles.dateChip, !muted && { backgroundColor: TEAM[700] }, muted && styles.dateChipMuted]}>
+      <Text style={[styles.dateWeekday, !muted && { color: TEAM[300] }, muted && styles.dateLabelMuted]}>{weekday}</Text>
       <Text style={[styles.dateDay, muted && styles.dateDayMuted]}>{day}</Text>
-      <Text style={[styles.dateMonth, muted && styles.dateLabelMuted]}>{month}</Text>
+      <Text style={[styles.dateMonth, !muted && { color: TEAM[300] }, muted && styles.dateLabelMuted]}>{month}</Text>
     </View>
   );
 }
 
 function KindTag({ kind, muted = false }: { kind: EventKind; muted?: boolean }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  const KIND_COLORS: Record<EventKind, { bg: string; text: string }> = {
+    game:     { bg: TEAM[900],            text: TEAM[300] },
+    practice: { bg: ice[900],             text: ice[300] },
+    social:   { bg: status.alert.subtle,  text: status.alert.pure },
+  };
   const c = KIND_COLORS[kind];
   return (
     <View style={[
@@ -147,6 +149,8 @@ function ManagerPill({ inCount, outCount }: { inCount: number; outCount: number 
 }
 
 function PlayerPill({ response }: { response: PlayerResponse }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   if (!response) {
     return (
       <View style={[styles.playerPill, { backgroundColor: TEAM[900], borderColor: TEAM[700] }]}>
@@ -295,7 +299,8 @@ function PastSection({ events, onNavigate }: { events: PastEvent[]; onNavigate: 
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
-  const { isManager } = useUserContext();
+  const { isManager, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No upcoming events</Text>
@@ -307,9 +312,16 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       {isManager && (
         <Pressable
           onPress={onAdd}
-          style={({ pressed }) => [styles.emptyAddBtn, pressed && { opacity: 0.8 }]}
+          style={({ pressed }) => [
+            styles.emptyAddBtn,
+            {
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+            },
+            pressed && { opacity: 0.8 },
+          ]}
         >
-          <Text style={styles.emptyAddBtnText}>+ Add your first event</Text>
+          <Text style={[styles.emptyAddBtnText, { color: TEAM[300] }]}>+ Add your first event</Text>
         </Pressable>
       )}
     </View>
@@ -317,24 +329,25 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function ScheduleHeader({ onAdd, onProfile }: { onAdd: () => void; onProfile: () => void }) {
-  const { isManager, activeTeamId } = useUserContext();
+  const { isManager, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const { team } = useTeam(activeTeamId);
   return (
     <View style={styles.header}>
       <View style={styles.teamPill}>
-        <View style={styles.teamDot} />
-        <Text style={styles.teamName}>{team?.name ?? 'Trash Dogs'}</Text>
+        <View style={[styles.teamDot, { backgroundColor: TEAM[300] }]} />
+        <Text style={[styles.teamName, { color: TEAM[300] }]}>{team?.name ?? 'Trash Dogs'}</Text>
       </View>
       <View style={styles.headerRow}>
         <Text style={styles.pageTitle}>Schedule</Text>
         <View style={styles.headerRight}>
           {isManager && (
             <TouchableOpacity
-              style={styles.addBtn}
+              style={[styles.addBtn, { backgroundColor: TEAM[500] }]}
               activeOpacity={0.75}
               onPress={onAdd}
             >
-              <Text style={styles.addBtnText}>+</Text>
+              <Text style={[styles.addBtnText, { color: TEAM.on }]}>+</Text>
             </TouchableOpacity>
           )}
           <AvatarPill onPress={onProfile} />

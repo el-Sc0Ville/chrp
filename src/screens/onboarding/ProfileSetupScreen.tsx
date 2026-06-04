@@ -5,9 +5,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateProfile } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
-import { auth } from '../../firebase';
+import { auth, db } from '../../firebase';
 import { useUserContext } from '../../context/UserContext';
 import { navy, fonts, teams, spacing, radius } from '../../theme';
 
@@ -15,7 +16,8 @@ type Props = NativeStackScreenProps<OnboardingStackParamList, 'ProfileSetup'>;
 
 export default function ProfileSetupScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { setMockUser } = useUserContext();
+  const { setMockUser, activeTeamId, activeTeamPalette, needsOnboarding } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   const [displayName, setDisplayName] = useState('');
   const [jerseyNumber, setJerseyNumber] = useState('');
   const canContinue = displayName.trim().length > 0;
@@ -26,9 +28,15 @@ export default function ProfileSetupScreen({ navigation }: Props) {
     if (auth.currentUser) {
       try {
         await updateProfile(auth.currentUser, { displayName: name });
-        // Sync the updated displayName into UserContext immediately so all
-        // screens see the correct name without waiting for an auth refresh.
         setMockUser({ ...auth.currentUser, displayName: name } as typeof auth.currentUser, false);
+        // For existing users editing their profile (not during initial onboarding),
+        // also sync the displayName to their Firestore member document.
+        if (!needsOnboarding) {
+          await updateDoc(
+            doc(db, 'teams', activeTeamId, 'members', auth.currentUser.uid),
+            { displayName: name },
+          ).catch(() => {});
+        }
       } catch (err) {
         console.error('[ProfileSetup] updateProfile failed:', err);
       }
@@ -90,6 +98,7 @@ export default function ProfileSetupScreen({ navigation }: Props) {
         <Pressable
           style={({ pressed }) => [
             styles.btn,
+            canContinue && { backgroundColor: TEAM[500] },
             !canContinue && styles.btnDisabled,
             pressed && canContinue && styles.btnPressed,
           ]}
@@ -155,7 +164,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   btn: {
-    backgroundColor: teams.trashdogs[500],
     borderRadius: radius.m,
     paddingVertical: spacing[16],
     alignItems: 'center',

@@ -23,7 +23,7 @@ import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { sendPushNotification } from '../firebase/sendNotification';
 
-const TEAM = teams.trashdogs;
+const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
 type CreateEventNavProp   = NativeStackNavigationProp<RootStackParamList>;
 type CreateEventRouteProp = RouteProp<RootStackParamList, 'CreateEvent'>;
@@ -78,7 +78,8 @@ export default function CreateEventScreen() {
   const navigation = useNavigation<CreateEventNavProp>();
   const route      = useRoute<CreateEventRouteProp>();
   const editEventId = route.params?.editEventId;
-  const { user, activeTeamId }   = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
 
   // Form state
   const [eventType,   setEventType]   = useState<EventType>('game');
@@ -237,7 +238,7 @@ export default function CreateEventScreen() {
           style={[styles.navSide, styles.navSideRight]}
           hitSlop={12}
         >
-          <Text style={[styles.saveText, (!isFormValid || saving) && styles.saveTextDisabled]}>
+          <Text style={[styles.saveText, { color: TEAM[300] }, (!isFormValid || saving) && styles.saveTextDisabled]}>
             {saving ? 'Saving…' : editEventId ? 'Save changes' : 'Save & notify'}
           </Text>
         </Pressable>
@@ -305,7 +306,7 @@ export default function CreateEventScreen() {
                     onPress={() => setShowDate(false)}
                     style={({ pressed }) => [styles.pickerDone, pressed && { opacity: 0.7 }]}
                   >
-                    <Text style={styles.pickerDoneText}>Done</Text>
+                    <Text style={[styles.pickerDoneText, { color: TEAM[300] }]}>Done</Text>
                   </Pressable>
                 )}
               </View>
@@ -341,7 +342,7 @@ export default function CreateEventScreen() {
                     onPress={() => setShowTime(false)}
                     style={({ pressed }) => [styles.pickerDone, pressed && { opacity: 0.7 }]}
                   >
-                    <Text style={styles.pickerDoneText}>Done</Text>
+                    <Text style={[styles.pickerDoneText, { color: TEAM[300] }]}>Done</Text>
                   </Pressable>
                 )}
               </View>
@@ -410,11 +411,12 @@ export default function CreateEventScreen() {
               onPress={handleSave}
               style={({ pressed }) => [
                 styles.saveBtn,
+                { backgroundColor: TEAM[500], shadowColor: TEAM[500] },
                 (!isFormValid || saving) && styles.saveBtnDisabled,
                 pressed && isFormValid && !saving && { opacity: 0.85 },
               ]}
             >
-              <Text style={[styles.saveBtnText, (!isFormValid || saving) && styles.saveBtnTextDisabled]}>
+              <Text style={[styles.saveBtnText, { color: TEAM.on }, (!isFormValid || saving) && styles.saveBtnTextDisabled]}>
                 {saving ? 'Saving…' : editEventId ? 'Save changes' : 'Save & notify team'}
               </Text>
             </Pressable>
@@ -450,6 +452,8 @@ function SegmentedControl({
   value: EventType;
   onChange: (v: EventType) => void;
 }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
   return (
     <View style={styles.segmented}>
       {EVENT_TYPES.map(opt => {
@@ -458,9 +462,12 @@ function SegmentedControl({
           <Pressable
             key={opt.id}
             onPress={() => onChange(opt.id)}
-            style={[styles.segment, isActive && styles.segmentActive]}
+            style={[styles.segment, isActive && [styles.segmentActive, {
+              backgroundColor: TEAM[500],
+              shadowColor: TEAM[500],
+            }]]}
           >
-            <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+            <Text style={[styles.segmentText, isActive && [styles.segmentTextActive, { color: TEAM.on }]]}>
               {opt.label}
             </Text>
           </Pressable>
