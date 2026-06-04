@@ -327,25 +327,29 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
           </Pressable>
         </View>
 
-        {/* ── Payment history ── */}
-        <Text style={styles.sectionLabel}>Payment history</Text>
-        <View style={styles.card}>
-          {PAYMENT_HISTORY.map((entry, idx) => (
-            <React.Fragment key={entry.id}>
-              {idx > 0 && <View style={styles.rowDivider} />}
-              <View style={styles.historyRow}>
-                <View style={styles.historyLeft}>
-                  <Text style={styles.historyLabel}>{entry.label}</Text>
-                  <Text style={styles.historyDate}>{entry.date}</Text>
-                </View>
-                <View style={styles.historyRight}>
-                  <Text style={styles.historyAmount}>${entry.amount}</Text>
-                  <StatusPill status="paid" />
-                </View>
-              </View>
-            </React.Fragment>
-          ))}
-        </View>
+        {/* ── Payment history (only shown when player has made payments) ── */}
+        {selfPlayer && selfPlayer.paidAmount > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Payment history</Text>
+            <View style={styles.card}>
+              {PAYMENT_HISTORY.map((entry, idx) => (
+                <React.Fragment key={entry.id}>
+                  {idx > 0 && <View style={styles.rowDivider} />}
+                  <View style={styles.historyRow}>
+                    <View style={styles.historyLeft}>
+                      <Text style={styles.historyLabel}>{entry.label}</Text>
+                      <Text style={styles.historyDate}>{entry.date}</Text>
+                    </View>
+                    <View style={styles.historyRight}>
+                      <Text style={styles.historyAmount}>${entry.amount}</Text>
+                      <StatusPill status="paid" />
+                    </View>
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* ── Toast ── */}

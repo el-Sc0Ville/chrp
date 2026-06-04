@@ -213,6 +213,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: fonts.ui,
     fontSize: 17,
+    letterSpacing: 0,
   },
   btn: {
     borderRadius: radius.m,
