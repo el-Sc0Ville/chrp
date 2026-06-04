@@ -49,6 +49,12 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 function formatDate(date) {
     return `${DAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
+function formatTime(date) {
+    const h = date.getHours() % 12 || 12;
+    const m = date.getMinutes();
+    const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+    return m === 0 ? `${h} ${ampm}` : `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
 async function sendBatchNotifications(messages) {
     if (messages.length === 0)
         return;
@@ -65,53 +71,78 @@ async function sendBatchNotifications(messages) {
         });
     }
 }
+const REMINDER_WINDOWS = [
+    {
+        hoursOut: 48,
+        startHours: 47,
+        endHours: 49,
+        buildNotification: (title, dateLabel, _timeLabel, venue) => ({
+            title: `Are you in for ${title}?`,
+            body: `📅 ${dateLabel} at ${venue}. Tap to respond.`,
+        }),
+    },
+    {
+        hoursOut: 24,
+        startHours: 23,
+        endHours: 25,
+        buildNotification: (title, _dateLabel, timeLabel, venue) => ({
+            title: `Last chance — are you in for ${title}?`,
+            body: `⏰ Tomorrow at ${timeLabel} at ${venue}. We need to know!`,
+        }),
+    },
+];
 exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'every 60 minutes', region: 'northamerica-northeast1' }, async () => {
     const now = new Date();
-    const windowStart = new Date(now.getTime() + 47 * 60 * 60 * 1000);
-    const windowEnd = new Date(now.getTime() + 49 * 60 * 60 * 1000);
     const teamsSnap = await db.collection('teams').get();
     for (const teamDoc of teamsSnap.docs) {
         const teamId = teamDoc.id;
-        const eventsSnap = await db
-            .collection('teams')
-            .doc(teamId)
-            .collection('events')
-            .where('startsAt', '>=', admin.firestore.Timestamp.fromDate(windowStart))
-            .where('startsAt', '<=', admin.firestore.Timestamp.fromDate(windowEnd))
-            .get();
-        for (const eventDoc of eventsSnap.docs) {
-            const eventData = eventDoc.data();
-            const eventId = eventDoc.id;
-            const [membersSnap, responsesSnap] = await Promise.all([
-                db.collection('teams').doc(teamId).collection('members').get(),
-                db.collection('teams').doc(teamId).collection('events').doc(eventId).collection('responses').get(),
-            ]);
-            const respondedIds = new Set(responsesSnap.docs.map(d => d.id));
-            const dateLabel = formatDate(eventData['startsAt'].toDate());
-            const notifications = [];
-            for (const memberDoc of membersSnap.docs) {
-                const member = memberDoc.data();
-                if (member['autoIn'] === false || member['role'] === 'spare')
-                    continue;
-                if (respondedIds.has(memberDoc.id))
-                    continue;
-                if (!member['pushToken'])
-                    continue;
-                notifications.push({
-                    to: member['pushToken'],
-                    sound: 'default',
-                    title: `Are you in for ${eventData['title']}?`,
-                    body: `📅 ${dateLabel} at ${eventData['venue']}. Tap to respond.`,
-                    categoryId: 'AVAILABILITY_REQUEST',
-                    data: {
-                        eventId,
-                        teamId,
-                        userId: memberDoc.id,
-                        displayName: member['displayName'],
-                    },
-                });
+        for (const window of REMINDER_WINDOWS) {
+            const windowStart = new Date(now.getTime() + window.startHours * 60 * 60 * 1000);
+            const windowEnd = new Date(now.getTime() + window.endHours * 60 * 60 * 1000);
+            const eventsSnap = await db
+                .collection('teams')
+                .doc(teamId)
+                .collection('events')
+                .where('startsAt', '>=', admin.firestore.Timestamp.fromDate(windowStart))
+                .where('startsAt', '<=', admin.firestore.Timestamp.fromDate(windowEnd))
+                .get();
+            for (const eventDoc of eventsSnap.docs) {
+                const eventData = eventDoc.data();
+                const eventId = eventDoc.id;
+                const eventDate = eventData['startsAt'].toDate();
+                const [membersSnap, responsesSnap] = await Promise.all([
+                    db.collection('teams').doc(teamId).collection('members').get(),
+                    db.collection('teams').doc(teamId).collection('events').doc(eventId).collection('responses').get(),
+                ]);
+                const respondedIds = new Set(responsesSnap.docs.map(d => d.id));
+                const dateLabel = formatDate(eventDate);
+                const timeLabel = formatTime(eventDate);
+                const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue']);
+                const notifications = [];
+                for (const memberDoc of membersSnap.docs) {
+                    const member = memberDoc.data();
+                    if (member['autoIn'] === false || member['role'] === 'spare')
+                        continue;
+                    if (respondedIds.has(memberDoc.id))
+                        continue;
+                    if (!member['pushToken'])
+                        continue;
+                    notifications.push({
+                        to: member['pushToken'],
+                        sound: 'default',
+                        title,
+                        body,
+                        categoryId: 'AVAILABILITY_REQUEST',
+                        data: {
+                            eventId,
+                            teamId,
+                            userId: memberDoc.id,
+                            displayName: member['displayName'],
+                        },
+                    });
+                }
+                await sendBatchNotifications(notifications);
             }
-            await sendBatchNotifications(notifications);
         }
     }
 });
