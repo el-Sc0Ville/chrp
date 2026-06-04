@@ -45,8 +45,7 @@
           "color": "#2F6BFF",
           "sounds": []
         }
-      ],
-      ["./plugins/withNotificationExtension"]
+      ]
     ],
     "extra": {
       "eas": {
