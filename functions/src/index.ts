@@ -45,6 +45,7 @@ type ExpoMessage = {
     teamColor?: string;
     eventDate?: string;
     location?: string;
+    requestId?: string;
   };
 };
 
@@ -244,4 +245,42 @@ export const recordAvailability = onRequest(
 
     res.status(200).json({ success: true });
   }
+);
+
+export const onSubRequestCreated = onDocumentCreated(
+  { document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' },
+  async (event) => {
+    const { teamId, requestId } = event.params;
+    const requestData = event.data?.data();
+    if (!requestData) return;
+
+    const membersSnap = await db
+      .collection('teams').doc(teamId).collection('members')
+      .where('role', '==', 'manager')
+      .get();
+
+    const notifications: ExpoMessage[] = [];
+    for (const memberDoc of membersSnap.docs) {
+      const member = memberDoc.data();
+      if (!member['pushToken']) continue;
+      if (member['notificationsEnabled'] === false) continue;
+
+      notifications.push({
+        to: member['pushToken'],
+        sound: 'default',
+        title: `Sub needed — ${requestData['opponent']}`,
+        body: `${requestData['gameWeekday']} ${requestData['gameDay']} ${requestData['gameMonth']} · ${requestData['gameVenue']}`,
+        categoryId: 'SUB_REQUEST',
+        data: {
+          eventId: requestData['eventId'] ?? '',
+          teamId,
+          userId: memberDoc.id,
+          displayName: member['displayName'],
+          requestId,
+        },
+      });
+    }
+
+    await sendBatchNotifications(notifications);
+  },
 );

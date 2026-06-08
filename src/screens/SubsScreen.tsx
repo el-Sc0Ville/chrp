@@ -13,8 +13,10 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { useSubRequests } from '../firebase/hooks/useSubRequests';
+import { useMembers } from '../firebase/hooks/useMembers';
 import { useEvents } from '../firebase/hooks/useEvents';
-import type { SubRequest as FirestoreSubRequest } from '../firebase/schema';
+import { sendPushNotification } from '../firebase/sendNotification';
+import type { SubRequest as FirestoreSubRequest, Member } from '../firebase/schema';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 const SPARE_FEE = 20; // $ per game
@@ -25,6 +27,7 @@ type SubStatus = 'pending' | 'filled' | 'cancelled';
 
 interface SubRequest {
   id: string;
+  eventId: string;
   playerId: string;
   playerName: string;
   playerInitials: string;
@@ -44,8 +47,8 @@ interface Spare {
   id: string;
   name: string;
   initials: string;
-  position: string;
-  gamesPlayed: number;
+  jersey: number;
+  pushToken?: string;
 }
 
 interface UpcomingEvent {
@@ -59,54 +62,15 @@ interface UpcomingEvent {
   myResponse: 'out' | null;
 }
 
-// ─── Hardcoded data ───────────────────────────────────────────────────────────
+// ─── Member → Spare mapper ────────────────────────────────────────────────────
 
-const SPARES: Spare[] = [
-  { id: 's1', name: 'François Lapointe', initials: 'FL', position: 'Defence', gamesPlayed: 3 },
-  { id: 's2', name: 'Keegan Murphy',     initials: 'KM', position: 'Forward', gamesPlayed: 7 },
-  { id: 's3', name: 'Isabelle Tran',     initials: 'IT', position: 'Goalie',  gamesPlayed: 1 },
-  { id: 's4', name: 'Dex Hartmann',      initials: 'DH', position: 'Forward', gamesPlayed: 5 },
-  { id: 's5', name: 'Rania Osei',        initials: 'RO', position: 'Defence', gamesPlayed: 2 },
-];
-
-const SUB_REQUESTS_SEED: SubRequest[] = [
-  {
-    id: 'sr1',
-    playerId: 'r4', playerName: 'Jake Kowalski', playerInitials: 'JK', playerJersey: 44,
-    gameWeekday: 'SAT', gameDay: '31', gameMonth: 'MAY',
-    opponent: 'vs Ember FC', venue: 'Arena Nord', gameTime: '7:30 PM',
-    reason: 'Out of town for a work trip',
-    status: 'pending',
-  },
-  {
-    id: 'sr2',
-    playerId: 'r9', playerName: 'Sam Delacroix', playerInitials: 'SD', playerJersey: 67,
-    gameWeekday: 'SAT', gameDay: '07', gameMonth: 'JUN',
-    opponent: '@ Aurora Sky', venue: 'Stadium B', gameTime: '8:00 PM',
-    status: 'pending',
-  },
-  {
-    id: 'sr3',
-    playerId: 'r7', playerName: 'Nina Petrov', playerInitials: 'NP', playerJersey: 3,
-    gameWeekday: 'WED', gameDay: '04', gameMonth: 'JUN',
-    opponent: 'Team Practice', venue: 'Inner Ice Complex', gameTime: '6:00 PM',
-    reason: 'Knee physio appointment',
-    status: 'filled',
-    filledBy: 'Keegan Murphy',
-  },
-];
-
-// Player's own submitted requests (Pat Normandin has 1 pending)
-const PLAYER_OWN_SEED: SubRequest[] = [
-  {
-    id: 'sr4',
-    playerId: 'r1', playerName: 'Pat Normandin', playerInitials: 'PN', playerJersey: 17,
-    gameWeekday: 'SAT', gameDay: '31', gameMonth: 'MAY',
-    opponent: 'vs Ember FC', venue: 'Arena Nord', gameTime: '7:30 PM',
-    reason: 'Work event',
-    status: 'pending',
-  },
-];
+function memberToSpare(m: Member): Spare {
+  const parts = m.displayName.trim().split(' ');
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : m.displayName.slice(0, 2).toUpperCase();
+  return { id: m.userId, name: m.displayName, initials, jersey: m.jerseyNumber, pushToken: m.pushToken };
+}
 
 // ─── Firestore → display mapper ───────────────────────────────────────────────
 
@@ -117,6 +81,7 @@ function toDisplaySubRequest(r: FirestoreSubRequest): SubRequest {
     : r.requestedByName.slice(0, 2).toUpperCase();
   return {
     id: r.id,
+    eventId: r.eventId,
     playerId: r.requestedBy, playerName: r.requestedByName,
     playerInitials: initials, playerJersey: 0,
     gameWeekday: r.gameWeekday, gameDay: r.gameDay, gameMonth: r.gameMonth,
@@ -166,7 +131,9 @@ function ManagerSubsScreen() {
   const { activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
+  const { members } = useMembers(activeTeamId);
   const requests     = firestoreRequests.map(toDisplaySubRequest);
+  const spareMembers: Spare[] = members.filter((m: Member) => m.role === 'spare').map(memberToSpare);
   const [findSubTarget,  setFindSubTarget]  = useState<SubRequest | null>(null);
   const [invitedSpares,  setInvitedSpares]  = useState<Set<string>>(new Set());
   const [filledExpanded, setFilledExpanded] = useState(false);
@@ -191,6 +158,15 @@ function ManagerSubsScreen() {
       await updateDoc(doc(db, 'teams', activeTeamId, 'subRequests', findSubTarget.id), {
         status: 'filled', filledBy: spare.name,
       });
+      if (spare.pushToken) {
+        const body = `${findSubTarget.gameWeekday} ${findSubTarget.gameDay} ${findSubTarget.gameMonth} · ${findSubTarget.venue}`;
+        sendPushNotification(
+          spare.pushToken,
+          'Sub request — are you available?',
+          body,
+          { eventId: findSubTarget.eventId, teamId: activeTeamId, userId: spare.id },
+        ).catch(err => console.error('[SubsScreen] spare push failed:', err));
+      }
     } catch (err) {
       console.error('[SubsScreen] invite write failed:', err);
     }
@@ -278,7 +254,7 @@ function ManagerSubsScreen() {
       {findSubTarget && (
         <FindSubSheet
           request={findSubTarget}
-          spares={SPARES}
+          spares={spareMembers}
           isInvited={isInvited}
           onInvite={handleInvite}
           onClose={() => setFindSubTarget(null)}
@@ -395,9 +371,7 @@ function FindSubSheet({
                       </View>
                       <View style={styles.spareInfo}>
                         <Text style={styles.spareName}>{spare.name}</Text>
-                        <Text style={styles.spareMeta}>
-                          {spare.position} · {spare.gamesPlayed} game{spare.gamesPlayed !== 1 ? 's' : ''} as spare
-                        </Text>
+                        <Text style={styles.spareMeta}>#{spare.jersey} · Spare</Text>
                       </View>
                       <Pressable
                         style={[styles.inviteBtn, {

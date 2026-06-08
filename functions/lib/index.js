@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
+exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
@@ -237,5 +237,38 @@ exports.recordAvailability = (0, https_1.onRequest)({ region: 'northamerica-nort
         setByManager: false,
     });
     res.status(200).json({ success: true });
+});
+exports.onSubRequestCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' }, async (event) => {
+    const { teamId, requestId } = event.params;
+    const requestData = event.data?.data();
+    if (!requestData)
+        return;
+    const membersSnap = await db
+        .collection('teams').doc(teamId).collection('members')
+        .where('role', '==', 'manager')
+        .get();
+    const notifications = [];
+    for (const memberDoc of membersSnap.docs) {
+        const member = memberDoc.data();
+        if (!member['pushToken'])
+            continue;
+        if (member['notificationsEnabled'] === false)
+            continue;
+        notifications.push({
+            to: member['pushToken'],
+            sound: 'default',
+            title: `Sub needed — ${requestData['opponent']}`,
+            body: `${requestData['gameWeekday']} ${requestData['gameDay']} ${requestData['gameMonth']} · ${requestData['gameVenue']}`,
+            categoryId: 'SUB_REQUEST',
+            data: {
+                eventId: requestData['eventId'] ?? '',
+                teamId,
+                userId: memberDoc.id,
+                displayName: member['displayName'],
+                requestId,
+            },
+        });
+    }
+    await sendBatchNotifications(notifications);
 });
 //# sourceMappingURL=index.js.map
