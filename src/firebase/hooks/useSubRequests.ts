@@ -13,6 +13,7 @@ export function useSubRequests(teamId: string): UseSubRequestsResult {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
+    if (!teamId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'subRequests');
     const q   = query(ref, orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(

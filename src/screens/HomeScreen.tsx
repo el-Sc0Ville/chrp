@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Pressable, Linking, Modal,
+  FlatList, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -47,21 +48,27 @@ export default function HomeScreen() {
 function ManagerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { width: screenWidth } = useWindowDimensions();
   const { unreadCount } = useNotifications();
   const { user, activeTeamId, activeTeamPalette, setActiveTeamId, setActiveTeamPalette } = useUserContext();
   const { teams: userTeams } = useUserTeams(user?.uid ?? null);
   const [switcherVisible, setSwitcherVisible] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  const { team }                 = useTeam(activeTeamId);
-  const { events, loading }      = useEvents(activeTeamId);
-  const { members }              = useMembers(activeTeamId);
-  const { announcements }        = useAnnouncements(activeTeamId);
+  const { team }            = useTeam(activeTeamId);
+  const { events, loading } = useEvents(activeTeamId);
+  const { members }         = useMembers(activeTeamId);
+  const { announcements }   = useAnnouncements(activeTeamId);
 
-  const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
-  const hasEvent  = nextEvent !== null;
-  const uid       = user?.uid;
+  const upcomingEvents = events.filter(
+    e => e.startsAt.toDate() > new Date() && e.status !== 'cancelled',
+  );
+  const hasEvent   = upcomingEvents.length > 0;
+  const safeIndex  = Math.min(activeIndex, Math.max(0, upcomingEvents.length - 1));
+  const activeEvent = upcomingEvents[safeIndex] ?? null;
+  const uid         = user?.uid;
 
-  const { responses } = useResponses(activeTeamId, nextEvent?.id ?? null);
+  const { responses } = useResponses(activeTeamId, activeEvent?.id ?? null);
 
   const avail: AvailCounts = { in: 0, out: 0, maybe: 0, noResp: 0 };
   members.forEach(m => {
@@ -73,18 +80,17 @@ function ManagerHomeScreen() {
     else                    avail.noResp++;
   });
 
-  console.log('Home event id:', nextEvent?.id, 'members:', members.length,
+  console.log('Home event id:', activeEvent?.id, 'members:', members.length,
     'counts — in:', avail.in, 'out:', avail.out, 'maybe:', avail.maybe, 'noResp:', avail.noResp);
 
   const managerResponse: Response = (responses[uid ?? ''] as Response) ?? null;
 
-  const handleManagerRespond = async (r: Response) => {
-    if (!r || !nextEvent) return;
-    if (!uid) {
-      console.warn('[HomeScreen] cannot write manager response: user.uid is undefined');
+  const handleManagerRespond = async (r: Response, event: TeamEvent) => {
+    if (!r || !event || !uid) {
+      console.warn('[HomeScreen] cannot write manager response: missing r/event/uid');
       return;
     }
-    const responseRef = doc(db, 'teams', activeTeamId, 'events', nextEvent.id, 'responses', uid);
+    const responseRef = doc(db, 'teams', activeTeamId, 'events', event.id, 'responses', uid);
     try {
       await setDoc(responseRef, {
         userId: uid,
@@ -103,7 +109,8 @@ function ManagerHomeScreen() {
   const goToGameday       = () => navigation.navigate('Gameday');
   const goToTeam          = () => navigation.navigate('Team');
   const goToNotifications = () => navigation.navigate('Notifications');
-  const goToEventDetail   = () => nextEvent && navigation.navigate('EventDetail', { eventId: nextEvent.id, title: nextEvent.title });
+
+  const cardWidth = screenWidth - spacing[16] * 2;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -126,14 +133,34 @@ function ManagerHomeScreen() {
           {loading ? (
             <HeroSkeleton />
           ) : hasEvent ? (
-            <ManagerHeroCard
-              event={nextEvent!}
-              avail={avail}
-              response={managerResponse}
-              onRespond={handleManagerRespond}
-              onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
-              onPress={goToEventDetail}
-            />
+            <>
+              <FlatList
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                data={upcomingEvents}
+                keyExtractor={e => e.id}
+                renderItem={({ item, index }) => (
+                  <View style={{ width: cardWidth }}>
+                    <ManagerHeroCard
+                      event={item}
+                      avail={index === safeIndex ? avail : { in: 0, out: 0, maybe: 0, noResp: 0 }}
+                      response={index === safeIndex ? managerResponse : null}
+                      onRespond={r => handleManagerRespond(r, item)}
+                      onGameday={isEventToday(item.startsAt) ? goToGameday : undefined}
+                      onPress={() => navigation.navigate('EventDetail', { eventId: item.id, title: item.title })}
+                    />
+                  </View>
+                )}
+                onMomentumScrollEnd={ev => {
+                  setActiveIndex(Math.round(ev.nativeEvent.contentOffset.x / cardWidth));
+                }}
+                scrollEventThrottle={16}
+              />
+              {upcomingEvents.length > 1 && (
+                <EventDots count={upcomingEvents.length} activeIndex={safeIndex} />
+              )}
+            </>
           ) : (
             <ManagerEmptyCard />
           )}
@@ -390,25 +417,31 @@ function ManagerEmptyCard() {
 function PlayerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { width: screenWidth } = useWindowDimensions();
   const { unreadCount } = useNotifications();
   const { user, activeTeamId, activeTeamPalette, setActiveTeamId, setActiveTeamPalette } = useUserContext();
   const { teams: userTeams } = useUserTeams(user?.uid ?? null);
   const [switcherVisible, setSwitcherVisible] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const { team }            = useTeam(activeTeamId);
   const { events, loading } = useEvents(activeTeamId);
   const { announcements }   = useAnnouncements(activeTeamId);
 
-  const nextEvent = events.find(e => e.startsAt.toDate() > new Date()) ?? null;
-  const hasEvent  = nextEvent !== null;
+  const upcomingEvents = events.filter(
+    e => e.startsAt.toDate() > new Date() && e.status !== 'cancelled',
+  );
+  const hasEvent   = upcomingEvents.length > 0;
+  const safeIndex  = Math.min(activeIndex, Math.max(0, upcomingEvents.length - 1));
+  const activeEvent = upcomingEvents[safeIndex] ?? null;
 
   const uid = user?.uid;
-  const { responses: firestoreResponses } = useResponses(activeTeamId, nextEvent?.id ?? null);
+  const { responses: firestoreResponses } = useResponses(activeTeamId, activeEvent?.id ?? null);
   const response: Response = (firestoreResponses[uid ?? ''] as Response) ?? null;
   const inCount  = Object.values(firestoreResponses).filter(r => r === 'in').length;
   const outCount = Object.values(firestoreResponses).filter(r => r === 'out').length;
 
-  console.log('Home event id:', nextEvent?.id, 'counts:', inCount, outCount);
+  console.log('Home event id:', activeEvent?.id, 'counts:', inCount, outCount);
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -420,10 +453,10 @@ function PlayerHomeScreen() {
     toastTimerRef.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const handleRespond = async (r: Response) => {
-    console.log('TOGGLE TAPPED', r, '— nextEvent:', nextEvent?.id ?? 'null');
-    if (!r || !nextEvent) {
-      console.warn('[HomeScreen] handleRespond bailed — r:', r, 'nextEvent:', nextEvent?.id ?? 'null');
+  const handleRespond = async (r: Response, event: TeamEvent) => {
+    console.log('TOGGLE TAPPED', r, '— event:', event?.id ?? 'null');
+    if (!r || !event) {
+      console.warn('[HomeScreen] handleRespond bailed — r:', r, 'event:', event?.id ?? 'null');
       return;
     }
     if (!uid) {
@@ -431,7 +464,7 @@ function PlayerHomeScreen() {
       return;
     }
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
-    const responseRef = doc(db, 'teams', activeTeamId, 'events', nextEvent.id, 'responses', uid);
+    const responseRef = doc(db, 'teams', activeTeamId, 'events', event.id, 'responses', uid);
     console.log('[HomeScreen] writing response', r, 'to', responseRef.path);
     try {
       await setDoc(responseRef, {
@@ -451,7 +484,8 @@ function PlayerHomeScreen() {
   const goToGameday       = () => navigation.navigate('Gameday');
   const goToTeam          = () => navigation.navigate('Team');
   const goToNotifications = () => navigation.navigate('Notifications');
-  const goToEventDetail   = () => nextEvent && navigation.navigate('EventDetail', { eventId: nextEvent.id, title: nextEvent.title });
+
+  const cardWidth = screenWidth - spacing[16] * 2;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -472,14 +506,34 @@ function PlayerHomeScreen() {
           {loading ? (
             <HeroSkeleton />
           ) : hasEvent ? (
-            <PlayerHeroCard
-              event={nextEvent!}
-              response={response}
-              inCount={inCount}
-              onRespond={handleRespond}
-              onGameday={isEventToday(nextEvent!.startsAt) ? goToGameday : undefined}
-              onPress={goToEventDetail}
-            />
+            <>
+              <FlatList
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                data={upcomingEvents}
+                keyExtractor={e => e.id}
+                renderItem={({ item, index }) => (
+                  <View style={{ width: cardWidth }}>
+                    <PlayerHeroCard
+                      event={item}
+                      response={index === safeIndex ? response : null}
+                      inCount={index === safeIndex ? inCount : 0}
+                      onRespond={r => handleRespond(r, item)}
+                      onGameday={isEventToday(item.startsAt) ? goToGameday : undefined}
+                      onPress={() => navigation.navigate('EventDetail', { eventId: item.id, title: item.title })}
+                    />
+                  </View>
+                )}
+                onMomentumScrollEnd={ev => {
+                  setActiveIndex(Math.round(ev.nativeEvent.contentOffset.x / cardWidth));
+                }}
+                scrollEventThrottle={16}
+              />
+              {upcomingEvents.length > 1 && (
+                <EventDots count={upcomingEvents.length} activeIndex={safeIndex} />
+              )}
+            </>
           ) : (
             <PlayerEmptyCard />
           )}
@@ -507,11 +561,10 @@ function PlayerHomeScreen() {
       />
       <SubRequestSheet
         visible={subSheetVisible}
-        gameName={nextEvent?.title ?? ''}
+        gameName={activeEvent?.title ?? ''}
         onYes={() => {
           setSubSheetVisible(false);
           showToast('Request sent to manager');
-          // TODO Phase 2: wire sub request to Firestore + trigger manager push notification
         }}
         onDismiss={() => setSubSheetVisible(false)}
       />
@@ -639,6 +692,28 @@ function PlayerEmptyCard() {
       <Text style={styles.emptyBody}>
         Ask your manager to add a game — you'll get a notification the moment it's posted.
       </Text>
+    </View>
+  );
+}
+
+// ─── Event page dots ──────────────────────────────────────────────────────────
+
+function EventDots({ count, activeIndex }: { count: number; activeIndex: number }) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  return (
+    <View style={styles.dotRow}>
+      {Array.from({ length: count }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.dot,
+            i === activeIndex
+              ? { width: 16, backgroundColor: TEAM[300] }
+              : { width: 6,  backgroundColor: navy[500] },
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -1368,6 +1443,20 @@ const styles = StyleSheet.create({
     color: 'rgba(229,234,242,0.55)',
     textAlign: 'center',
     maxWidth: 240,
+  },
+
+  // ── Event pagination dots ─────────────────────────────────────────────────
+  dotRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing[6],
+    paddingTop: spacing[10],
+    paddingBottom: spacing[4],
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
   },
 
   // ── Loading skeleton ──────────────────────────────────────────────────────

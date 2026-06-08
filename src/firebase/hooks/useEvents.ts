@@ -16,6 +16,7 @@ export function useEvents(teamId: string): UseEventsResult {
 
   useEffect(() => {
     console.log('useEvents called with teamId:', teamId);
+    if (!teamId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'events');
     const q   = query(ref, orderBy('startsAt', 'asc'));
 
