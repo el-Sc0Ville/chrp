@@ -241,15 +241,18 @@ exports.recordAvailability = (0, https_1.onRequest)({ region: 'northamerica-nort
 exports.onSubRequestCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' }, async (event) => {
     const { teamId, requestId } = event.params;
     const requestData = event.data?.data();
+    console.log('[onSubRequestCreated] triggered', { teamId, requestId, requestData });
     if (!requestData)
         return;
     const membersSnap = await db
         .collection('teams').doc(teamId).collection('members')
         .where('role', '==', 'manager')
         .get();
+    console.log('[onSubRequestCreated] managers found:', membersSnap.docs.length);
     const notifications = [];
     for (const memberDoc of membersSnap.docs) {
         const member = memberDoc.data();
+        console.log('[onSubRequestCreated] manager:', memberDoc.id, 'pushToken:', member['pushToken'] ?? 'none');
         if (!member['pushToken'])
             continue;
         if (member['notificationsEnabled'] === false)
@@ -269,6 +272,7 @@ exports.onSubRequestCreated = (0, firestore_1.onDocumentCreated)({ document: 'te
             },
         });
     }
+    console.log('[onSubRequestCreated] sending', notifications.length, 'notifications');
     await sendBatchNotifications(notifications);
 });
 //# sourceMappingURL=index.js.map

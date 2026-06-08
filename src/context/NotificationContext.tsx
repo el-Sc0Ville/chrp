@@ -47,63 +47,8 @@ const NotificationContext = createContext<NotificationContextValue>({
   unreadCount: 0,
 });
 
-const SEED_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'n1',
-    type: 'availability',
-    date: 'today',
-    timestamp: '1h ago',
-    read: false,
-    eventId: 'home_game',
-    opponent: 'Wildcats',
-    weekday: 'Sunday',
-    time: '9:45 pm',
-  },
-  {
-    id: 'n2',
-    type: 'announcement',
-    date: 'today',
-    timestamp: '2h ago',
-    read: false,
-    authorName: 'Pat Normandin',
-    body: 'Ice time has moved to 9:45 pm this Sunday. Gate C is still our meeting point — see you out there.',
-    announcementId: 'ann1',
-  },
-  {
-    id: 'n3',
-    type: 'sub_filled',
-    date: 'today',
-    timestamp: '4h ago',
-    read: true,
-    subName: 'François Lapointe',
-    weekday: 'Sunday',
-    opponent: 'Wildcats',
-  },
-  {
-    id: 'n4',
-    type: 'availability',
-    date: 'yesterday',
-    timestamp: 'yesterday',
-    read: true,
-    eventId: 'game_ember',
-    opponent: 'Ember FC',
-    weekday: 'Friday',
-    time: '8:00 pm',
-  },
-  {
-    id: 'n5',
-    type: 'announcement',
-    date: 'yesterday',
-    timestamp: 'yesterday',
-    read: false,
-    authorName: 'Marco Beauchamp',
-    body: 'Reminder to update your availability for the playoff rounds — we need a final headcount by Thursday noon.',
-    announcementId: 'ann3',
-  },
-];
-
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>(SEED_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const markRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));

@@ -252,6 +252,7 @@ export const onSubRequestCreated = onDocumentCreated(
   async (event) => {
     const { teamId, requestId } = event.params;
     const requestData = event.data?.data();
+    console.log('[onSubRequestCreated] triggered', { teamId, requestId, requestData });
     if (!requestData) return;
 
     const membersSnap = await db
@@ -259,9 +260,12 @@ export const onSubRequestCreated = onDocumentCreated(
       .where('role', '==', 'manager')
       .get();
 
+    console.log('[onSubRequestCreated] managers found:', membersSnap.docs.length);
+
     const notifications: ExpoMessage[] = [];
     for (const memberDoc of membersSnap.docs) {
       const member = memberDoc.data();
+      console.log('[onSubRequestCreated] manager:', memberDoc.id, 'pushToken:', member['pushToken'] ?? 'none');
       if (!member['pushToken']) continue;
       if (member['notificationsEnabled'] === false) continue;
 
@@ -281,6 +285,7 @@ export const onSubRequestCreated = onDocumentCreated(
       });
     }
 
+    console.log('[onSubRequestCreated] sending', notifications.length, 'notifications');
     await sendBatchNotifications(notifications);
   },
 );

@@ -46,7 +46,7 @@ function toDuesPlayer(r: DuesRecord): DuesPlayer {
     : r.displayName.slice(0, 2).toUpperCase();
   return {
     id: r.userId, name: r.displayName, initials,
-    jersey: 0, duesStatus: r.status, paidAmount: r.amountPaid,
+    jersey: 0, duesStatus: (r.status ?? 'pending') as DuesStatus, paidAmount: r.amountPaid,
     seasonAmount: r.seasonAmount, notes: r.notes,
     dueDate: r.dueDate?.toDate() ?? null,
   };
@@ -103,7 +103,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
       for (const member of nonSpares) {
         batch.set(
           doc(db, 'teams', activeTeamId, 'dues', member.userId),
-          { seasonAmount: amount, userId: member.userId, displayName: member.displayName },
+          { seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: 'pending' },
           { merge: true },
         );
       }
@@ -409,7 +409,7 @@ function StatusPill({ status: s, large }: { status: DuesStatus; large?: boolean 
     pending: { label: 'Pending', bg: statusColors.alert.subtle,   text: statusColors.alert.pure    },
     overdue: { label: 'Overdue', bg: statusColors.error.subtle,   text: statusColors.error.pure    },
   };
-  const config = map[s];
+  const config = map[s] ?? map['pending'];
   return (
     <View style={[styles.pill, { backgroundColor: config.bg }, large && styles.pillLarge]}>
       <Text style={[styles.pillText, { color: config.text }, large && styles.pillTextLarge]}>

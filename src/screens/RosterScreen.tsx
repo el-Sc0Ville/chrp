@@ -425,9 +425,20 @@ function InviteSheet({
   const insets = useSafeAreaInsets();
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const handleShare = () => {
+  const [showQR, setShowQR] = useState(false);
+
+  const joinUrl = `https://chrp.app/join/${inviteCode}`;
+  const initials = teamName
+    ? teamName.trim().split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+    : 'TM';
+
+  const handleCopyLink = () => {
+    Share.share({ message: joinUrl });
+  };
+
+  const handleShareInvite = () => {
     Share.share({
-      message: `Join my team on Chrp! Use code: ${inviteCode}`,
+      message: `Join my team on Chrp! Use code: ${inviteCode} or tap: ${joinUrl}`,
     });
   };
 
@@ -436,53 +447,50 @@ function InviteSheet({
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
         <Pressable onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
           <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Invite players</Text>
-          <Text style={styles.sheetSub}>Share this code with teammates to join {teamName}</Text>
 
-          {inviteCode ? (
-            <View style={styles.qrWrap}>
-              <Image
-                source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteCode)}` }}
-                style={styles.qrImage}
-              />
+          <View style={styles.inviteHeader}>
+            <View style={[styles.inviteAvatar, { backgroundColor: TEAM[700], borderColor: TEAM[500] }]}>
+              <Text style={[styles.inviteAvatarText, { color: TEAM[100] }]}>{initials}</Text>
             </View>
-          ) : null}
-
-          <View style={[
-            styles.inviteCodeBox,
-            {
-              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
-              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.28)`,
-            },
-          ]}>
-            <Text style={[styles.inviteCodeText, { color: TEAM[300] }]}>{inviteCode || '——'}</Text>
+            <Text style={styles.inviteTeamName}>{teamName}</Text>
+            <Text style={styles.inviteCodeLabel}>YOUR TEAM CODE</Text>
+            <Text style={[styles.inviteCodeBig, { color: TEAM[300] }]}>{inviteCode || '——'}</Text>
           </View>
 
+          <View style={styles.actionDivider} />
+
           <Pressable
-            style={({ pressed }) => [
-              styles.sheetBtn,
-              styles.sheetBtnGhost,
-              {
-                borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
-                backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
-              },
-              pressed && { opacity: 0.7 },
-            ]}
-            onPress={handleShare}
+            style={({ pressed }) => [styles.inviteRow, pressed && { backgroundColor: navy[600] }]}
+            onPress={handleCopyLink}
           >
-            <Text style={[styles.sheetBtnGhostText, { color: TEAM[300] }]}>Copy code</Text>
+            <Text style={styles.actionRowText}>Copy link</Text>
+            <Text style={styles.inviteRowChevron}>›</Text>
           </Pressable>
+
           <Pressable
-            style={({ pressed }) => [
-              styles.sheetBtn,
-              { backgroundColor: TEAM[500], shadowColor: TEAM[500],
-                shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 4 },
-              pressed && { opacity: 0.85 },
-            ]}
-            onPress={handleShare}
+            style={({ pressed }) => [styles.inviteRow, pressed && { backgroundColor: navy[600] }]}
+            onPress={handleShareInvite}
           >
-            <Text style={[styles.sheetBtnFilledText, { color: TEAM.on }]}>Share invite</Text>
+            <Text style={styles.actionRowText}>Share via Messages / Email</Text>
+            <Text style={styles.inviteRowChevron}>›</Text>
           </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.inviteRow, pressed && { backgroundColor: navy[600] }]}
+            onPress={() => setShowQR(q => !q)}
+          >
+            <Text style={styles.actionRowText}>{showQR ? 'Hide QR code' : 'Show QR code'}</Text>
+            <Text style={styles.inviteRowChevron}>{showQR ? '↑' : '↓'}</Text>
+          </Pressable>
+
+          <View style={styles.actionDivider} />
+
+          {showQR && inviteCode ? (
+            <Image
+              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}` }}
+              style={styles.qrImage}
+            />
+          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -909,54 +917,67 @@ const styles = StyleSheet.create({
     marginBottom: spacing[24],
   },
 
-  // ── QR code ───────────────────────────────────────────────────────────────
-  qrWrap: {
+  // ── Invite sheet header ───────────────────────────────────────────────────
+  inviteHeader: {
     alignItems: 'center',
-    marginBottom: spacing[20],
+    paddingBottom: spacing[20],
   },
-  qrImage: {
-    width: 160,
-    height: 160,
-    borderRadius: radius.m,
-  },
-
-  // ── Invite code ───────────────────────────────────────────────────────────
-  inviteCodeBox: {
-    borderRadius: radius.l,
-    borderWidth: 1,
-    paddingVertical: spacing[20],
-    paddingHorizontal: spacing[24],
-    marginBottom: spacing[20],
-    alignItems: 'center',
-  },
-  inviteCodeText: {
-    fontFamily: fonts.mono,
-    fontSize: 34,
-    fontWeight: '600',
-    letterSpacing: 10,
-  },
-
-  // ── Sheet buttons ─────────────────────────────────────────────────────────
-  sheetBtn: {
-    height: 52,
-    borderRadius: radius.l,
+  inviteAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[10],
   },
-  sheetBtnGhost: {
-    borderWidth: 1,
-  },
-  sheetBtnFilled: {},
-  sheetBtnGhostText: {
+  inviteAvatarText: {
     fontFamily: fonts.uiSemiBold,
-    fontSize: 15,
+    fontSize: 22,
     fontWeight: '600',
   },
-  sheetBtnFilledText: {
+  inviteTeamName: {
+    ...T.headingM,
+    color: '#FFFFFF',
+    marginBottom: spacing[16],
+  },
+  inviteCodeLabel: {
     fontFamily: fonts.uiSemiBold,
-    fontSize: 15,
+    fontSize: 10,
     fontWeight: '600',
+    letterSpacing: 1.5,
+    color: navy[400],
+    marginBottom: spacing[6],
+  },
+  inviteCodeBig: {
+    fontFamily: fonts.mono,
+    fontSize: 36,
+    fontWeight: '700',
+    letterSpacing: 10,
+  },
+
+  // ── Invite action rows ────────────────────────────────────────────────────
+  inviteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[14],
+    paddingHorizontal: spacing[4],
+    borderRadius: radius.s,
+  },
+  inviteRowChevron: {
+    fontFamily: fonts.ui,
+    fontSize: 20,
+    color: navy[400],
+  },
+
+  // ── QR code ───────────────────────────────────────────────────────────────
+  qrImage: {
+    width: 200,
+    height: 200,
+    borderRadius: radius.m,
+    alignSelf: 'center',
+    marginTop: spacing[16],
   },
 
   // ── Action sheet rows ─────────────────────────────────────────────────────
