@@ -3,10 +3,9 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert,
+  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert, Image,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import QRCode from 'react-native-qrcode-svg';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -428,7 +427,6 @@ function InviteSheet({
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const [copied, setCopied] = useState(false);
-  const joinUrl = `https://chrp-app.web.app/join?code=${inviteCode}`;
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(inviteCode);
@@ -452,11 +450,9 @@ function InviteSheet({
 
           {inviteCode ? (
             <View style={styles.qrWrap}>
-              <QRCode
-                value={joinUrl}
-                size={148}
-                backgroundColor="transparent"
-                color={TEAM[300]}
+              <Image
+                source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteCode)}` }}
+                style={styles.qrImage}
               />
             </View>
           ) : null}
@@ -928,6 +924,11 @@ const styles = StyleSheet.create({
   qrWrap: {
     alignItems: 'center',
     marginBottom: spacing[20],
+  },
+  qrImage: {
+    width: 160,
+    height: 160,
+    borderRadius: radius.m,
   },
 
   // ── Invite code ───────────────────────────────────────────────────────────
