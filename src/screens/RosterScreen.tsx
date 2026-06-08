@@ -5,7 +5,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert, Image,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -426,14 +425,6 @@ function InviteSheet({
   const insets = useSafeAreaInsets();
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    await Clipboard.setStringAsync(inviteCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleShare = () => {
     Share.share({
       message: `Join my team on Chrp! Use code: ${inviteCode}`,
@@ -477,11 +468,9 @@ function InviteSheet({
               },
               pressed && { opacity: 0.7 },
             ]}
-            onPress={handleCopy}
+            onPress={handleShare}
           >
-            <Text style={[styles.sheetBtnGhostText, { color: TEAM[300] }]}>
-              {copied ? '✓ Copied!' : 'Copy code'}
-            </Text>
+            <Text style={[styles.sheetBtnGhostText, { color: TEAM[300] }]}>Copy code</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [

@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { setDoc, doc, serverTimestamp, getDocs, query, collection, where, limit } from 'firebase/firestore';
@@ -136,6 +136,40 @@ async function handleDeepLink(url: string): Promise<void> {
   }
 }
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[ErrorBoundary]', error.message, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#070B14', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginBottom: 12 }}>
+            Something went wrong
+          </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
+            {this.state.error.message}
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   console.log('APP STARTED');
 
@@ -192,7 +226,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <AppNavigator />
+      <ErrorBoundary>
+        <AppNavigator />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
