@@ -15,6 +15,7 @@ export function useDues(teamId: string): UseDuesResult {
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
+    if (!teamId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'dues');
     const unsub = onSnapshot(
       ref,

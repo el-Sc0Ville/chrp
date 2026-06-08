@@ -3,8 +3,10 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Modal, Share, Clipboard, StyleSheet, Alert,
+  View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import QRCode from 'react-native-qrcode-svg';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -426,16 +428,17 @@ function InviteSheet({
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const [copied, setCopied] = useState(false);
+  const joinUrl = `https://chrp-app.web.app/join?code=${inviteCode}`;
 
-  const handleCopy = () => {
-    Clipboard.setString(inviteCode);
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = () => {
     Share.share({
-      message: `Join my team on Chrp!\nhttps://chrp-app.web.app/join?code=${inviteCode}`,
+      message: `Join my team on Chrp! Use code: ${inviteCode}`,
     });
   };
 
@@ -446,6 +449,17 @@ function InviteSheet({
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>Invite players</Text>
           <Text style={styles.sheetSub}>Share this code with teammates to join {teamName}</Text>
+
+          {inviteCode ? (
+            <View style={styles.qrWrap}>
+              <QRCode
+                value={joinUrl}
+                size={148}
+                backgroundColor="transparent"
+                color={TEAM[300]}
+              />
+            </View>
+          ) : null}
 
           <View style={[
             styles.inviteCodeBox,
@@ -482,7 +496,7 @@ function InviteSheet({
             ]}
             onPress={handleShare}
           >
-            <Text style={[styles.sheetBtnFilledText, { color: TEAM.on }]}>Share</Text>
+            <Text style={[styles.sheetBtnFilledText, { color: TEAM.on }]}>Share invite</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -908,6 +922,12 @@ const styles = StyleSheet.create({
     color: navy[300],
     textAlign: 'center',
     marginBottom: spacing[24],
+  },
+
+  // ── QR code ───────────────────────────────────────────────────────────────
+  qrWrap: {
+    alignItems: 'center',
+    marginBottom: spacing[20],
   },
 
   // ── Invite code ───────────────────────────────────────────────────────────

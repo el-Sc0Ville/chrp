@@ -15,6 +15,7 @@ export function useMembers(teamId: string): UseMembersResult {
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
+    if (!teamId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'members');
     const q   = query(ref, orderBy('displayName', 'asc'));
     const unsub = onSnapshot(

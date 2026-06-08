@@ -99,6 +99,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
     try {
       const batch = writeBatch(db);
       const nonSpares = members.filter((m: Member) => m.role !== 'spare');
+      if (nonSpares.length === 0) return;
       for (const member of nonSpares) {
         batch.set(
           doc(db, 'teams', activeTeamId, 'dues', member.userId),
@@ -129,8 +130,9 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
             style={({ pressed }) => [styles.ghostBtn, {
               borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
               backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
-            }, pressed && { opacity: 0.65 }]}
+            }, pressed && { opacity: 0.65 }, members.length === 0 && { opacity: 0.35 }]}
             onPress={() => setSetAmountVisible(true)}
+            disabled={members.length === 0}
           >
             <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Set amount</Text>
           </Pressable>
@@ -142,8 +144,9 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
             style={({ pressed }) => [styles.ghostBtn, {
               borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
               backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
-            }, pressed && { opacity: 0.65 }]}
+            }, pressed && { opacity: 0.65 }, members.length === 0 && { opacity: 0.35 }]}
             onPress={() => setSetAmountVisible(true)}
+            disabled={members.length === 0}
           >
             <Text style={[styles.ghostBtnText, { color: TEAM[300] }]}>Set amount</Text>
           </Pressable>
