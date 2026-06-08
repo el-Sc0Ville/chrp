@@ -46,7 +46,7 @@ function toDuesPlayer(r: DuesRecord): DuesPlayer {
     : r.displayName.slice(0, 2).toUpperCase();
   return {
     id: r.userId, name: r.displayName, initials,
-    jersey: 0, duesStatus: (r.status ?? 'pending') as DuesStatus, paidAmount: r.amountPaid,
+    jersey: 0, duesStatus: (r.status ?? 'pending') as DuesStatus, paidAmount: r.amountPaid ?? 0,
     seasonAmount: r.seasonAmount, notes: r.notes,
     dueDate: r.dueDate?.toDate() ?? null,
   };
@@ -100,10 +100,14 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
       const batch = writeBatch(db);
       const nonSpares = members.filter((m: Member) => m.role !== 'spare');
       if (nonSpares.length === 0) return;
+      const existingDuesIds = new Set(dues.map((d: DuesRecord) => d.userId));
       for (const member of nonSpares) {
         batch.set(
           doc(db, 'teams', activeTeamId, 'dues', member.userId),
-          { seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: 'pending' },
+          {
+            seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: 'pending',
+            ...(!existingDuesIds.has(member.userId) && { amountPaid: 0 }),
+          },
           { merge: true },
         );
       }
@@ -490,7 +494,7 @@ function PlayerEditSheet({
   const { activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const [owedRaw,         setOwedRaw]         = useState(String(player.seasonAmount));
-  const [paidRaw,         setPaidRaw]         = useState(String(player.paidAmount));
+  const [paidRaw,         setPaidRaw]         = useState(String(player.paidAmount ?? 0));
   const [notes,           setNotes]           = useState(player.notes ?? '');
   const [dueDate,         setDueDate]         = useState<Date | null>(player.dueDate);
   const [showDatePicker,  setShowDatePicker]  = useState(false);

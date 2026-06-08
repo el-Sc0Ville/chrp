@@ -86,7 +86,7 @@ const REMINDER_WINDOWS = [
         endHours: 49,
         buildNotification: (title, dateLabel, _timeLabel, venue) => ({
             title: `Are you in for ${title}?`,
-            body: `📅 ${dateLabel} at ${venue}. Tap to respond.`,
+            body: `📅 ${dateLabel} at ${venue} — Swipe ↓ or hold to reply`,
         }),
     },
     {
@@ -95,7 +95,7 @@ const REMINDER_WINDOWS = [
         endHours: 25,
         buildNotification: (title, _dateLabel, timeLabel, venue) => ({
             title: `Last chance — are you in for ${title}?`,
-            body: `⏰ Tomorrow at ${timeLabel} at ${venue}. We need to know!`,
+            body: `⏰ Tomorrow at ${timeLabel} at ${venue} — Swipe ↓ or hold to reply`,
         }),
     },
 ];
@@ -191,7 +191,7 @@ exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{
             to: member['pushToken'],
             sound: 'default',
             title: `New event: ${eventData['title']}`,
-            body: `📅 ${dateLabel} at ${eventData['venue']}. Are you in?`,
+            body: `📅 ${dateLabel} at ${eventData['venue']} — Swipe ↓ or hold to reply`,
             categoryId: 'AVAILABILITY_REQUEST',
             data: {
                 eventId,

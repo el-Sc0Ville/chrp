@@ -19,7 +19,7 @@ export function useSubRequests(teamId: string): UseSubRequestsResult {
     const unsub = onSnapshot(
       q,
       snap => { setSubRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }) as SubRequest)); setLoading(false); },
-      ()   => setLoading(false),
+      err  => { console.error('[useSubRequests] snapshot error:', err); setLoading(false); },
     );
     return unsub;
   }, [teamId]);
