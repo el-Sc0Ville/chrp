@@ -36,11 +36,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
+exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
+const https_1 = require("firebase-functions/v2/https");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 admin.initializeApp();
 const db = admin.firestore();
@@ -55,6 +56,13 @@ function formatTime(date) {
     const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
     return m === 0 ? `${h} ${ampm}` : `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
 }
+const PALETTE_HEX = {
+    trashdogs: '#2540D6',
+    ember: '#D6253F',
+    verdant: '#0E9A5E',
+    solstice: '#F59E0B',
+    aurora: '#7C3FE5',
+};
 async function sendBatchNotifications(messages) {
     if (messages.length === 0)
         return;
@@ -96,6 +104,9 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
     const teamsSnap = await db.collection('teams').get();
     for (const teamDoc of teamsSnap.docs) {
         const teamId = teamDoc.id;
+        const teamData = teamDoc.data();
+        const teamName = teamData['name'] ?? 'Your Team';
+        const teamColor = PALETTE_HEX[teamData['palette']] ?? '#2540D6';
         for (const window of REMINDER_WINDOWS) {
             const windowStart = new Date(now.getTime() + window.startHours * 60 * 60 * 1000);
             const windowEnd = new Date(now.getTime() + window.endHours * 60 * 60 * 1000);
@@ -117,6 +128,7 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                 const respondedIds = new Set(responsesSnap.docs.map(d => d.id));
                 const dateLabel = formatDate(eventDate);
                 const timeLabel = formatTime(eventDate);
+                const eventDateStr = `${dateLabel} · ${timeLabel}`;
                 const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue']);
                 const notifications = [];
                 for (const memberDoc of membersSnap.docs) {
@@ -140,6 +152,10 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                             teamId,
                             userId: memberDoc.id,
                             displayName: member['displayName'],
+                            teamName,
+                            teamColor,
+                            eventDate: eventDateStr,
+                            location: eventData['venue'],
                         },
                     });
                 }
@@ -153,8 +169,17 @@ exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{
     const eventData = event.data?.data();
     if (!eventData)
         return;
-    const membersSnap = await db.collection('teams').doc(teamId).collection('members').get();
-    const dateLabel = formatDate(eventData['startsAt'].toDate());
+    const [teamDoc, membersSnap] = await Promise.all([
+        db.collection('teams').doc(teamId).get(),
+        db.collection('teams').doc(teamId).collection('members').get(),
+    ]);
+    const teamData = teamDoc.data() ?? {};
+    const teamName = teamData['name'] ?? 'Your Team';
+    const teamColor = PALETTE_HEX[teamData['palette']] ?? '#2540D6';
+    const eventDate = eventData['startsAt'].toDate();
+    const dateLabel = formatDate(eventDate);
+    const timeLabel = formatTime(eventDate);
+    const eventDateStr = `${dateLabel} · ${timeLabel}`;
     const notifications = [];
     for (const memberDoc of membersSnap.docs) {
         const member = memberDoc.data();
@@ -173,9 +198,44 @@ exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{
                 teamId,
                 userId: memberDoc.id,
                 displayName: member['displayName'],
+                teamName,
+                teamColor,
+                eventDate: eventDateStr,
+                location: eventData['venue'],
             },
         });
     }
     await sendBatchNotifications(notifications);
+});
+exports.recordAvailability = (0, https_1.onRequest)({ region: 'northamerica-northeast1', cors: true }, async (req, res) => {
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    const { eventId, teamId, userId, response, displayName } = req.body;
+    if (!eventId || !teamId || !userId || !response) {
+        res.status(400).send('Missing required fields');
+        return;
+    }
+    const validResponses = ['in', 'out', 'maybe'];
+    if (!validResponses.includes(response)) {
+        res.status(400).send('Invalid response value');
+        return;
+    }
+    await db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .collection('responses')
+        .doc(userId)
+        .set({
+        userId,
+        displayName: displayName ?? '',
+        response,
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        setByManager: false,
+    });
+    res.status(200).json({ success: true });
 });
 //# sourceMappingURL=index.js.map

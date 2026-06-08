@@ -7,7 +7,7 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, updateDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, writeBatch, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -90,6 +90,26 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(msg);
     toastTimer.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const handleSetAmount = async (amount: number) => {
+    setSeasonDues(amount);
+    setSetAmountVisible(false);
+    showToast(`Dues set to $${amount}/player`);
+    try {
+      const batch = writeBatch(db);
+      const nonSpares = members.filter((m: Member) => m.role !== 'spare');
+      for (const member of nonSpares) {
+        batch.set(
+          doc(db, 'teams', activeTeamId, 'dues', member.userId),
+          { seasonAmount: amount, userId: member.userId, displayName: member.displayName },
+          { merge: true },
+        );
+      }
+      await batch.commit();
+    } catch (err) {
+      console.error('[DuesScreen] setAmount batch failed:', err);
+    }
   };
 
   const paidCount  = players.filter(p => p.duesStatus === 'paid').length;
@@ -224,7 +244,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
       <SetAmountSheet
         visible={setAmountVisible}
         current={seasonDues}
-        onSave={amount => { setSeasonDues(amount); setSetAmountVisible(false); showToast(`Dues set to $${amount}/player`); }}
+        onSave={handleSetAmount}
         onClose={() => setSetAmountVisible(false)}
       />
 
