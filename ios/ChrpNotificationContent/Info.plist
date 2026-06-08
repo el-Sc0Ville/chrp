@@ -11,7 +11,7 @@
             <key>UNNotificationExtensionDefaultContentHidden</key>
             <true/>
             <key>UNNotificationExtensionInitialContentSizeRatio</key>
-            <real>0.35</real>
+            <real>0.55</real>
         </dict>
         <key>NSExtensionMainStoryboard</key>
         <string>MainInterface</string>

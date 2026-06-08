@@ -4,8 +4,16 @@ import UserNotificationsUI
 
 class NotificationViewController: UIViewController, UNNotificationContentExtension {
 
+    // MARK: - State
+    private var eventId = ""
+    private var teamId = ""
+    private var userId = ""
+    private var displayName = ""
+    private var accentColor: UIColor = UIColor(red: 37/255, green: 64/255, blue: 214/255, alpha: 1)
+    private var hasResponded = false
+
     // MARK: - UI
-    private let stackView: UIStackView = {
+    private let containerStack: UIStackView = {
         let sv = UIStackView()
         sv.axis = .vertical
         sv.spacing = 6
@@ -15,7 +23,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
     private let teamLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 12, weight: .medium)
+        l.font = .systemFont(ofSize: 11, weight: .semibold)
         l.textColor = UIColor(white: 1, alpha: 0.45)
         l.text = "CHRP"
         return l
@@ -23,7 +31,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
     private let eventLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 17, weight: .semibold)
+        l.font = .systemFont(ofSize: 18, weight: .bold)
         l.textColor = .white
         l.numberOfLines = 2
         return l
@@ -43,27 +51,70 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         return l
     }()
 
+    private let buttonStack: UIStackView = {
+        let sv = UIStackView()
+        sv.axis = .horizontal
+        sv.spacing = 8
+        sv.distribution = .fillEqually
+        return sv
+    }()
+
+    private let confirmLabel: UILabel = {
+        let l = UILabel()
+        l.font = .systemFont(ofSize: 13, weight: .medium)
+        l.textColor = UIColor(white: 1, alpha: 0.55)
+        l.textAlignment = .center
+        l.isHidden = true
+        return l
+    }()
+
+    private lazy var inButton = makeButton(title: "✓  In", tag: 0)
+    private lazy var outButton = makeButton(title: "✗  Out", tag: 1)
+    private lazy var maybeButton = makeButton(title: "?  Maybe", tag: 2)
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 7/255, green: 11/255, blue: 20/255, alpha: 1)
+        view.backgroundColor = UIColor(red: 10/255, green: 17/255, blue: 32/255, alpha: 1)
         setupLayout()
     }
 
     private func setupLayout() {
-        view.addSubview(stackView)
-        stackView.addArrangedSubview(teamLabel)
-        stackView.addArrangedSubview(eventLabel)
-        stackView.setCustomSpacing(10, after: eventLabel)
-        stackView.addArrangedSubview(dateLabel)
-        stackView.addArrangedSubview(locationLabel)
+        view.addSubview(containerStack)
+
+        containerStack.addArrangedSubview(teamLabel)
+        containerStack.addArrangedSubview(eventLabel)
+        containerStack.setCustomSpacing(10, after: eventLabel)
+        containerStack.addArrangedSubview(dateLabel)
+        containerStack.addArrangedSubview(locationLabel)
+        containerStack.setCustomSpacing(16, after: locationLabel)
+        containerStack.addArrangedSubview(buttonStack)
+        containerStack.setCustomSpacing(8, after: buttonStack)
+        containerStack.addArrangedSubview(confirmLabel)
+
+        buttonStack.addArrangedSubview(inButton)
+        buttonStack.addArrangedSubview(outButton)
+        buttonStack.addArrangedSubview(maybeButton)
 
         NSLayoutConstraint.activate([
-            stackView.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
-            stackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            stackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            stackView.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -16),
+            buttonStack.heightAnchor.constraint(equalToConstant: 44),
+            containerStack.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
+            containerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            containerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            containerStack.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -16),
         ])
+    }
+
+    private func makeButton(title: String, tag: Int) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(title, for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        b.setTitleColor(.white, for: .normal)
+        b.backgroundColor = UIColor(white: 1, alpha: 0.10)
+        b.layer.cornerRadius = 10
+        b.tag = tag
+        b.addTarget(self, action: #selector(handleButtonTap(_:)), for: .touchUpInside)
+        return b
     }
 
     // MARK: - UNNotificationContentExtension
@@ -71,35 +122,81 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         let content = notification.request.content
         let info = content.userInfo
 
-        // Team name
+        eventId = info["eventId"] as? String ?? ""
+        teamId = info["teamId"] as? String ?? ""
+        userId = info["userId"] as? String ?? ""
+        displayName = info["displayName"] as? String ?? ""
+
         if let teamName = info["teamName"] as? String {
             teamLabel.text = teamName.uppercased()
-        } else if !content.subtitle.isEmpty {
-            teamLabel.text = content.subtitle.uppercased()
         }
 
-        // Team accent colour
-        if let hex = info["teamColor"] as? String {
-            teamLabel.textColor = UIColor(hex: hex) ?? UIColor(white: 1, alpha: 0.45)
+        if let hex = info["teamColor"] as? String, let color = UIColor(hex: hex) {
+            accentColor = color
+            teamLabel.textColor = color
+            inButton.backgroundColor = color
         }
 
-        // Event name
         eventLabel.text = content.title
 
-        // Date/time
         if let dateStr = info["eventDate"] as? String {
             dateLabel.text = dateStr
-        } else {
-            dateLabel.text = content.body
         }
 
-        // Location
         if let location = info["location"] as? String, !location.isEmpty {
             locationLabel.text = "📍  \(location)"
             locationLabel.isHidden = false
         } else {
             locationLabel.isHidden = true
         }
+
+        view.layoutIfNeeded()
+        let targetHeight = containerStack.frame.height + 32
+        preferredContentSize = CGSize(width: 0, height: max(targetHeight, 180))
+    }
+
+    // MARK: - Button Actions
+    @objc private func handleButtonTap(_ sender: UIButton) {
+        guard !hasResponded else { return }
+        hasResponded = true
+
+        let responses = ["in", "out", "maybe"]
+        let labels = ["Marked you In ✓", "Marked you Out ✗", "Marked you Maybe ?"]
+        let response = responses[sender.tag]
+
+        [inButton, outButton, maybeButton].forEach { btn in
+            UIView.animate(withDuration: 0.2) {
+                btn.alpha = btn.tag == sender.tag ? 1.0 : 0.25
+                if btn.tag == sender.tag {
+                    btn.backgroundColor = self.accentColor
+                }
+            }
+        }
+
+        confirmLabel.text = labels[sender.tag]
+        confirmLabel.isHidden = false
+
+        submitResponse(response)
+    }
+
+    private func submitResponse(_ response: String) {
+        guard let url = URL(string: "https://northamerica-northeast1-chrp-app.cloudfunctions.net/recordAvailability") else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+
+        let body: [String: String] = [
+            "eventId": eventId,
+            "teamId": teamId,
+            "userId": userId,
+            "response": response,
+            "displayName": displayName,
+        ]
+
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
     }
 }
 

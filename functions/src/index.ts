@@ -2,6 +2,7 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onRequest } from 'firebase-functions/v2/https';
 import fetch from 'node-fetch';
 
 admin.initializeApp();
@@ -21,6 +22,14 @@ function formatTime(date: Date): string {
   return m === 0 ? `${h} ${ampm}` : `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
 }
 
+const PALETTE_HEX: Record<string, string> = {
+  trashdogs: '#2540D6',
+  ember:     '#D6253F',
+  verdant:   '#0E9A5E',
+  solstice:  '#F59E0B',
+  aurora:    '#7C3FE5',
+};
+
 type ExpoMessage = {
   to: string;
   sound: string;
@@ -32,6 +41,10 @@ type ExpoMessage = {
     teamId: string;
     userId: string;
     displayName?: string;
+    teamName?: string;
+    teamColor?: string;
+    eventDate?: string;
+    location?: string;
   };
 };
 
@@ -78,6 +91,9 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
 
   for (const teamDoc of teamsSnap.docs) {
     const teamId = teamDoc.id;
+    const teamData = teamDoc.data();
+    const teamName: string = teamData['name'] ?? 'Your Team';
+    const teamColor: string = PALETTE_HEX[teamData['palette']] ?? '#2540D6';
 
     for (const window of REMINDER_WINDOWS) {
       const windowStart = new Date(now.getTime() + window.startHours * 60 * 60 * 1000);
@@ -104,6 +120,7 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
         const respondedIds = new Set(responsesSnap.docs.map(d => d.id));
         const dateLabel = formatDate(eventDate);
         const timeLabel = formatTime(eventDate);
+        const eventDateStr = `${dateLabel} · ${timeLabel}`;
         const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue']);
 
         const notifications: ExpoMessage[] = [];
@@ -125,6 +142,10 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
               teamId,
               userId: memberDoc.id,
               displayName: member['displayName'],
+              teamName,
+              teamColor,
+              eventDate: eventDateStr,
+              location: eventData['venue'],
             },
           });
         }
@@ -142,8 +163,19 @@ export const onEventCreated = onDocumentCreated(
     const eventData = event.data?.data();
     if (!eventData) return;
 
-    const membersSnap = await db.collection('teams').doc(teamId).collection('members').get();
-    const dateLabel = formatDate(eventData['startsAt'].toDate());
+    const [teamDoc, membersSnap] = await Promise.all([
+      db.collection('teams').doc(teamId).get(),
+      db.collection('teams').doc(teamId).collection('members').get(),
+    ]);
+
+    const teamData = teamDoc.data() ?? {};
+    const teamName: string = teamData['name'] ?? 'Your Team';
+    const teamColor: string = PALETTE_HEX[teamData['palette']] ?? '#2540D6';
+
+    const eventDate = eventData['startsAt'].toDate();
+    const dateLabel = formatDate(eventDate);
+    const timeLabel = formatTime(eventDate);
+    const eventDateStr = `${dateLabel} · ${timeLabel}`;
 
     const notifications: ExpoMessage[] = [];
     for (const memberDoc of membersSnap.docs) {
@@ -162,10 +194,54 @@ export const onEventCreated = onDocumentCreated(
           teamId,
           userId: memberDoc.id,
           displayName: member['displayName'],
+          teamName,
+          teamColor,
+          eventDate: eventDateStr,
+          location: eventData['venue'],
         },
       });
     }
 
     await sendBatchNotifications(notifications);
   },
+);
+
+export const recordAvailability = onRequest(
+  { region: 'northamerica-northeast1', cors: true },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed');
+      return;
+    }
+
+    const { eventId, teamId, userId, response, displayName } = req.body;
+
+    if (!eventId || !teamId || !userId || !response) {
+      res.status(400).send('Missing required fields');
+      return;
+    }
+
+    const validResponses = ['in', 'out', 'maybe'];
+    if (!validResponses.includes(response)) {
+      res.status(400).send('Invalid response value');
+      return;
+    }
+
+    await db
+      .collection('teams')
+      .doc(teamId)
+      .collection('events')
+      .doc(eventId)
+      .collection('responses')
+      .doc(userId)
+      .set({
+        userId,
+        displayName: displayName ?? '',
+        response,
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        setByManager: false,
+      });
+
+    res.status(200).json({ success: true });
+  }
 );
