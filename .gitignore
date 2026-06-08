@@ -42,5 +42,6 @@ google-services.json
 *.tsbuildinfo
 
 # generated native folders
-/ios
 /android
+ios/Pods/
+ios/build/
