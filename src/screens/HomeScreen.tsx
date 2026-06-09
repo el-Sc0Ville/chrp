@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
 import { useNotifications } from '../context/NotificationContext';
@@ -511,6 +511,41 @@ function PlayerHomeScreen() {
     }
   };
 
+  const WEEKDAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const MONTH_ABBR   = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+  const handleSubRequest = async () => {
+    if (!activeEvent || !uid) {
+      console.warn('[HomeScreen] handleSubRequest: missing activeEvent or uid');
+      return;
+    }
+    setSubSheetVisible(false);
+    showToast('Request sent to manager');
+    const d = activeEvent.startsAt.toDate();
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    try {
+      await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
+        eventId:         activeEvent.id,
+        requestedBy:     uid,
+        requestedByName: user?.displayName ?? 'Player',
+        reason:          null,
+        status:          'pending',
+        createdAt:       serverTimestamp(),
+        opponent:        activeEvent.opponent ?? activeEvent.title,
+        gameWeekday:     WEEKDAY_ABBR[d.getDay()],
+        gameDay:         String(d.getDate()).padStart(2, '0'),
+        gameMonth:       MONTH_ABBR[d.getMonth()],
+        gameVenue:       activeEvent.venue,
+        gameTime:        `${h12}:${String(m).padStart(2, '0')} ${ampm}`,
+      });
+    } catch (err) {
+      console.error('[HomeScreen] sub request write failed:', err);
+    }
+  };
+
   const goToProfile       = () => navigation.navigate('Profile');
   const goToGameday       = () => navigation.navigate('Gameday');
   const goToTeam          = () => navigation.navigate('Team');
@@ -593,10 +628,7 @@ function PlayerHomeScreen() {
       <SubRequestSheet
         visible={subSheetVisible}
         gameName={activeEvent?.title ?? ''}
-        onYes={() => {
-          setSubSheetVisible(false);
-          showToast('Request sent to manager');
-        }}
+        onYes={handleSubRequest}
         onDismiss={() => setSubSheetVisible(false)}
       />
       {toast !== null && (

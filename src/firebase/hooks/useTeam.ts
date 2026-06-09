@@ -15,6 +15,7 @@ export function useTeam(teamId: string): UseTeamResult {
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
+    if (!teamId) { setTeam(null); setLoading(false); return; }
     const ref = doc(db, 'teams', teamId);
     const unsub = onSnapshot(
       ref,

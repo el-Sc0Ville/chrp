@@ -10,11 +10,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { useBlackouts } from '../firebase/hooks/useBlackouts';
+import { useDues } from '../firebase/hooks/useDues';
+import { useTeam } from '../firebase/hooks/useTeam';
+import type { DuesRecord } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
@@ -31,7 +34,7 @@ function getInitials(n: string): string {
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { user, isManager, activeTeamId, activeTeamPalette } = useUserContext();
+  const { user, isManager, activeTeamId, activeTeamPalette, setNeedsOnboarding } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ProfileNavProp>();
@@ -58,6 +61,9 @@ export default function ProfileScreen() {
   const [autoIn, setAutoIn] = useState(false);
   const [memberRole, setMemberRole] = useState<'manager' | 'player' | 'spare'>(isManager ? 'manager' : 'player');
   const { dates: blackoutDates } = useBlackouts(activeTeamId, user?.uid ?? '');
+  const { team } = useTeam(activeTeamId);
+  const { dues } = useDues(activeTeamId);
+  const myDues = dues.find(d => d.userId === user?.uid) ?? null;
 
   useEffect(() => {
     if (!user?.uid || !activeTeamId) return;
@@ -168,12 +174,29 @@ export default function ProfileScreen() {
   };
 
   const handleLeaveTeam = () => {
+    const teamName = team?.name ?? 'this team';
     Alert.alert(
-      'Leave Trashdogs?',
+      `Leave ${teamName}?`,
       "You'll need a new invite code to rejoin.",
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Leave team', style: 'destructive', onPress: () => {} },
+        {
+          text: 'Leave team',
+          style: 'destructive',
+          onPress: async () => {
+            if (!user?.uid || !activeTeamId) return;
+            try {
+              const batch = writeBatch(db);
+              batch.delete(doc(db, 'teams', activeTeamId, 'members', user.uid));
+              batch.delete(doc(db, 'users', user.uid, 'teams', activeTeamId));
+              await batch.commit();
+              setNeedsOnboarding(true);
+            } catch (err) {
+              console.error('[ProfileScreen] leave team failed:', err);
+              Alert.alert('Error', 'Could not leave the team. Please try again.');
+            }
+          },
+        },
       ],
     );
   };
@@ -219,7 +242,7 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Player balance card (player view only) ── */}
-        {!isManager && <PlayerBalanceCard />}
+        {!isManager && <PlayerBalanceCard dues={myDues} />}
 
         {/* ── Hero card ── */}
         <View style={styles.heroCard}>
@@ -294,7 +317,7 @@ export default function ProfileScreen() {
             <RolePill role={memberRole} teamPalette={activeTeamPalette} />
             <View style={styles.teamRow}>
               <View style={[styles.teamSwatch, { backgroundColor: TEAM[300] }]} />
-              <Text style={[styles.teamLabel, { color: TEAM[300] }]}>Trashdogs</Text>
+              <Text style={[styles.teamLabel, { color: TEAM[300] }]}>{team?.name ?? '—'}</Text>
             </View>
           </View>
 
@@ -429,27 +452,42 @@ export default function ProfileScreen() {
 
 // ─── Player balance card ──────────────────────────────────────────────────────
 
-function PlayerBalanceCard() {
+const DUES_STATUS_CONFIG: Record<DuesRecord['status'], { bg: string; border: string; text: string; label: string }> = {
+  paid:    { bg: 'rgba(52,199,89,0.14)',  border: 'rgba(52,199,89,0.30)',  text: '#34C759', label: 'Paid'    },
+  partial: { bg: 'rgba(245,158,11,0.14)', border: 'rgba(245,158,11,0.30)', text: '#F59E0B', label: 'Partial' },
+  pending: { bg: 'rgba(95,107,133,0.14)', border: 'rgba(95,107,133,0.28)', text: '#9BA3B4', label: 'Pending' },
+  overdue: { bg: 'rgba(239,68,68,0.14)',  border: 'rgba(239,68,68,0.30)',  text: '#EF4444', label: 'Overdue' },
+};
+
+function PlayerBalanceCard({ dues }: { dues: DuesRecord | null }) {
+  const cfg = dues ? DUES_STATUS_CONFIG[dues.status] : DUES_STATUS_CONFIG.pending;
+  const amountText = dues != null ? `$${dues.seasonAmount}` : '—';
+  const dueDateText = dues?.dueDate
+    ? dues.dueDate.toDate().toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
+
   return (
     <View style={styles.balanceCard}>
       <View style={styles.balanceCardTop}>
         <View>
           <Text style={styles.balanceCardLabel}>Season dues</Text>
-          <Text style={styles.balanceCardAmount}>$500</Text>
+          <Text style={styles.balanceCardAmount}>{amountText}</Text>
         </View>
-        <View style={styles.balancePill}>
-          <Text style={styles.balancePillText}>Paid</Text>
+        <View style={[styles.balancePill, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+          <Text style={[styles.balancePillText, { color: cfg.text }]}>{cfg.label}</Text>
         </View>
       </View>
       <View style={styles.balanceCardMeta}>
         <View style={styles.balanceMetaItem}>
           <Text style={styles.balanceMetaLabel}>Due date</Text>
-          <Text style={styles.balanceMetaValue}>Jun 15, 2025</Text>
+          <Text style={styles.balanceMetaValue}>{dueDateText}</Text>
         </View>
-        <View style={styles.balanceMetaItem}>
-          <Text style={styles.balanceMetaLabel}>Season</Text>
-          <Text style={styles.balanceMetaValue}>Summer 2025</Text>
-        </View>
+        {dues?.notes != null && (
+          <View style={styles.balanceMetaItem}>
+            <Text style={styles.balanceMetaLabel}>Notes</Text>
+            <Text style={styles.balanceMetaValue}>{dues.notes}</Text>
+          </View>
+        )}
       </View>
     </View>
   );

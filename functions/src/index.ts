@@ -35,7 +35,7 @@ type ExpoMessage = {
   sound: string;
   title: string;
   body: string;
-  categoryId: string;
+  categoryId?: string;
   data: {
     eventId: string;
     teamId: string;
@@ -53,15 +53,22 @@ async function sendBatchNotifications(messages: ExpoMessage[]): Promise<void> {
   if (messages.length === 0) return;
   for (let i = 0; i < messages.length; i += 100) {
     const chunk = messages.slice(i, i + 100);
-    await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(chunk),
-    });
+    try {
+      const res = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(chunk),
+      });
+      if (!res.ok) {
+        console.error('[sendBatchNotifications] Expo API error:', res.status, res.statusText);
+      }
+    } catch (err) {
+      console.error('[sendBatchNotifications] fetch failed:', err);
+    }
   }
 }
 
@@ -110,6 +117,7 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
 
       for (const eventDoc of eventsSnap.docs) {
         const eventData = eventDoc.data();
+        if (eventData['status'] === 'cancelled') continue;
         const eventId = eventDoc.id;
         const eventDate = eventData['startsAt'].toDate();
 
@@ -188,8 +196,7 @@ export const onEventCreated = onDocumentCreated(
         to: member['pushToken'],
         sound: 'default',
         title: `New event: ${eventData['title']}`,
-        body: `📅 ${dateLabel} at ${eventData['venue']} — Swipe ↓ or hold to reply`,
-        categoryId: 'AVAILABILITY_REQUEST',
+        body: `📅 ${dateLabel} at ${eventData['venue']}`,
         data: {
           eventId,
           teamId,

@@ -15,6 +15,7 @@ export function useAnnouncements(teamId: string): UseAnnouncementsResult {
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
+    if (!teamId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'announcements');
     const q   = query(ref, orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(

@@ -79,10 +79,10 @@ export default function BlackoutScreen() {
   };
 
   const handleSave = async () => {
-    if (saving) return;
+    if (saving || !user) return;
     setSaving(true);
     try {
-      const ref = doc(db, 'teams', activeTeamId, 'members', user!.uid, 'blackouts', 'current');
+      const ref = doc(db, 'teams', activeTeamId, 'members', user.uid, 'blackouts', 'current');
       await setDoc(ref, {
         dates:     Array.from(selected).sort(),
         createdAt: serverTimestamp(),
