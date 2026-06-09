@@ -12,6 +12,7 @@ import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
 import { useNotifications } from '../context/NotificationContext';
+import { sendPushNotification } from '../firebase/sendNotification';
 import { useUserContext } from '../context/UserContext';
 import { db } from '../firebase';
 import { useEvents } from '../firebase/hooks/useEvents';
@@ -54,6 +55,8 @@ function ManagerHomeScreen() {
   const { teams: userTeams } = useUserTeams(user?.uid ?? null);
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { team }            = useTeam(activeTeamId);
   const { events, loading } = useEvents(activeTeamId);
@@ -102,6 +105,28 @@ function ManagerHomeScreen() {
     } catch (err) {
       console.error('[HomeScreen] manager response write failed:', err);
     }
+  };
+
+  const showToast = (msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const handleRemind = async () => {
+    if (!activeEvent) return;
+    const nonResponders = members.filter(m => m.role !== 'spare' && !responses[m.userId]);
+    const targets = nonResponders.filter(m => m.pushToken && m.notificationsEnabled !== false);
+    console.log('[HomeScreen] reminding', targets.length, 'non-responders for event', activeEvent.id);
+    for (const m of targets) {
+      sendPushNotification(
+        m.pushToken!,
+        `Are you in for ${activeEvent.opponent ?? activeEvent.title}?`,
+        `${formatRelativeDay(activeEvent.startsAt)} ${formatTime(activeEvent.startsAt)} — Swipe ↓ or hold to reply`,
+        { eventId: activeEvent.id, teamId: activeTeamId, userId: m.userId, displayName: m.displayName },
+      ).catch(err => console.error('[HomeScreen] remind push failed for', m.userId, err));
+    }
+    showToast(`Reminded ${targets.length} player${targets.length !== 1 ? 's' : ''}`);
   };
 
   const goToCreateEvent   = () => navigation.navigate('CreateEvent');
@@ -168,7 +193,7 @@ function ManagerHomeScreen() {
 
         {/* Region 2: quick actions */}
         {!loading && hasEvent && (
-          <ManagerQuickActions noRespCount={avail.noResp} onAdd={goToCreateEvent} />
+          <ManagerQuickActions noRespCount={avail.noResp} onAdd={goToCreateEvent} onRemind={handleRemind} />
         )}
 
         {/* Region 3: announcements */}
@@ -191,6 +216,11 @@ function ManagerHomeScreen() {
         }}
         onClose={() => setSwitcherVisible(false)}
       />
+      {toast !== null && (
+        <View style={[styles.toast, { bottom: Math.max(insets.bottom, spacing[12]) + spacing[16] }]} pointerEvents="none">
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -364,7 +394,7 @@ function AvailabilityBar({ avail }: { avail: AvailCounts }) {
 
 // ─── Manager quick actions ────────────────────────────────────────────────────
 
-function ManagerQuickActions({ noRespCount, onAdd }: { noRespCount: number; onAdd: () => void }) {
+function ManagerQuickActions({ noRespCount, onAdd, onRemind }: { noRespCount: number; onAdd: () => void; onRemind: () => void }) {
   const { activeTeamPalette } = useUserContext();
   const activeTeam = teams[activeTeamPalette];
   return (
@@ -376,6 +406,7 @@ function ManagerQuickActions({ noRespCount, onAdd }: { noRespCount: number; onAd
             backgroundColor: `rgba(${hexToRgbVals(activeTeam[500])}, 0.08)`,
           }]}
           android_ripple={{ color: `rgba(${hexToRgbVals(activeTeam[500])}, 0.15)` }}
+          onPress={onRemind}
         >
           <Text style={[styles.remindBtnText, { color: activeTeam[300] }]}>
             🔔  Remind {noRespCount} non-responder{noRespCount !== 1 ? 's' : ''}

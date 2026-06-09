@@ -2,6 +2,8 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  linkWithCredential,
+  EmailAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   type User,
@@ -40,11 +42,35 @@ export async function confirmMagicLink(email: string, emailLink: string): Promis
   if (!isSignInWithEmailLink(auth, emailLink)) {
     throw new Error('Invalid sign-in link');
   }
-  const credential = await signInWithEmailLink(auth, email, emailLink);
+
+  let uid: string;
+
+  if (auth.currentUser?.isAnonymous) {
+    // Link email credential to the anonymous account — preserves UID and all Firestore data
+    const emailCredential = EmailAuthProvider.credentialWithLink(email, emailLink);
+    try {
+      const result = await linkWithCredential(auth.currentUser, emailCredential);
+      uid = result.user.uid;
+      console.log('[confirmMagicLink] linked email to anonymous account, uid:', uid);
+    } catch (err: any) {
+      if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+        // Email already used by another account; sign in normally
+        console.log('[confirmMagicLink] email already in use, signing in normally');
+        const result = await signInWithEmailLink(auth, email, emailLink);
+        uid = result.user.uid;
+      } else {
+        throw err;
+      }
+    }
+  } else {
+    const result = await signInWithEmailLink(auth, email, emailLink);
+    uid = result.user.uid;
+    console.log('[confirmMagicLink] signed in with email link, uid:', uid);
+  }
+
   await AsyncStorage.removeItem(PENDING_EMAIL_KEY);
 
   // Create user profile on first sign-in
-  const uid = credential.user.uid;
   console.log('[confirmMagicLink] checking /users/', uid);
   const userRef = doc(db, 'users', uid);
   const snap = await getDoc(userRef);

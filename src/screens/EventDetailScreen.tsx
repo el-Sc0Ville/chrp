@@ -168,6 +168,21 @@ function ManagerEventDetail() {
   const { responses } = useResponses(activeTeamId, eventId);
   const event = events.find(e => e.id === eventId) ?? null;
 
+  const handleRemind = () => {
+    const targets = members.filter(
+      m => m.role !== 'spare' && !responses[m.userId] && m.pushToken && m.notificationsEnabled !== false,
+    );
+    console.log('[EventDetail] reminding', targets.length, 'non-responders for event', eventId);
+    for (const m of targets) {
+      sendPushNotification(
+        m.pushToken!,
+        `Are you in for ${event?.opponent ?? event?.title ?? 'next game'}?`,
+        `${event ? formatEventDate(event.startsAt) : ''} — Swipe ↓ or hold to reply`,
+        { eventId, teamId: activeTeamId, userId: m.userId, displayName: m.displayName },
+      ).catch(err => console.error('[EventDetail] remind push failed for', m.userId, err));
+    }
+  };
+
   const [groups, setGroups] = useState<Record<GroupKey, Player[]>>({
     in: [], out: [], maybe: [], noResp: [],
   });
@@ -268,6 +283,7 @@ function ManagerEventDetail() {
             players={groups.noResp}
             showRemind={!isPast}
             onEditPlayer={(p) => setEditTarget({ player: p, fromGroup: 'noResp' })}
+            onRemind={handleRemind}
           />
         </View>
 
@@ -681,13 +697,14 @@ function ScoreSheet({
 // ─── Availability group (collapsible) ─────────────────────────────────────────
 
 function AvailGroup({
-  label, dotColor, players, showRemind = false, onEditPlayer,
+  label, dotColor, players, showRemind = false, onEditPlayer, onRemind,
 }: {
   label: string;
   dotColor: string;
   players: Player[];
   showRemind?: boolean;
   onEditPlayer?: (player: Player) => void;
+  onRemind?: () => void;
 }) {
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
@@ -706,7 +723,7 @@ function AvailGroup({
         </View>
         <View style={styles.groupRight}>
           {showRemind && (
-            <TouchableOpacity style={[styles.remindInlineBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.50)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)` }]} hitSlop={8}>
+            <TouchableOpacity style={[styles.remindInlineBtn, { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.50)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)` }]} hitSlop={8} onPress={onRemind}>
               <Text style={[styles.remindInlineText, { color: TEAM[300] }]}>Remind</Text>
             </TouchableOpacity>
           )}

@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert, Image,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -426,20 +427,27 @@ function InviteSheet({
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const [showQR, setShowQR] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const joinUrl = `https://chrp.app/join/${inviteCode}`;
   const initials = teamName
     ? teamName.trim().split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
     : 'TM';
 
-  const handleCopyLink = () => {
-    Share.share({ message: joinUrl });
+  const handleCopyCode = () => {
+    Clipboard.setString(inviteCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShareInvite = () => {
-    Share.share({
-      message: `Join my team on Chrp! Use code: ${inviteCode} or tap: ${joinUrl}`,
-    });
+  const handleShareInvite = async () => {
+    try {
+      const result = await Share.share({
+        message: `Join my team on Chrp! Use invite code: ${inviteCode}`,
+      });
+      if (result.action === Share.dismissedAction) return;
+    } catch (err) {
+      console.error('[InviteSheet] share error:', err);
+    }
   };
 
   return (
@@ -461,10 +469,10 @@ function InviteSheet({
 
           <Pressable
             style={({ pressed }) => [styles.inviteRow, pressed && { backgroundColor: navy[600] }]}
-            onPress={handleCopyLink}
+            onPress={handleCopyCode}
           >
-            <Text style={styles.actionRowText}>Copy link</Text>
-            <Text style={styles.inviteRowChevron}>›</Text>
+            <Text style={styles.actionRowText}>{copied ? 'Copied!' : 'Copy code'}</Text>
+            <Text style={styles.inviteRowChevron}>{copied ? '✓' : '›'}</Text>
           </Pressable>
 
           <Pressable
@@ -487,7 +495,7 @@ function InviteSheet({
 
           {showQR && inviteCode ? (
             <Image
-              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}` }}
+              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteCode)}` }}
               style={styles.qrImage}
             />
           ) : null}

@@ -11,7 +11,7 @@ interface UserContextValue {
   activeTeamPalette: TeamKey;
   setActiveTeamPalette: (palette: TeamKey) => void;
   needsOnboarding: boolean | undefined;
-  setNeedsOnboarding: (v: boolean) => void;
+  setNeedsOnboarding: (v: boolean | undefined) => void;
   completeOnboarding: (teamId: string, palette: TeamKey, isManagerRole: boolean) => void;
 }
 
