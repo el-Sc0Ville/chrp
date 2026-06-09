@@ -3,6 +3,7 @@ type ActionableOptions = {
   teamId: string;
   userId: string;
   displayName?: string;
+  categoryId?: string;
   data?: object;
 };
 
@@ -17,7 +18,7 @@ export async function sendPushNotification(
     sound: 'default',
     title,
     body,
-    ...(options ? { categoryId: 'AVAILABILITY_REQUEST' } : {}),
+    ...(options?.categoryId ? { categoryId: options.categoryId } : {}),
     data: options
       ? {
           eventId: options.eventId,
@@ -29,13 +30,20 @@ export async function sendPushNotification(
       : {},
   };
 
-  await fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Accept-encoding': 'gzip, deflate',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  });
+  try {
+    const res = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+    if (!res.ok) {
+      console.error('[sendPushNotification] Expo API error:', res.status, res.statusText);
+    }
+  } catch (err) {
+    console.error('[sendPushNotification] fetch failed:', err);
+  }
 }

@@ -7,6 +7,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import {
   useNotifications,
@@ -36,7 +38,7 @@ export default function NotificationCentreScreen() {
   const navigation = useNavigation<any>();
   const { notifications, markRead, markAllRead, unreadCount } = useNotifications();
   const { responses, setResponse } = useGameResponse();
-  const { activeTeamPalette } = useUserContext();
+  const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
@@ -66,7 +68,19 @@ export default function NotificationCentreScreen() {
                 setSubGameName(`vs. ${notif.opponent}`);
                 setSubSheetVisible(true);
               }
-              // TODO Phase 2: wire response to Firestore + trigger FCM confirmation
+              const uid = user?.uid;
+              if (uid) {
+                setDoc(
+                  doc(db, 'teams', activeTeamId, 'events', notif.eventId, 'responses', uid),
+                  {
+                    userId:       uid,
+                    displayName:  user?.displayName ?? 'Player',
+                    response:     r,
+                    respondedAt:  Timestamp.now(),
+                    setByManager: false,
+                  },
+                ).catch(err => console.error('[NotificationCentre] response write failed:', err));
+              }
             }}
           />
         );

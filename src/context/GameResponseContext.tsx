@@ -13,9 +13,7 @@ export const GameResponseContext = createContext<GameResponseContextValue>({
 });
 
 export function GameResponseProvider({ children }: { children: React.ReactNode }) {
-  const [responses, setResponses] = useState<Record<string, PlayerResponse>>({
-    home_game: 'in',
-  });
+  const [responses, setResponses] = useState<Record<string, PlayerResponse>>({});
 
   const setResponse = (eventId: string, response: PlayerResponse) => {
     setResponses(prev => ({ ...prev, [eventId]: response }));

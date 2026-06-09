@@ -6,7 +6,7 @@ import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert, Image,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
@@ -124,10 +124,13 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     setRoster(prev => prev.filter(p => p.id !== id));
     setActionPlayer(null);
     try {
-      await deleteDoc(doc(db, 'teams', activeTeamId, 'members', id));
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'teams', activeTeamId, 'members', id));
+      batch.delete(doc(db, 'users', id, 'teams', activeTeamId));
       if (wasManager) {
-        await updateDoc(doc(db, 'teams', activeTeamId), { managerIds: arrayRemove(id) });
+        batch.update(doc(db, 'teams', activeTeamId), { managerIds: arrayRemove(id) });
       }
+      await batch.commit();
     } catch (err) {
       console.error('[Roster] removePlayer failed:', err);
     }

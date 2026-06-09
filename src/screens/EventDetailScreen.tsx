@@ -178,7 +178,7 @@ function ManagerEventDetail() {
         m.pushToken!,
         `Are you in for ${event?.opponent ?? event?.title ?? 'next game'}?`,
         `${event ? formatEventDate(event.startsAt) : ''} — Swipe ↓ or hold to reply`,
-        { eventId, teamId: activeTeamId, userId: m.userId, displayName: m.displayName },
+        { eventId, teamId: activeTeamId, userId: m.userId, displayName: m.displayName, categoryId: 'AVAILABILITY_REQUEST' },
       ).catch(err => console.error('[EventDetail] remind push failed for', m.userId, err));
     }
   };
@@ -319,6 +319,9 @@ function ManagerEventDetail() {
 // ║  C-03 · Player Event Detail                                              ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
+const WEEKDAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MONTH_ABBR   = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
 function PlayerEventDetail() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<EventDetailNavProp>();
@@ -354,6 +357,35 @@ function PlayerEventDetail() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
     toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const handleSubRequest = async () => {
+    if (!event || !uid || uid === 'anon') return;
+    setSubSheetVisible(false);
+    showToast('Request sent to manager');
+    const d = event.startsAt.toDate();
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    try {
+      await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
+        eventId:         event.id,
+        requestedBy:     uid,
+        requestedByName: user?.displayName ?? 'Player',
+        reason:          null,
+        status:          'pending',
+        createdAt:       serverTimestamp(),
+        opponent:        event.opponent ?? event.title,
+        gameWeekday:     WEEKDAY_ABBR[d.getDay()],
+        gameDay:         String(d.getDate()).padStart(2, '0'),
+        gameMonth:       MONTH_ABBR[d.getMonth()],
+        gameVenue:       event.venue,
+        gameTime:        `${h12}:${String(m).padStart(2, '0')} ${ampm}`,
+      });
+    } catch (err) {
+      console.error('[EventDetail] sub request write failed:', err);
+    }
   };
 
   const handleRespond = async (r: NonNullable<PlayerResponse>) => {
@@ -424,11 +456,7 @@ function PlayerEventDetail() {
       <SubRequestSheet
         visible={subSheetVisible}
         gameName={event?.title ?? fallbackTitle}
-        onYes={() => {
-          setSubSheetVisible(false);
-          showToast('Request sent to manager');
-          // TODO Phase 2: wire sub request to Firestore + trigger manager push notification
-        }}
+        onYes={handleSubRequest}
         onDismiss={() => setSubSheetVisible(false)}
       />
       {toast !== null && (

@@ -281,11 +281,6 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
 // ║  C-09 · Player Dues                                                      ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
 
-const PAYMENT_HISTORY = [
-  { id: 'ph1', label: 'Winter 2024/25 season dues', date: 'Sep 28, 2024', amount: 900 },
-  { id: 'ph2', label: 'Summer 2024 season dues',    date: 'Apr 6, 2024',  amount: 500 },
-];
-
 function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
@@ -304,7 +299,9 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const dueDate = 'Jun 15, 2025';
+  const dueDate = selfRecord?.dueDate
+    ? formatDueDate(selfRecord.dueDate.toDate())
+    : 'Not set';
 
   return (
     <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
@@ -342,7 +339,7 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
             </View>
             <View style={styles.balanceMetaItem}>
               <Text style={styles.balanceMetaLabel}>Season</Text>
-              <Text style={styles.balanceMetaValue}>Summer 2025</Text>
+              <Text style={styles.balanceMetaValue}>Not set</Text>
             </View>
           </View>
 
@@ -354,29 +351,6 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
           </Pressable>
         </View>
 
-        {/* ── Payment history (only shown when player has made payments) ── */}
-        {selfPlayer && selfPlayer.paidAmount > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Payment history</Text>
-            <View style={styles.card}>
-              {PAYMENT_HISTORY.map((entry, idx) => (
-                <React.Fragment key={entry.id}>
-                  {idx > 0 && <View style={styles.rowDivider} />}
-                  <View style={styles.historyRow}>
-                    <View style={styles.historyLeft}>
-                      <Text style={styles.historyLabel}>{entry.label}</Text>
-                      <Text style={styles.historyDate}>{entry.date}</Text>
-                    </View>
-                    <View style={styles.historyRight}>
-                      <Text style={styles.historyAmount}>${entry.amount}</Text>
-                      <StatusPill status="paid" />
-                    </View>
-                  </View>
-                </React.Fragment>
-              ))}
-            </View>
-          </>
-        )}
       </ScrollView>
 
       {/* ── Toast ── */}
