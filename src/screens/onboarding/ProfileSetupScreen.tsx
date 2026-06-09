@@ -36,7 +36,7 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
           await updateDoc(
             doc(db, 'teams', activeTeamId, 'members', auth.currentUser.uid),
             { displayName: name },
-          ).catch(() => {});
+          ).catch(err => console.error('[ProfileSetup] member displayName sync failed:', err));
         }
       } catch (err) {
         console.error('[ProfileSetup] updateProfile failed:', err);
@@ -49,8 +49,8 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
           doc(db, 'users', auth.currentUser.uid),
           { email: trimmedEmail },
           { merge: true },
-        ).catch(() => {});
-        await updateEmail(auth.currentUser, trimmedEmail).catch(() => {});
+        ).catch(err => console.error('[ProfileSetup] email setDoc failed:', err));
+        await updateEmail(auth.currentUser, trimmedEmail).catch(err => console.error('[ProfileSetup] updateEmail failed:', err));
       }
     }
     const params = route.params;

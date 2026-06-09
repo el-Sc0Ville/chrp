@@ -39,7 +39,6 @@ export default function OnboardingCompleteScreen({ route }: Props) {
         onPress={() => {
           const uid = auth.currentUser?.uid;
           if (uid) {
-            console.log('Push token registration for:', uid, teamId);
             registerForPushNotifications(uid, teamId).catch(console.error);
           }
           completeOnboarding(teamId, palette, isManager);

@@ -26,10 +26,8 @@ const ACTION_CODE_SETTINGS = {
 
 export async function sendMagicLink(email: string): Promise<void> {
   try {
-    console.log('Sending magic link to:', email);
     await sendSignInLinkToEmail(auth, email, ACTION_CODE_SETTINGS);
     await AsyncStorage.setItem(PENDING_EMAIL_KEY, email);
-    console.log('Magic link sent successfully');
   } catch (e) {
     console.error('sendMagicLink error:', e);
     throw e;
@@ -43,7 +41,6 @@ export async function confirmMagicLink(email: string, emailLink: string): Promis
 
   const result = await signInWithEmailLink(auth, email, emailLink);
   const uid = result.user.uid;
-  console.log('[confirmMagicLink] signed in, uid:', uid);
 
   await AsyncStorage.removeItem(PENDING_EMAIL_KEY);
 
@@ -52,10 +49,7 @@ export async function confirmMagicLink(email: string, emailLink: string): Promis
   const userRef = doc(db, 'users', uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) {
-    console.log('[confirmMagicLink] new user — creating profile at /users/', uid);
     await setDoc(userRef, { email, displayName: '', createdAt: serverTimestamp() });
-  } else {
-    console.log('[confirmMagicLink] returning user — profile exists at /users/', uid);
   }
 }
 

@@ -95,25 +95,27 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const handleSetAmount = async (amount: number) => {
     setSeasonDues(amount);
     setSetAmountVisible(false);
-    showToast(`Dues set to $${amount}/player`);
     try {
       const batch = writeBatch(db);
       const nonSpares = members.filter((m: Member) => m.role !== 'spare');
-      if (nonSpares.length === 0) return;
-      const existingDuesIds = new Set(dues.map((d: DuesRecord) => d.userId));
-      for (const member of nonSpares) {
-        batch.set(
-          doc(db, 'teams', activeTeamId, 'dues', member.userId),
-          {
-            seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: 'pending',
-            ...(!existingDuesIds.has(member.userId) && { amountPaid: 0 }),
-          },
-          { merge: true },
-        );
+      if (nonSpares.length > 0) {
+        const existingDuesIds = new Set(dues.map((d: DuesRecord) => d.userId));
+        for (const member of nonSpares) {
+          batch.set(
+            doc(db, 'teams', activeTeamId, 'dues', member.userId),
+            {
+              seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: 'pending',
+              ...(!existingDuesIds.has(member.userId) && { amountPaid: 0 }),
+            },
+            { merge: true },
+          );
+        }
+        await batch.commit();
       }
-      await batch.commit();
+      showToast(`Dues set to $${amount}/player`);
     } catch (err) {
       console.error('[DuesScreen] setAmount batch failed:', err);
+      showToast('Something went wrong');
     }
   };
 

@@ -15,7 +15,6 @@ export function useEvents(teamId: string): UseEventsResult {
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('useEvents called with teamId:', teamId);
     if (!teamId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'events');
     const q   = query(ref, orderBy('startsAt', 'asc'));
@@ -23,7 +22,6 @@ export function useEvents(teamId: string): UseEventsResult {
     const unsub = onSnapshot(
       q,
       snap => {
-        console.log('useEvents: snapshot fired, docs count:', snap.docs.length);
         setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Event));
         setLoading(false);
         setError(null);
@@ -33,7 +31,6 @@ export function useEvents(teamId: string): UseEventsResult {
         setLoading(false);
       },
     );
-    console.log('useEvents: setting up snapshot for team:', teamId);
     return unsub;
   }, [teamId]);
 

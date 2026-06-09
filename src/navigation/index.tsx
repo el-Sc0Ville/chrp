@@ -296,9 +296,7 @@ function AppStack() {
         // so user.uid and user.displayName are available in all screens
         setMockUser(u, false); // isManager defaults false; updated below once teams load
         setNeedsOnboarding(undefined); // Force LoadingScreen while Firestore check runs
-        console.log('Auth state: user found, checking onboarding...', u.uid);
         const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
-        console.log('Onboarding check — /users/{uid}/teams docs:', snap.size, 'needsOnboarding:', snap.empty);
         setNeedsOnboarding(snap.empty);
         if (!snap.empty) {
           // Returning user — restore their active team and manager status

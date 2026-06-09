@@ -189,6 +189,7 @@ export const onEventCreated = onDocumentCreated(
     const notifications: ExpoMessage[] = [];
     for (const memberDoc of membersSnap.docs) {
       const member = memberDoc.data();
+      if (member['role'] === 'spare') continue;
       if (!member['pushToken']) continue;
       if (member['notificationsEnabled'] === false) continue;
 

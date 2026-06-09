@@ -165,7 +165,6 @@ export default function NotificationCentreScreen() {
         gameName={subGameName}
         onYes={async () => {
           setSubSheetVisible(false);
-          showToast('Request sent to manager');
           const uid = user?.uid;
           if (!subNotif || !uid) return;
           try {
@@ -192,6 +191,7 @@ export default function NotificationCentreScreen() {
               gameVenue,
               gameTime:        subNotif.time,
             });
+            showToast('Request sent to manager');
           } catch (err) {
             console.error('[NotificationCentre] sub request write failed:', err);
           }

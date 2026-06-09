@@ -17,7 +17,7 @@ export function useUserTeams(userId: string | null): { teams: UserTeam[]; loadin
     const unsub = onSnapshot(
       ref,
       snap => { setTeams(snap.docs.map(d => d.data() as UserTeam)); setLoading(false); },
-      ()   => setLoading(false),
+      err  => { console.error('[useUserTeams] snapshot error:', err); setLoading(false); },
     );
     return unsub;
   }, [userId]);

@@ -98,37 +98,42 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     : null;
 
   const handlePost = async (body: string, isPinned: boolean) => {
-    if (editingId) {
-      await updateDoc(doc(db, 'teams', activeTeamId, 'announcements', editingId), {
-        body, pinned: isPinned,
-      });
-      showToast('Announcement updated');
-    } else {
-      const authorName = user?.displayName ?? 'Manager';
-      await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
-        authorId: user?.uid ?? 'anon',
-        authorName,
-        body,
-        pinned: isPinned,
-        createdAt: serverTimestamp(),
-      });
-      // TODO Phase 2b: move to Firebase Cloud Function for reliability
-      const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
-      const preview = body.length > 100 ? body.slice(0, 97) + '...' : body;
-      for (const memberDoc of membersSnap.docs) {
-        const m = memberDoc.data() as Member;
-        if (m.pushToken) {
-          sendPushNotification(
-            m.pushToken,
-            `${authorName} posted an announcement`,
-            preview,
-          ).catch(console.error);
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, 'teams', activeTeamId, 'announcements', editingId), {
+          body, pinned: isPinned,
+        });
+        showToast('Announcement updated');
+      } else {
+        const authorName = user?.displayName ?? 'Manager';
+        await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
+          authorId: user?.uid ?? 'anon',
+          authorName,
+          body,
+          pinned: isPinned,
+          createdAt: serverTimestamp(),
+        });
+        // TODO Phase 2b: move to Firebase Cloud Function for reliability
+        const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+        const preview = body.length > 100 ? body.slice(0, 97) + '...' : body;
+        for (const memberDoc of membersSnap.docs) {
+          const m = memberDoc.data() as Member;
+          if (m.pushToken) {
+            sendPushNotification(
+              m.pushToken,
+              `${authorName} posted an announcement`,
+              preview,
+            ).catch(console.error);
+          }
         }
+        showToast('Sent to all players');
       }
-      showToast('Sent to all players');
+      setPostVisible(false);
+      setEditingId(null);
+    } catch (err) {
+      console.error('[AnnouncementsScreen] handlePost failed:', err);
+      showToast('Something went wrong');
     }
-    setPostVisible(false);
-    setEditingId(null);
   };
 
   const handleEdit = () => {
@@ -140,9 +145,14 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 
   const handleDelete = async () => {
     if (!actionItem) return;
-    await deleteDoc(doc(db, 'teams', activeTeamId, 'announcements', actionItem.id));
-    setActionItem(null);
-    showToast('Announcement deleted');
+    try {
+      await deleteDoc(doc(db, 'teams', activeTeamId, 'announcements', actionItem.id));
+      setActionItem(null);
+      showToast('Announcement deleted');
+    } catch (err) {
+      console.error('[AnnouncementsScreen] handleDelete failed:', err);
+      showToast('Something went wrong');
+    }
   };
 
   const openPost = () => {

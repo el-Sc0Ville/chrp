@@ -84,7 +84,7 @@ export default function ProfileScreen() {
           setLocation(data.locationEnabled ?? false);
         }
       })
-      .catch(() => {});
+      .catch(err => console.error('[ProfileScreen] member doc load failed:', err));
   }, [user?.uid, activeTeamId]);
 
   const handleAutoInToggle = async (value: boolean) => {

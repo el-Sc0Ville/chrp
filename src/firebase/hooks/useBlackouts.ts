@@ -29,7 +29,7 @@ export function useBlackouts(teamId: string, userId: string): UseBlackoutsResult
         setDates(all);
         setLoading(false);
       },
-      () => setLoading(false),
+      err => { console.error('[useBlackouts] snapshot error:', err); setLoading(false); },
     );
     return unsub;
   }, [teamId, userId]);
