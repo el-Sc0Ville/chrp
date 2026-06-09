@@ -10,9 +10,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { updateProfile } from 'firebase/auth';
 import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
 import { useBlackouts } from '../firebase/hooks/useBlackouts';
 import { useDues } from '../firebase/hooks/useDues';
@@ -109,7 +110,7 @@ export default function ProfileScreen() {
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = name.trim() || savedName;
     const cleanJersey = jersey.trim() || savedJersey;
     setName(trimmed);
@@ -119,6 +120,18 @@ export default function ProfileScreen() {
     setIsEditingName(false);
     setIsEditingJersey(false);
     showToast('Saved!');
+    if (!user?.uid || !activeTeamId) return;
+    try {
+      await Promise.all([
+        updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), {
+          displayName: trimmed,
+          ...(cleanJersey ? { jerseyNumber: parseInt(cleanJersey, 10) } : {}),
+        }),
+        auth.currentUser ? updateProfile(auth.currentUser, { displayName: trimmed }) : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error('[ProfileScreen] save failed:', err);
+    }
   };
 
   const handleNotificationsToggle = async (value: boolean) => {

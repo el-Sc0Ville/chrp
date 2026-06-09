@@ -6,7 +6,7 @@ import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert, Image,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';

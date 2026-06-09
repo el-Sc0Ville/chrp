@@ -28,11 +28,6 @@ export async function registerForPushNotifications(
       }
     }
 
-    // Register action buttons for availability requests.
-    // isAuthenticationRequired: false → buttons work on the lock screen
-    // without Face ID / Touch ID, matching UNNotificationActionOptions.
-    await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', []);
-
     const token = await Notifications.getExpoPushTokenAsync({
       projectId: '16e2f5c6-2e3a-4dad-9b51-8b485329db64',
     });

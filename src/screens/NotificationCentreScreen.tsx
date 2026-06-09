@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import {
@@ -22,6 +22,8 @@ import { useGameResponse, type PlayerResponse } from '../context/GameResponseCon
 import { useUserContext } from '../context/UserContext';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
+
+const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 const DATE_GROUPS: { key: DateGroup; label: string }[] = [
   { key: 'today',     label: 'Today'     },
@@ -43,6 +45,7 @@ export default function NotificationCentreScreen() {
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [subGameName,     setSubGameName]     = useState('');
+  const [subNotif,        setSubNotif]        = useState<AvailabilityNotif | null>(null);
   const [toast,           setToast]           = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -65,6 +68,7 @@ export default function NotificationCentreScreen() {
               setResponse(notif.eventId, r);
               markRead(notif.id);
               if (r === 'out' || r === 'maybe') {
+                setSubNotif(notif);
                 setSubGameName(`vs. ${notif.opponent}`);
                 setSubSheetVisible(true);
               }
@@ -159,10 +163,38 @@ export default function NotificationCentreScreen() {
       <SubRequestSheet
         visible={subSheetVisible}
         gameName={subGameName}
-        onYes={() => {
+        onYes={async () => {
           setSubSheetVisible(false);
           showToast('Request sent to manager');
-          // TODO Phase 2: wire sub request to Firestore + trigger manager push notification
+          const uid = user?.uid;
+          if (!subNotif || !uid) return;
+          try {
+            const eventSnap = await getDoc(doc(db, 'teams', activeTeamId, 'events', subNotif.eventId));
+            let gameDay = '', gameMonth = '', gameVenue = '';
+            if (eventSnap.exists()) {
+              const evData = eventSnap.data();
+              const d = evData.startsAt.toDate();
+              gameDay   = String(d.getDate()).padStart(2, '0');
+              gameMonth = MONTH_ABBR[d.getMonth()];
+              gameVenue = evData.venue ?? '';
+            }
+            await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
+              eventId:         subNotif.eventId,
+              requestedBy:     uid,
+              requestedByName: user?.displayName ?? 'Player',
+              reason:          null,
+              status:          'pending',
+              createdAt:       serverTimestamp(),
+              opponent:        subNotif.opponent,
+              gameWeekday:     subNotif.weekday,
+              gameDay,
+              gameMonth,
+              gameVenue,
+              gameTime:        subNotif.time,
+            });
+          } catch (err) {
+            console.error('[NotificationCentre] sub request write failed:', err);
+          }
         }}
         onDismiss={() => setSubSheetVisible(false)}
       />

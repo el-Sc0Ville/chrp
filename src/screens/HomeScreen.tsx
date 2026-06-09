@@ -123,7 +123,7 @@ function ManagerHomeScreen() {
         m.pushToken!,
         `Are you in for ${activeEvent.opponent ?? activeEvent.title}?`,
         `${formatRelativeDay(activeEvent.startsAt)} ${formatTime(activeEvent.startsAt)} — Swipe ↓ or hold to reply`,
-        { eventId: activeEvent.id, teamId: activeTeamId, userId: m.userId, displayName: m.displayName },
+        { eventId: activeEvent.id, teamId: activeTeamId, userId: m.userId, displayName: m.displayName, categoryId: 'AVAILABILITY_REQUEST' },
       ).catch(err => console.error('[HomeScreen] remind push failed for', m.userId, err));
     }
     showToast(`Reminded ${targets.length} player${targets.length !== 1 ? 's' : ''}`);
