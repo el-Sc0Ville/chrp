@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User profiles ────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /teams/{teamId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ── Team data ─────────────────────────────────────────────────────────────
+    match /teams/{teamId} {
+      function isMember() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
+      }
+
+      function isManager() {
+        return request.auth != null
+          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == 'manager';
+      }
+
+      allow read: if isMember();
+      allow write: if isManager();
+
+      match /members/{memberId} {
+        allow read: if isMember();
+        allow write: if isManager() || (request.auth != null && request.auth.uid == memberId);
+      }
+
+      match /events/{eventId} {
+        allow read: if isMember();
+        allow write: if isManager();
+
+        match /responses/{userId} {
+          allow read: if isMember();
+          allow write: if request.auth != null
+            && (request.auth.uid == userId || isManager());
+        }
+      }
+
+      match /announcements/{announcementId} {
+        allow read: if isMember();
+        allow write: if isMember();
+
+        match /replies/{replyId} {
+          allow read: if isMember();
+          allow write: if isMember();
+        }
+      }
+
+      match /subRequests/{requestId} {
+        // Any team member can read sub requests (player sees own, manager sees all)
+        allow read: if isMember();
+        // Any team member can create a sub request
+        allow create: if isMember();
+        // Only managers can update (e.g. mark as filled)
+        allow update: if isManager();
+      }
+
+      match /dues/{userId} {
+        allow read: if isMember() && (request.auth.uid == userId || isManager());
+        allow write: if isManager();
+      }
+
+      match /blackouts/{docId} {
+        allow read: if isMember();
+        allow write: if isMember();
+      }
+    }
+  }
+}
