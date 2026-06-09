@@ -143,13 +143,13 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                 const notifications = [];
                 for (const memberDoc of membersSnap.docs) {
                     const member = memberDoc.data();
-                    if (member['autoIn'] === false || member['role'] === 'spare')
+                    if (member['role'] === 'spare')
                         continue;
                     if (respondedIds.has(memberDoc.id))
                         continue;
                     if (!member['pushToken'])
                         continue;
-                    if (member['remindersEnabled'] === false)
+                    if (member['notificationsEnabled'] === false)
                         continue;
                     notifications.push({
                         to: member['pushToken'],
@@ -231,21 +231,27 @@ exports.recordAvailability = (0, https_1.onRequest)({ region: 'northamerica-nort
         res.status(400).send('Invalid response value');
         return;
     }
-    await db
-        .collection('teams')
-        .doc(teamId)
-        .collection('events')
-        .doc(eventId)
-        .collection('responses')
-        .doc(userId)
-        .set({
-        userId,
-        displayName: displayName ?? '',
-        response,
-        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-        setByManager: false,
-    });
-    res.status(200).json({ success: true });
+    try {
+        await db
+            .collection('teams')
+            .doc(teamId)
+            .collection('events')
+            .doc(eventId)
+            .collection('responses')
+            .doc(userId)
+            .set({
+            userId,
+            displayName: displayName ?? '',
+            response,
+            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+            setByManager: false,
+        });
+        res.status(200).json({ success: true });
+    }
+    catch (err) {
+        console.error('[recordAvailability] Firestore write failed:', err);
+        res.status(500).json({ error: 'Failed to record availability' });
+    }
 });
 exports.onSubRequestCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' }, async (event) => {
     const { teamId, requestId } = event.params;

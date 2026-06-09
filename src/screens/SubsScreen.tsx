@@ -153,18 +153,18 @@ function ManagerSubsScreen() {
     if (!findSubTarget) return;
     const key = `${findSubTarget.id}:${spare.id}`;
     setInvitedSpares(prev => new Set([...prev, key]));
-    showToast(`Invite sent to ${spare.name.split(' ')[0]}`);
     try {
       await updateDoc(doc(db, 'teams', activeTeamId, 'subRequests', findSubTarget.id), {
         status: 'filled', filledBy: spare.name,
       });
+      showToast(`Invite sent to ${spare.name.split(' ')[0]}`);
       if (spare.pushToken) {
         const body = `${findSubTarget.gameWeekday} ${findSubTarget.gameDay} ${findSubTarget.gameMonth} · ${findSubTarget.venue}`;
         sendPushNotification(
           spare.pushToken,
           'Sub request — are you available?',
           body,
-          { eventId: findSubTarget.eventId, teamId: activeTeamId, userId: spare.id },
+          { eventId: findSubTarget.eventId, teamId: activeTeamId, userId: spare.id, categoryId: 'SUB_REQUEST' },
         ).catch(err => console.error('[SubsScreen] spare push failed:', err));
       }
     } catch (err) {
@@ -438,10 +438,8 @@ function PlayerSubsScreen() {
     setNoteText('');
     setRequestTarget(null);
     showToast('Request sent to your manager');
-    const path = `teams/${activeTeamId}/subRequests`;
-    console.log('Writing sub request to:', path);
     try {
-      const result = await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
+      await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
         eventId:         requestTarget.id,
         requestedBy:     user?.uid ?? 'anon',
         requestedByName: user?.displayName ?? 'Player',
@@ -455,7 +453,6 @@ function PlayerSubsScreen() {
         gameVenue:       requestTarget.venue,
         gameTime:        requestTarget.time,
       });
-      console.log('Sub request write result:', result);
     } catch (err) {
       console.error('[SubsScreen] sub request write failed:', err);
     }

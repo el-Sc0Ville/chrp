@@ -125,12 +125,10 @@ function ManagerEventDetail() {
           text: 'Cancel event',
           style: 'destructive',
           onPress: async () => {
-            console.log('Cancelling event:', eventId);
             try {
               await updateDoc(doc(db, 'teams', activeTeamId, 'events', eventId), {
                 status: 'cancelled',
               });
-              console.log('Cancel result: success');
               if (event) {
                 const cancelBody = `🚫 ${event.title} on ${formatEventDate(event.startsAt)} has been cancelled.`;
                 await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
@@ -172,7 +170,6 @@ function ManagerEventDetail() {
     const targets = members.filter(
       m => m.role !== 'spare' && !responses[m.userId] && m.pushToken && m.notificationsEnabled !== false,
     );
-    console.log('[EventDetail] reminding', targets.length, 'non-responders for event', eventId);
     for (const m of targets) {
       sendPushNotification(
         m.pushToken!,

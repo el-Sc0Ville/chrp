@@ -135,10 +135,10 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
         const notifications: ExpoMessage[] = [];
         for (const memberDoc of membersSnap.docs) {
           const member = memberDoc.data();
-          if (member['autoIn'] === false || member['role'] === 'spare') continue;
+          if (member['role'] === 'spare') continue;
           if (respondedIds.has(memberDoc.id)) continue;
           if (!member['pushToken']) continue;
-          if (member['remindersEnabled'] === false) continue;
+          if (member['notificationsEnabled'] === false) continue;
 
           notifications.push({
             to: member['pushToken'],
@@ -235,22 +235,26 @@ export const recordAvailability = onRequest(
       return;
     }
 
-    await db
-      .collection('teams')
-      .doc(teamId)
-      .collection('events')
-      .doc(eventId)
-      .collection('responses')
-      .doc(userId)
-      .set({
-        userId,
-        displayName: displayName ?? '',
-        response,
-        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-        setByManager: false,
-      });
-
-    res.status(200).json({ success: true });
+    try {
+      await db
+        .collection('teams')
+        .doc(teamId)
+        .collection('events')
+        .doc(eventId)
+        .collection('responses')
+        .doc(userId)
+        .set({
+          userId,
+          displayName: displayName ?? '',
+          response,
+          respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+          setByManager: false,
+        });
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[recordAvailability] Firestore write failed:', err);
+      res.status(500).json({ error: 'Failed to record availability' });
+    }
   }
 );
 

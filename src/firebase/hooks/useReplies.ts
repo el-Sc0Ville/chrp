@@ -13,7 +13,7 @@ export function useReplies(teamId: string, announcementId: string): UseRepliesRe
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!teamId || !announcementId) return;
+    if (!teamId || !announcementId) { setLoading(false); return; }
     const ref = collection(db, 'teams', teamId, 'announcements', announcementId, 'replies');
     const q   = query(ref, orderBy('createdAt', 'asc'));
     const unsub = onSnapshot(

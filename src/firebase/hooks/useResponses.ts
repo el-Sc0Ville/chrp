@@ -18,7 +18,7 @@ export function useResponses(teamId: string, eventId: string | null): UseRespons
   const [error,     setError]     = useState<string | null>(null);
 
   useEffect(() => {
-    if (!eventId) {
+    if (!teamId || !eventId) {
       setResponses({});
       setLoading(false);
       return;

@@ -37,7 +37,6 @@ interface AvailCounts {
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  console.log('HOMESCREEN MOUNTED');
   const { isManager } = useUserContext();
   return isManager ? <ManagerHomeScreen /> : <PlayerHomeScreen />;
 }
@@ -83,9 +82,6 @@ function ManagerHomeScreen() {
     else                    avail.noResp++;
   });
 
-  console.log('Home event id:', activeEvent?.id, 'members:', members.length,
-    'counts — in:', avail.in, 'out:', avail.out, 'maybe:', avail.maybe, 'noResp:', avail.noResp);
-
   const managerResponse: Response = (responses[uid ?? ''] as Response) ?? null;
 
   const handleManagerRespond = async (r: Response, event: TeamEvent) => {
@@ -117,7 +113,6 @@ function ManagerHomeScreen() {
     if (!activeEvent) return;
     const nonResponders = members.filter(m => m.role !== 'spare' && !responses[m.userId]);
     const targets = nonResponders.filter(m => m.pushToken && m.notificationsEnabled !== false);
-    console.log('[HomeScreen] reminding', targets.length, 'non-responders for event', activeEvent.id);
     for (const m of targets) {
       sendPushNotification(
         m.pushToken!,
@@ -472,8 +467,6 @@ function PlayerHomeScreen() {
   const inCount  = Object.values(firestoreResponses).filter(r => r === 'in').length;
   const outCount = Object.values(firestoreResponses).filter(r => r === 'out').length;
 
-  console.log('Home event id:', activeEvent?.id, 'counts:', inCount, outCount);
-
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -485,7 +478,6 @@ function PlayerHomeScreen() {
   };
 
   const handleRespond = async (r: Response, event: TeamEvent) => {
-    console.log('TOGGLE TAPPED', r, '— event:', event?.id ?? 'null');
     if (!r || !event) {
       console.warn('[HomeScreen] handleRespond bailed — r:', r, 'event:', event?.id ?? 'null');
       return;
@@ -496,7 +488,6 @@ function PlayerHomeScreen() {
     }
     if (r === 'out' || r === 'maybe') setSubSheetVisible(true);
     const responseRef = doc(db, 'teams', activeTeamId, 'events', event.id, 'responses', uid);
-    console.log('[HomeScreen] writing response', r, 'to', responseRef.path);
     try {
       await setDoc(responseRef, {
         userId:       uid,
@@ -505,7 +496,6 @@ function PlayerHomeScreen() {
         respondedAt:  Timestamp.now(),
         setByManager: false,
       });
-      console.log('[HomeScreen] response write succeeded');
     } catch (err) {
       console.error('[HomeScreen] response write failed:', err);
     }
@@ -888,7 +878,7 @@ function InOutMaybeToggle({ response, onRespond }: {
           <Pressable
             key={opt.id}
             style={styles.toggleSegment}
-            onPress={() => { console.log('TOGGLE TAPPED', opt.id); onRespond(opt.id); }}
+            onPress={() => onRespond(opt.id)}
             android_ripple={{ color: 'rgba(255,255,255,0.1)', borderless: true }}
           >
             <View style={[
