@@ -193,6 +193,8 @@ exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{
     const notifications = [];
     for (const memberDoc of membersSnap.docs) {
         const member = memberDoc.data();
+        if (member['role'] === 'spare')
+            continue;
         if (!member['pushToken'])
             continue;
         if (member['notificationsEnabled'] === false)
