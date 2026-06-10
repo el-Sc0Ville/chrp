@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // TODO: FCM push notifications require Expo Notifications + a custom dev build — not available in Expo Go
 
@@ -14,7 +15,10 @@ const firebaseConfig = {
   appId:             '1:865858877596:web:3edda39c32d0661f925559',
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const isFirstInit = getApps().length === 0;
+const app = isFirstInit ? initializeApp(firebaseConfig) : getApp();
 
 export const db   = getFirestore(app);
-export const auth = getAuth(app);
+export const auth = isFirstInit
+  ? initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })
+  : getAuth(app);
