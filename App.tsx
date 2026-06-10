@@ -38,6 +38,7 @@ import {
 import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
+import './src/tasks/geofenceTask';
 
 const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
   const actionIdentifier = response.actionIdentifier;

@@ -42,6 +42,7 @@ export interface Event {
   title: string;
   opponent?: string;
   venue: string;
+  venueCoords?: { lat: number; lng: number };
   startsAt: Timestamp;
   endsAt: Timestamp;
   recurring: boolean;
@@ -60,6 +61,8 @@ export interface AvailabilityResponse {
   response: 'in' | 'out' | 'maybe';
   respondedAt: Timestamp;
   setByManager: boolean;
+  status?: 'here';
+  checkedInAt?: Timestamp;
 }
 
 // /teams/{teamId}/announcements/{announcementId}

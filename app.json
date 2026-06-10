@@ -21,7 +21,8 @@
             "CFBundleURLSchemes": ["chrp"]
           }
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
@@ -44,6 +45,13 @@
           "icon": "./assets/chrp-icon-1024.png",
           "color": "#2F6BFF",
           "sounds": []
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue.",
+          "locationWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue."
         }
       ]
     ],

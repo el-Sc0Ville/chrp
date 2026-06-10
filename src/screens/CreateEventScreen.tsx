@@ -1,10 +1,11 @@
 // B-04 · Create Event (manager-only form)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, ScrollView, Pressable, Switch,
   KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
+import { GooglePlacesAutocomplete, type GooglePlacesAutocompleteRef } from 'react-native-google-places-autocomplete';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -86,9 +87,11 @@ export default function CreateEventScreen() {
   const [date,        setDate]        = useState(DEFAULT_DATE);
   const [time,        setTime]        = useState(DEFAULT_TIME);
   const [venue,       setVenue]       = useState('');
+  const [venueCoords, setVenueCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [notes,       setNotes]       = useState('');
   const [recurring,   setRecurring]   = useState(false);
   const [saving,      setSaving]      = useState(false);
+  const placesRef = useRef<GooglePlacesAutocompleteRef>(null);
 
   // Load existing event when editing
   useEffect(() => {
@@ -99,6 +102,8 @@ export default function CreateEventScreen() {
       if (e.type === 'game' || e.type === 'practice' || e.type === 'social') setEventType(e.type);
       setEventName(e.title ?? '');
       setVenue(e.venue ?? '');
+      placesRef.current?.setAddressText(e.venue ?? '');
+      setVenueCoords(e.venueCoords ?? null);
       setNotes(e.notes ?? '');
       setRecurring(e.recurring ?? false);
       const start = e.startsAt.toDate();
@@ -127,6 +132,7 @@ export default function CreateEventScreen() {
         type:      eventType,
         title:     eventName.trim(),
         venue:     venue.trim(),
+        ...(venueCoords ? { venueCoords } : {}),
         ...(notesValue ? { notes: notesValue } : {}),
         startsAt:  Timestamp.fromDate(start),
         endsAt:    Timestamp.fromDate(end),
@@ -229,7 +235,7 @@ export default function CreateEventScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
         >
@@ -326,25 +332,77 @@ export default function CreateEventScreen() {
                 )}
               </View>
             )}
+          </View>
 
-            <View style={styles.cardDivider} />
-
-            {/* Venue */}
-            {/* TODO Phase 2: replace with Google Places Autocomplete for precise GPS coordinates */}
-            <View style={styles.textFieldRow}>
-              <Text style={styles.fieldLabel}>VENUE</Text>
-              <View style={styles.venueInputRow}>
-                <VenuePinIcon />
-                <TextInput
-                  style={[styles.fieldInput, { flex: 1 }]}
-                  value={venue}
-                  onChangeText={setVenue}
-                  placeholder="Arena name or address"
-                  placeholderTextColor={navy[400]}
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                />
-              </View>
+          {/* Venue card — separate card (no overflow:hidden) so autocomplete dropdown can extend below */}
+          <View style={styles.venueCard}>
+            <Text style={styles.fieldLabel}>VENUE</Text>
+            <View style={styles.venueInputRow}>
+              <VenuePinIcon />
+              <GooglePlacesAutocomplete
+                ref={placesRef}
+                placeholder="Arena name or address"
+                fetchDetails
+                onPress={(data, details) => {
+                  const address = data.description;
+                  setVenue(address);
+                  if (details?.geometry?.location) {
+                    setVenueCoords({
+                      lat: details.geometry.location.lat,
+                      lng: details.geometry.location.lng,
+                    });
+                  }
+                }}
+                query={{
+                  key: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '',
+                  language: 'en',
+                }}
+                textInputProps={{
+                  onChangeText: (text) => { setVenue(text); setVenueCoords(null); },
+                  placeholderTextColor: navy[400],
+                  autoCapitalize: 'words' as const,
+                  returnKeyType: 'next' as const,
+                }}
+                styles={{
+                  container: { flex: 1 },
+                  textInputContainer: { backgroundColor: 'transparent', padding: 0 },
+                  textInput: {
+                    fontFamily: fonts.ui,
+                    fontSize: 16,
+                    color: navy[50],
+                    backgroundColor: 'transparent',
+                    padding: 0,
+                    margin: 0,
+                    height: 22,
+                  },
+                  listView: {
+                    backgroundColor: navy[700],
+                    borderRadius: radius.m,
+                    marginTop: spacing[4],
+                    borderWidth: 0.5,
+                    borderColor: navy[600],
+                  },
+                  row: {
+                    backgroundColor: 'transparent',
+                    paddingVertical: spacing[12],
+                    paddingHorizontal: spacing[12],
+                  },
+                  description: {
+                    fontFamily: fonts.ui,
+                    fontSize: 14,
+                    color: navy[100],
+                  },
+                  separator: {
+                    height: 0.5,
+                    backgroundColor: navy[600],
+                  },
+                  poweredContainer: { display: 'none' },
+                  powered: { display: 'none' },
+                }}
+                enablePoweredByContainer={false}
+                suppressDefaultStyles
+                keepResultsAfterBlur={false}
+              />
             </View>
           </View>
 
@@ -589,11 +647,26 @@ const styles = StyleSheet.create({
     marginLeft: spacing[16],
   },
 
+  // ── Venue card — own card without overflow:hidden so dropdown can extend below ──
+  venueCard: {
+    marginTop: spacing[8],
+    backgroundColor: navy[700],
+    borderRadius: radius.l,
+    borderWidth: 0.5,
+    borderColor: navy[600],
+    paddingHorizontal: spacing[16],
+    paddingTop: spacing[12],
+    paddingBottom: spacing[12],
+    zIndex: 10,
+    elevation: 3,
+  },
+
   // ── Venue input row (pin icon + text input) ──────────────────────────────
   venueInputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing[8],
+    marginTop: spacing[4],
   },
 
   // ── Text field row ───────────────────────────────────────────────────────
