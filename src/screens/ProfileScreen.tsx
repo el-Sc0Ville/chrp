@@ -6,12 +6,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
   Switch, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { updateProfile } from 'firebase/auth';
 import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import * as RNIap from 'react-native-iap';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { auth, db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
@@ -568,11 +570,16 @@ function RolePill({ role, teamPalette }: { role: 'manager' | 'player' | 'spare';
 
 // ─── Tip jar sheet ────────────────────────────────────────────────────────────
 
-const TIP_OPTIONS = [
-  { amount: '$2',  emoji: '☕' },
-  { amount: '$5',  emoji: '🍕' },
-  { amount: '$10', emoji: '🎉' },
-  { amount: '$25', emoji: '🏒' },
+const TIP_SKUS = [
+  'com.chrp.app.tip.small',
+  'com.chrp.app.tip.medium',
+  'com.chrp.app.tip.large',
+] as const;
+
+const TIP_OPTIONS: { sku: typeof TIP_SKUS[number]; emoji: string }[] = [
+  { sku: 'com.chrp.app.tip.small',  emoji: '☕' },
+  { sku: 'com.chrp.app.tip.medium', emoji: '🍕' },
+  { sku: 'com.chrp.app.tip.large',  emoji: '🏒' },
 ];
 
 function TipJarSheet({
@@ -586,10 +593,78 @@ function TipJarSheet({
   const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
 
-  const handleTip = () => {
-    // TODO Phase 2b: wire to Stripe or Apple/Google in-app purchase
-    onDismiss();
-    showToast('Coming soon — payment support is on the way! 🙏');
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [products, setProducts] = useState<Record<string, RNIap.Product>>({});
+  const [purchasing, setPurchasing] = useState<string | null>(null);
+
+  const showToastRef = useRef(showToast);
+  useEffect(() => { showToastRef.current = showToast; }, [showToast]);
+
+  useEffect(() => {
+    if (!visible) return;
+
+    let isMounted = true;
+    let purchaseSub: RNIap.EventSubscription | null = null;
+    let errorSub:    RNIap.EventSubscription | null = null;
+
+    (async () => {
+      try {
+        await RNIap.initConnection();
+        if (!isMounted) return;
+
+        const prods = await RNIap.fetchProducts({ skus: [...TIP_SKUS], type: 'in-app' });
+        if (!isMounted) return;
+
+        const map: Record<string, RNIap.Product> = {};
+        (prods ?? []).forEach(p => {
+          if (p.type === 'in-app') map[p.id] = p as RNIap.Product;
+        });
+        setProducts(map);
+        setProductsLoading(false);
+      } catch (err) {
+        console.error('[TipJar] init/fetchProducts failed:', err);
+        if (isMounted) setProductsLoading(false);
+      }
+
+      purchaseSub = RNIap.purchaseUpdatedListener(async (purchase) => {
+        try {
+          await RNIap.finishTransaction({ purchase, isConsumable: true });
+        } catch (err) {
+          console.error('[TipJar] finishTransaction failed:', err);
+        }
+        if (!isMounted) return;
+        setPurchasing(null);
+        onDismiss();
+        showToastRef.current('Thank you for supporting Chrp! 🙏');
+      });
+
+      errorSub = RNIap.purchaseErrorListener((error) => {
+        if (!isMounted) return;
+        setPurchasing(null);
+        if (error.code !== RNIap.ErrorCode.UserCancelled) {
+          showToastRef.current('Purchase failed — please try again');
+        }
+      });
+    })();
+
+    return () => {
+      isMounted = false;
+      purchaseSub?.remove();
+      errorSub?.remove();
+      RNIap.endConnection().catch(err => console.error('[TipJar] endConnection failed:', err));
+    };
+  }, [visible]);
+
+  const handleTip = (sku: string) => {
+    if (purchasing) return;
+    setPurchasing(sku);
+    RNIap.requestPurchase({
+      request: { apple: { sku } },
+      type: 'in-app',
+    }).catch(err => {
+      setPurchasing(null);
+      console.error('[TipJar] requestPurchase error:', err);
+    });
   };
 
   return (
@@ -610,21 +685,38 @@ function TipJarSheet({
             Chrp is free and always will be. If it saves you one awkward "are you coming?" text, consider buying us a coffee.
           </Text>
 
-          <View style={styles.tipGrid}>
-            {TIP_OPTIONS.map(({ amount, emoji }) => (
-              <Pressable
-                key={amount}
-                style={({ pressed }) => [styles.tipBtn, {
-                  backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
-                  borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
-                }, pressed && { opacity: 0.8 }]}
-                onPress={handleTip}
-              >
-                <Text style={styles.tipBtnEmoji}>{emoji}</Text>
-                <Text style={[styles.tipBtnAmount, { color: TEAM[300] }]}>{amount}</Text>
-              </Pressable>
-            ))}
-          </View>
+          {productsLoading ? (
+            <View style={styles.tipLoadingRow}>
+              <ActivityIndicator color={TEAM[300]} />
+            </View>
+          ) : (
+            <View style={styles.tipGrid}>
+              {TIP_OPTIONS.map(({ sku, emoji }) => {
+                const product = products[sku];
+                const isPurchasing = purchasing === sku;
+                return (
+                  <Pressable
+                    key={sku}
+                    style={({ pressed }) => [styles.tipBtn, {
+                      backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+                      borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.38)`,
+                    }, pressed && !purchasing && { opacity: 0.8 }]}
+                    onPress={() => handleTip(sku)}
+                    disabled={!!purchasing}
+                  >
+                    {isPurchasing ? (
+                      <ActivityIndicator color={TEAM[300]} style={{ height: 30 }} />
+                    ) : (
+                      <Text style={styles.tipBtnEmoji}>{emoji}</Text>
+                    )}
+                    <Text style={[styles.tipBtnAmount, { color: TEAM[300] }]}>
+                      {product?.displayPrice ?? '—'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
           <Pressable
             style={({ pressed }) => [styles.tipLaterBtn, pressed && { opacity: 0.75 }]}
@@ -1084,14 +1176,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing[24],
   },
+  tipLoadingRow: {
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[20],
+  },
   tipGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing[10],
     marginBottom: spacing[20],
   },
   tipBtn: {
-    width: '47.5%',
+    flex: 1,
     paddingVertical: spacing[16],
     borderRadius: radius.l,
     backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
