@@ -93,6 +93,11 @@ export default function CreateEventScreen() {
   const [saving,      setSaving]      = useState(false);
   const placesRef = useRef<GooglePlacesAutocompleteRef>(null);
 
+  useEffect(() => {
+    const key = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+    if (!key) console.warn('[CreateEvent] EXPO_PUBLIC_GOOGLE_PLACES_API_KEY is undefined — venue autocomplete will not work');
+  }, []);
+
   // Load existing event when editing
   useEffect(() => {
     if (!editEventId) return;
@@ -158,7 +163,7 @@ export default function CreateEventScreen() {
             const batch = writeBatch(db);
             for (const memberDoc of membersSnap.docs) {
               const member = memberDoc.data() as Member;
-              if (!member.autoIn || member.role === 'spare') continue;
+              if (member.role === 'spare') continue;
               const blackoutsSnap = await getDocs(
                 collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
               );
@@ -350,6 +355,7 @@ export default function CreateEventScreen() {
                 ref={placesRef}
                 placeholder="Arena name or address"
                 fetchDetails
+                onFail={(error) => console.error('[CreateEvent] Places API error:', JSON.stringify(error))}
                 onPress={(data, details) => {
                   const address = data.description;
                   setVenue(address);

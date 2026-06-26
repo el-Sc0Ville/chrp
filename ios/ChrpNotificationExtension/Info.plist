@@ -24,10 +24,6 @@
   <dict>
     <key>NSExtensionAttributes</key>
     <dict>
-      <key>UNNotificationExtensionCategory</key>
-      <string>AVAILABILITY_REQUEST</string>
-      <key>UNNotificationExtensionDefaultContentHidden</key>
-      <true/>
       <key>UNNotificationExtensionInitialContentSizeRatio</key>
       <real>0.28</real>
     </dict>
