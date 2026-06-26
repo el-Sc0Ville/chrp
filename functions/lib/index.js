@@ -203,7 +203,8 @@ exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{
             to: member['pushToken'],
             sound: 'default',
             title: `New event: ${eventData['title']}`,
-            body: `📅 ${dateLabel} at ${eventData['venue']}`,
+            body: `📅 ${dateLabel} at ${eventData['venue']} — Hold to reply`,
+            categoryId: 'AVAILABILITY_REQUEST',
             data: {
                 eventId,
                 teamId,

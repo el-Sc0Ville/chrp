@@ -185,6 +185,7 @@ export default function CreateEventScreen() {
       navigation.goBack();
     } catch (err) {
       console.error('[CreateEvent] write failed:', err);
+    } finally {
       setSaving(false);
     }
   };
@@ -225,6 +226,7 @@ export default function CreateEventScreen() {
 
         <Pressable
           onPress={handleSave}
+          disabled={!isFormValid || saving}
           style={[styles.navSide, styles.navSideRight]}
           hitSlop={12}
         >
@@ -451,6 +453,7 @@ export default function CreateEventScreen() {
           <View style={styles.saveSection}>
             <Pressable
               onPress={handleSave}
+              disabled={!isFormValid || saving}
               style={({ pressed }) => [
                 styles.saveBtn,
                 { backgroundColor: TEAM[500], shadowColor: TEAM[500] },
