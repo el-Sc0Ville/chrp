@@ -30,6 +30,12 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
       try {
         await updateProfile(auth.currentUser, { displayName: name });
         setMockUser({ ...auth.currentUser, displayName: name } as typeof auth.currentUser, false);
+        // Always sync displayName to the Firestore user doc (it's created with '' on first sign-in)
+        await setDoc(
+          doc(db, 'users', auth.currentUser.uid),
+          { displayName: name },
+          { merge: true },
+        ).catch(err => console.error('[ProfileSetup] displayName setDoc failed:', err));
         // For existing users editing their profile (not during initial onboarding),
         // also sync the displayName to their Firestore member document.
         if (!needsOnboarding) {

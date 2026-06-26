@@ -42,15 +42,8 @@ export default function CreateTeamScreen({ navigation, route }: Props) {
       const name      = teamName.trim();
       const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-      await setDoc(teamRef, {
-        name,
-        sport,
-        palette,
-        managerIds: [user.uid],
-        inviteCode,
-        createdAt: serverTimestamp(),
-      });
-
+      // Member doc must be written FIRST: the team doc write requires isManager()
+      // which checks teams/{teamId}/members/{uid}.role — that doc must exist first.
       await setDoc(doc(db, 'teams', teamId, 'members', user.uid), {
         userId: user.uid,
         displayName,
@@ -59,6 +52,15 @@ export default function CreateTeamScreen({ navigation, route }: Props) {
         email: user.email ?? '',
         autoIn: true,
         joinedAt: serverTimestamp(),
+      });
+
+      await setDoc(teamRef, {
+        name,
+        sport,
+        palette,
+        managerIds: [user.uid],
+        inviteCode,
+        createdAt: serverTimestamp(),
       });
 
       await setDoc(doc(db, 'users', user.uid, 'teams', teamId), {

@@ -49,6 +49,8 @@ export async function confirmMagicLink(email: string, emailLink: string): Promis
   const userRef = doc(db, 'users', uid);
   const snap = await getDoc(userRef);
   if (!snap.exists()) {
+    // displayName is empty at this point — ProfileSetupScreen fills it in
+    // and writes it back once the user completes onboarding
     await setDoc(userRef, { email, displayName: '', createdAt: serverTimestamp() });
   }
 }
