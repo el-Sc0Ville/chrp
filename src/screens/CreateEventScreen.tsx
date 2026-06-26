@@ -148,33 +148,38 @@ export default function CreateEventScreen() {
           createdAt: serverTimestamp(),
         });
 
-        // Auto-in: batch-write responses for members with autoIn enabled
+        navigation.goBack();
+
+        // Auto-in: fire-and-forget so navigation isn't blocked
         // TODO Phase 2b: move this logic to a Firebase Cloud Function trigger on event creation
         const eventDateStr = toYMD(start);
-        const membersSnap  = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
-        const batch        = writeBatch(db);
-        for (const memberDoc of membersSnap.docs) {
-          const member = memberDoc.data() as Member;
-          if (!member.autoIn || member.role === 'spare') continue;
-          const blackoutsSnap = await getDocs(
-            collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
-          );
-          const blackedOut = blackoutsSnap.docs.some(bd =>
-            ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
-          );
-          batch.set(
-            doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
-            {
-              userId:       memberDoc.id,
-              displayName:  member.displayName,
-              response:     blackedOut ? 'out' : 'in',
-              respondedAt:  serverTimestamp(),
-              setByManager: false,
-            },
-          );
-        }
-        await batch.commit();
-
+        getDocs(collection(db, 'teams', activeTeamId, 'members'))
+          .then(async membersSnap => {
+            const batch = writeBatch(db);
+            for (const memberDoc of membersSnap.docs) {
+              const member = memberDoc.data() as Member;
+              if (!member.autoIn || member.role === 'spare') continue;
+              const blackoutsSnap = await getDocs(
+                collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
+              );
+              const blackedOut = blackoutsSnap.docs.some(bd =>
+                ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
+              );
+              batch.set(
+                doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
+                {
+                  userId:       memberDoc.id,
+                  displayName:  member.displayName,
+                  response:     blackedOut ? 'out' : 'in',
+                  respondedAt:  serverTimestamp(),
+                  setByManager: false,
+                },
+              );
+            }
+            await batch.commit();
+          })
+          .catch(err => console.error('[CreateEvent] auto-in failed:', err));
+        return;
       }
 
       navigation.goBack();

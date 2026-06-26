@@ -102,9 +102,9 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     @objc private func buttonTapped(_ sender: UIButton) {
         guard let actionId = sender.accessibilityIdentifier else { return }
         highlight(actionId: actionId)
-        // Pass the selected response back to the app via the default action.
-        // App.tsx handles DEFAULT_ACTION_IDENTIFIER → navigates to EventDetail.
-        extensionContext?.performNotificationDefaultAction()
+        // Dismiss the NCE; the system action buttons (registered via setNotificationCategoryAsync)
+        // are the authoritative tap targets and forward the action identifier to App.tsx.
+        extensionContext?.dismiss()
     }
 
     private func highlight(actionId: String) {

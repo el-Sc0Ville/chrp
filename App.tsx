@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './src/firebase';
 import { auth } from './src/firebase/config';
 import { navigationRef } from './src/navigation';
+import { registerNotificationCategories } from './src/firebase/notifications';
 import {
   useFonts,
   SpaceGrotesk_300Light,
@@ -175,6 +176,10 @@ export default function App() {
   console.log('APP STARTED');
 
   useEffect(() => {
+    registerNotificationCategories().catch(err =>
+      console.warn('[App] registerNotificationCategories failed:', err),
+    );
+
     // Cold-start: app opened via deep link while not running
     Linking.getInitialURL().then(url => {
       if (url) handleDeepLink(url);
