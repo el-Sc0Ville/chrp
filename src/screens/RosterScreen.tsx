@@ -11,6 +11,7 @@ import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import { publishInviteCode } from '../firebase/invites';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useTeam } from '../firebase/hooks/useTeam';
 import type { Member } from '../firebase/schema';
@@ -71,6 +72,16 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const [actionPlayer, setActionPlayer] = useState<RosterPlayer | null>(null);
 
   const inviteCode = team?.inviteCode ?? '';
+
+  // Backfill the code -> team lookup entry. Redeeming a code reads
+  // /inviteCodes/{CODE}, but teams created before that table existed have no
+  // entry, so their code would silently resolve to nothing. Publishing it here
+  // heals those teams the first time a manager opens the roster. Safe to repeat.
+  useEffect(() => {
+    if (!inviteCode || !activeTeamId || !team) return;
+    publishInviteCode(inviteCode, activeTeamId, team.name, activeTeamPalette)
+      .catch(err => console.error('[Roster] invite code publish failed:', err));
+  }, [inviteCode, activeTeamId, team?.name, activeTeamPalette]);
 
   const makeManager = async (id: string) => {
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'manager' as PlayerRole } : p));
