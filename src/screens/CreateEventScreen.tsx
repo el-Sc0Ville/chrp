@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, ScrollView, Pressable, Switch,
-  KeyboardAvoidingView, Platform, StyleSheet,
+  KeyboardAvoidingView, Platform, StyleSheet, Alert,
 } from 'react-native';
 import { GooglePlacesAutocomplete, type GooglePlacesAutocompleteRef } from 'react-native-google-places-autocomplete';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +15,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import {
   addDoc, collection, serverTimestamp, Timestamp,
-  getDocs, doc, writeBatch, getDoc, updateDoc,
+  getDocs, doc, writeBatch, getDoc, updateDoc, deleteField,
 } from 'firebase/firestore';
 import type { Member, Event as FirestoreEvent } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
@@ -35,19 +35,23 @@ const EVENT_TYPES: { id: EventType; label: string }[] = [
   { id: 'social',   label: 'Social'   },
 ];
 
-// Default event time: tomorrow at 7:00 PM
-const DEFAULT_DATE = (() => {
+// Default event time: tomorrow at 7:00 PM.
+// Evaluated per mount rather than at module load — a session left open across
+// midnight would otherwise prefill a date already behind minimumDate.
+function defaultDate(): Date {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   d.setHours(0, 0, 0, 0);
   return d;
-})();
+}
 
-const DEFAULT_TIME = (() => {
+function defaultTime(): Date {
   const d = new Date();
   d.setHours(19, 0, 0, 0);
   return d;
-})();
+}
+
+const DEFAULT_DURATION_MS = 90 * 60 * 1000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,13 +88,20 @@ export default function CreateEventScreen() {
   // Form state
   const [eventType,   setEventType]   = useState<EventType>('game');
   const [eventName,   setEventName]   = useState('');
-  const [date,        setDate]        = useState(DEFAULT_DATE);
-  const [time,        setTime]        = useState(DEFAULT_TIME);
+  const [date,        setDate]        = useState(defaultDate);
+  const [time,        setTime]        = useState(defaultTime);
+  // Preserved across an edit so changing only the title cannot silently
+  // rewrite a custom end time back to the 90-minute default.
+  const [durationMs,  setDurationMs]  = useState(DEFAULT_DURATION_MS);
   const [venue,       setVenue]       = useState('');
   const [venueCoords, setVenueCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [notes,       setNotes]       = useState('');
   const [recurring,   setRecurring]   = useState(false);
   const [saving,      setSaving]      = useState(false);
+  // `saving` alone cannot guard the submit: it is read from the render closure
+  // and setSaving is async, so two taps landing in the same render both pass the
+  // check and fire two addDoc calls. This ref is read and set synchronously.
+  const savingRef = useRef(false);
   const placesRef = useRef<GooglePlacesAutocompleteRef>(null);
 
   useEffect(() => {
@@ -114,6 +125,8 @@ export default function CreateEventScreen() {
       const start = e.startsAt.toDate();
       setDate(start);
       setTime(start);
+      const span = e.endsAt ? e.endsAt.toDate().getTime() - start.getTime() : 0;
+      setDurationMs(span > 0 ? span : DEFAULT_DURATION_MS);
     }).catch(err => console.error('[CreateEvent] load failed:', err));
   }, [editEventId, activeTeamId]);
 
@@ -124,73 +137,104 @@ export default function CreateEventScreen() {
   const isFormValid = eventName.trim().length > 0;
 
   const handleSave = async () => {
-    if (!isFormValid || saving) return;
+    if (!isFormValid || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const start = new Date(
         date.getFullYear(), date.getMonth(), date.getDate(),
         time.getHours(), time.getMinutes(), 0, 0,
       );
-      const end        = new Date(start.getTime() + 90 * 60 * 1000);
+      const end        = new Date(start.getTime() + durationMs);
       const notesValue = notes.trim();
-      const fields = {
+      const core = {
         type:      eventType,
         title:     eventName.trim(),
         venue:     venue.trim(),
-        ...(venueCoords ? { venueCoords } : {}),
-        ...(notesValue ? { notes: notesValue } : {}),
         startsAt:  Timestamp.fromDate(start),
         endsAt:    Timestamp.fromDate(end),
         recurring,
       };
 
       if (editEventId) {
-        await updateDoc(doc(db, 'teams', activeTeamId, 'events', editEventId), fields);
-      } else {
-        const eventRef = await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
-          ...fields,
-          createdBy: user?.uid ?? 'anon',
-          createdAt: serverTimestamp(),
+        // On edit, optional fields must be actively removed when cleared.
+        // Omitting the key from an updateDoc leaves the previous value in place,
+        // so emptying the notes or dropping a pin would never stick.
+        await updateDoc(doc(db, 'teams', activeTeamId, 'events', editEventId), {
+          ...core,
+          venueCoords: venueCoords ?? deleteField(),
+          notes:       notesValue || deleteField(),
         });
-
         navigation.goBack();
-
-        // Auto-in: fire-and-forget so navigation isn't blocked
-        // TODO Phase 2b: move this logic to a Firebase Cloud Function trigger on event creation
-        const eventDateStr = toYMD(start);
-        getDocs(collection(db, 'teams', activeTeamId, 'members'))
-          .then(async membersSnap => {
-            const batch = writeBatch(db);
-            for (const memberDoc of membersSnap.docs) {
-              const member = memberDoc.data() as Member;
-              if (member.role === 'spare') continue;
-              const blackoutsSnap = await getDocs(
-                collection(db, 'teams', activeTeamId, 'members', memberDoc.id, 'blackouts'),
-              );
-              const blackedOut = blackoutsSnap.docs.some(bd =>
-                ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
-              );
-              batch.set(
-                doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
-                {
-                  userId:       memberDoc.id,
-                  displayName:  member.displayName,
-                  response:     blackedOut ? 'out' : 'in',
-                  respondedAt:  serverTimestamp(),
-                  setByManager: false,
-                },
-              );
-            }
-            await batch.commit();
-          })
-          .catch(err => console.error('[CreateEvent] auto-in failed:', err));
         return;
       }
 
+      const eventRef = await addDoc(collection(db, 'teams', activeTeamId, 'events'), {
+        ...core,
+        ...(venueCoords ? { venueCoords } : {}),
+        ...(notesValue ? { notes: notesValue } : {}),
+        createdBy: user?.uid ?? 'anon',
+        createdAt: serverTimestamp(),
+      });
+
       navigation.goBack();
+
+      // Auto-in runs after navigation so the form is never blocked by it.
+      // TODO Phase 2b: move this logic to a Firebase Cloud Function trigger on event creation
+      const eventDateStr = toYMD(start);
+      void (async () => {
+        try {
+          const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+          const eligible = membersSnap.docs.filter(d => {
+            const m = d.data() as Member;
+            // autoIn is opt-OUT: onboarding writes autoIn:true, but legacy and
+            // seeded member docs can omit the field entirely, and those members
+            // must not be silently skipped. Only an explicit false opts out.
+            return m.autoIn !== false && m.role !== 'spare';
+          });
+
+          // Read every roster member's blackouts in parallel. Serial awaits here
+          // cost one round-trip per player before the batch could even commit.
+          const blackouts = await Promise.all(
+            eligible.map(d =>
+              getDocs(collection(db, 'teams', activeTeamId, 'members', d.id, 'blackouts')),
+            ),
+          );
+
+          const batch = writeBatch(db);
+          eligible.forEach((memberDoc, i) => {
+            const member = memberDoc.data() as Member;
+            const blackedOut = blackouts[i].docs.some(bd =>
+              ((bd.data().dates as string[]) ?? []).includes(eventDateStr),
+            );
+            batch.set(
+              doc(db, 'teams', activeTeamId, 'events', eventRef.id, 'responses', memberDoc.id),
+              {
+                userId:       memberDoc.id,
+                displayName:  member.displayName,
+                response:     blackedOut ? 'out' : 'in',
+                respondedAt:  serverTimestamp(),
+                setByManager: false,
+              },
+            );
+          });
+          await batch.commit();
+        } catch (err) {
+          // The event itself saved, so don't imply otherwise — but do surface
+          // this. Swallowing it into console.error is how a permission failure
+          // here stayed invisible while the UI promised the team was notified.
+          console.error('[CreateEvent] auto-in failed:', err);
+          Alert.alert(
+            'Event saved',
+            "Couldn't pre-fill the team's availability. Everyone can still reply from the event.",
+          );
+        }
+      })();
     } catch (err) {
       console.error('[CreateEvent] write failed:', err);
+      Alert.alert('Couldn\'t save event', 'Something went wrong. Please try again.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

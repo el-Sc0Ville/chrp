@@ -74,7 +74,10 @@ export default function ProfileScreen() {
       .then(snap => {
         if (snap.exists()) {
           const data = snap.data();
-          setAutoIn(data.autoIn ?? false);
+          // Default true to match the auto-in batch in CreateEventScreen, which
+          // treats a missing autoIn field as opted in. Defaulting to false here
+          // showed the toggle off while the user was in fact being auto-in'd.
+          setAutoIn(data.autoIn ?? true);
           setMemberRole(data.role ?? (isManager ? 'manager' : 'player'));
           if (data.jerseyNumber != null) {
             const j = String(data.jerseyNumber);
