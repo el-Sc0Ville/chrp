@@ -41,9 +41,27 @@ import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
 import './src/tasks/geofenceTask';
 
+/**
+ * Deep-link into an event once the navigator has mounted. On a cold start the
+ * notification response is delivered before <NavigationContainer> renders
+ * (fonts are still loading), so navigating immediately would be a no-op.
+ */
+function navigateToEventWhenReady(eventId: string, fallbackTitle: string, attempt = 0): void {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('EventDetail', { eventId, title: fallbackTitle });
+    return;
+  }
+  if (attempt >= 20) {
+    console.warn('[Notification] navigator never became ready, skipping deep link');
+    return;
+  }
+  setTimeout(() => navigateToEventWhenReady(eventId, fallbackTitle, attempt + 1), 250);
+}
+
 const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
   const actionIdentifier = response.actionIdentifier;
-  const data = response.notification.request.content.data as {
+  const content = response.notification.request.content;
+  const data = content.data as {
     eventId?: string;
     teamId?: string;
     userId?: string;
@@ -52,25 +70,42 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
 
   console.log('Notification response received:', actionIdentifier, data);
 
+  // Tapping the notification body just opens the app — take the user straight
+  // to the event. Availability itself is set from the notification content
+  // extension (ios/ChrpNotificationContent), which posts to the
+  // recordAvailability Cloud Function without launching the app at all.
+  if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+    if (data.eventId) {
+      navigateToEventWhenReady(data.eventId, content.title ?? 'Event');
+    }
+    return;
+  }
+
+  // Safety net: the AVAILABILITY_REQUEST category registers no system action
+  // buttons today, so this branch is normally unreachable. It stays so that any
+  // future action button still records a response rather than silently no-oping.
   if (!data.eventId || !data.teamId || !data.userId) {
     console.warn('Missing notification data, cannot write response');
     return;
   }
 
-  if (actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
-    const response_value = actionIdentifier.toLowerCase();
-    await setDoc(
-      doc(db, 'teams', data.teamId, 'events', data.eventId, 'responses', data.userId),
-      {
-        response: response_value,
-        respondedAt: serverTimestamp(),
-        setByManager: false,
-        displayName: data.displayName ?? 'Player',
-        userId: data.userId,
-      },
-    ).catch(err => console.error('[Notification] Firestore write failed:', err));
-    console.log('Notification response written:', response_value);
+  const responseValue = actionIdentifier.toLowerCase();
+  if (!['in', 'out', 'maybe'].includes(responseValue)) {
+    console.warn('[Notification] unrecognised action identifier:', actionIdentifier);
+    return;
   }
+
+  await setDoc(
+    doc(db, 'teams', data.teamId, 'events', data.eventId, 'responses', data.userId),
+    {
+      response: responseValue,
+      respondedAt: serverTimestamp(),
+      setByManager: false,
+      displayName: data.displayName ?? 'Player',
+      userId: data.userId,
+    },
+  ).catch(err => console.error('[Notification] Firestore write failed:', err));
+  console.log('Notification response written:', responseValue);
 };
 
 async function handleJoinDeepLink(url: string): Promise<void> {

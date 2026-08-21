@@ -12,24 +12,22 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/**
+ * Registers the AVAILABILITY_REQUEST category with NO action buttons.
+ *
+ * This is deliberate. The In/Out/Maybe controls are rendered by the iOS
+ * Notification Content Extension (ios/ChrpNotificationContent), which is bound
+ * to this category via UNNotificationExtensionCategory in its Info.plist. That
+ * extension draws the branded buttons and POSTs the choice straight to the
+ * recordAvailability Cloud Function, so the response lands in Firestore without
+ * the app ever launching.
+ *
+ * Registering system action buttons here as well would render a SECOND set of
+ * In/Out/Maybe controls underneath the extension's own — that is exactly the
+ * duplicate-UI bug. Keep this array empty; add buttons to the extension, not here.
+ */
 export async function registerNotificationCategories(): Promise<void> {
-  await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', [
-    {
-      identifier: 'IN',
-      buttonTitle: '✅ In',
-      options: { opensAppToForeground: false },
-    },
-    {
-      identifier: 'OUT',
-      buttonTitle: '❌ Out',
-      options: { opensAppToForeground: false },
-    },
-    {
-      identifier: 'MAYBE',
-      buttonTitle: '🟡 Maybe',
-      options: { opensAppToForeground: false },
-    },
-  ]);
+  await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', []);
 }
 
 export async function registerForPushNotifications(
