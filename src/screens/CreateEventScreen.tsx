@@ -1,11 +1,12 @@
 // B-04 · Create Event (manager-only form)
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TextInput, ScrollView, Pressable, Switch,
   KeyboardAvoidingView, Platform, StyleSheet, Alert,
 } from 'react-native';
 import { GooglePlacesAutocomplete, type GooglePlacesAutocompleteRef } from 'react-native-google-places-autocomplete';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,6 +23,7 @@ import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
+import { useEvents } from '../firebase/hooks/useEvents';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
@@ -110,6 +112,48 @@ export default function CreateEventScreen() {
   // up once the API answers, which flips this via onFail.
   const placesKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
   const [placesAvailable, setPlacesAvailable] = useState(placesKey.length > 0);
+
+  // Bias venue results toward where this team actually plays. Unbiased, Google
+  // ranks globally — searching "bell centre" from Montreal returns Belle
+  // Center, Ohio.
+  //
+  // This never prompts. Location is read only if permission was already granted
+  // elsewhere (the gameday auto check-in opt-in), and getLastKnownPositionAsync
+  // returns a cached fix without waking the GPS. Asking for location just to
+  // sort a search box would be intrusive and an App Review risk.
+  const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (!perm.granted) return;
+        const pos = await Location.getLastKnownPositionAsync();
+        if (!cancelled && pos) {
+          setDeviceCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      } catch (err) {
+        console.warn('[CreateEvent] location bias unavailable:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fallback for the common case where location was never granted: a rec team
+  // plays the same few rinks, so the newest venue we have coordinates for is
+  // usually the right neighbourhood. Needs no permission at all.
+  const { events } = useEvents(activeTeamId);
+
+  const lastKnownVenue = useMemo(() => {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const coords = events[i].venueCoords;
+      if (coords) return coords;
+    }
+    return null;
+  }, [events]);
+
+  const searchBias = deviceCoords ?? lastKnownVenue;
 
   useEffect(() => {
     if (!placesKey) {
@@ -430,6 +474,11 @@ export default function CreateEventScreen() {
                 query={{
                   key: placesKey,
                   language: 'en',
+                  // Soft bias — no strictbounds, so an out-of-town tournament
+                  // venue is still findable, just ranked lower.
+                  ...(searchBias
+                    ? { location: `${searchBias.lat},${searchBias.lng}`, radius: 50000 }
+                    : {}),
                 }}
                 textInputProps={{
                   onChangeText: (text) => { setVenue(text); setVenueCoords(null); },
