@@ -104,10 +104,18 @@ export default function CreateEventScreen() {
   const savingRef = useRef(false);
   const placesRef = useRef<GooglePlacesAutocompleteRef>(null);
 
+  // Venue autocomplete degrades to a plain text field rather than looking
+  // broken. EXPO_PUBLIC_* values are inlined at bundle time, so a missing key
+  // is a build-time fact we can detect immediately; a rejected key only shows
+  // up once the API answers, which flips this via onFail.
+  const placesKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
+  const [placesAvailable, setPlacesAvailable] = useState(placesKey.length > 0);
+
   useEffect(() => {
-    const key = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
-    if (!key) console.warn('[CreateEvent] EXPO_PUBLIC_GOOGLE_PLACES_API_KEY is undefined — venue autocomplete will not work');
-  }, []);
+    if (!placesKey) {
+      console.warn('[CreateEvent] EXPO_PUBLIC_GOOGLE_PLACES_API_KEY is undefined at bundle time — venue autocomplete disabled');
+    }
+  }, [placesKey]);
 
   // Load existing event when editing
   useEffect(() => {
@@ -399,7 +407,16 @@ export default function CreateEventScreen() {
                 ref={placesRef}
                 placeholder="Arena name or address"
                 fetchDetails
-                onFail={(error) => console.error('[CreateEvent] Places API error:', JSON.stringify(error))}
+                onFail={(error) => {
+                  // The library only calls this for an HTTP 200 carrying an
+                  // error_message (a rejected key, billing off, API not
+                  // enabled). Log it verbatim and stop pretending suggestions
+                  // are coming.
+                  console.error('[CreateEvent] Places API error:', JSON.stringify(error));
+                  setPlacesAvailable(false);
+                }}
+                onNotFound={() => console.warn('[CreateEvent] Places: no results for query')}
+                onTimeout={() => console.warn('[CreateEvent] Places: request timed out')}
                 onPress={(data, details) => {
                   const address = data.description;
                   setVenue(address);
@@ -411,7 +428,7 @@ export default function CreateEventScreen() {
                   }
                 }}
                 query={{
-                  key: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ?? '',
+                  key: placesKey,
                   language: 'en',
                 }}
                 textInputProps={{
@@ -461,6 +478,12 @@ export default function CreateEventScreen() {
                 keepResultsAfterBlur={false}
               />
             </View>
+            {!placesAvailable && (
+              <Text style={styles.venueHint}>
+                Suggestions unavailable — type the venue name. Auto check-in
+                needs a suggestion to get the location.
+              </Text>
+            )}
           </View>
 
           {/* Notes card */}
@@ -720,6 +743,13 @@ const styles = StyleSheet.create({
   },
 
   // ── Venue input row (pin icon + text input) ──────────────────────────────
+  venueHint: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    lineHeight: 16,
+    color: navy[400],
+    marginTop: spacing[8],
+  },
   venueInputRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
