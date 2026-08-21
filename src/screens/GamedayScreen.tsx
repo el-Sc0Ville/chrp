@@ -14,6 +14,7 @@ import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import ErrorState from '../components/ErrorState';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useCheckIns } from '../firebase/hooks/useCheckIns';
@@ -42,8 +43,10 @@ export default function GamedayScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const { events, loading } = useEvents(activeTeamId);
-  const { members } = useMembers(activeTeamId);
+  const { events, loading, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
+  const { members, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
+  const loadError = eventsError ?? membersError;
+  const retryAll  = () => { retryEvents(); retryMembers(); };
 
   const [toast,          setToast]          = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -207,7 +210,7 @@ export default function GamedayScreen() {
   // `loading` has to be checked first: while Firestore resolves, todaysGame is
   // null and this screen used to claim "No game today" on an actual gameday.
 
-  if (loading || !todaysGame) {
+  if (loading || loadError || !todaysGame) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.pageHeader}>
@@ -222,7 +225,10 @@ export default function GamedayScreen() {
           <Text style={styles.pageTitle}>Gameday</Text>
         </View>
         {loading && <GamedaySkeleton />}
-        {!loading && (
+        {!loading && loadError && (
+          <ErrorState message="Couldn't load tonight's game." onRetry={retryAll} />
+        )}
+        {!loading && !loadError && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🏒</Text>
             <Text style={styles.emptyTitle}>No game today</Text>

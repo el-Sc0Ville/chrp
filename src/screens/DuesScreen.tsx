@@ -14,6 +14,7 @@ import DateTimePicker, {
 import { db } from '../firebase';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import ErrorState from '../components/ErrorState';
 import { useDues } from '../firebase/hooks/useDues';
 import { useMembers } from '../firebase/hooks/useMembers';
 import type { DuesRecord, Member } from '../firebase/schema';
@@ -75,8 +76,11 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { dues } = useDues(activeTeamId);
-  const { members } = useMembers(activeTeamId);
+  const { dues, loading: duesLoading, error: duesError, retry: retryDues } = useDues(activeTeamId);
+  const { members, loading: membersLoading, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
+  const loading   = duesLoading || membersLoading;
+  const loadError = duesError ?? membersError;
+  const retryAll  = () => { retryDues(); retryMembers(); };
   const spareMembers = members.filter((m: Member) => m.role === 'spare');
   const spareIds = new Set(spareMembers.map((m: Member) => m.userId));
   const players = dues.map(toDuesPlayer).filter(p => !spareIds.has(p.id));
@@ -186,29 +190,35 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
         showsVerticalScrollIndicator={false}
       >
 
+        {!loading && loadError && (
+          <ErrorState message="Couldn't load your team's dues." onRetry={retryAll} />
+        )}
+
         {/* ── Summary banner ── */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <View>
-              <Text style={styles.summaryLabel}>Collected</Text>
-              <Text style={styles.summaryAmount}>
-                <Text style={styles.summaryAmountBold}>${collected}</Text>
-                <Text style={styles.summaryAmountOf}> of ${total}</Text>
-              </Text>
+        {!loadError && (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <View>
+                <Text style={styles.summaryLabel}>Collected</Text>
+                <Text style={styles.summaryAmount}>
+                  <Text style={styles.summaryAmountBold}>${collected}</Text>
+                  <Text style={styles.summaryAmountOf}> of ${total}</Text>
+                </Text>
+              </View>
+              <View style={styles.summaryRight}>
+                <Text style={styles.summaryFraction}>{paidCount}/{totalCount} paid in full</Text>
+                <Text style={styles.summaryPerPlayer}>{perPlayerLabel}</Text>
+              </View>
             </View>
-            <View style={styles.summaryRight}>
-              <Text style={styles.summaryFraction}>{paidCount}/{totalCount} paid in full</Text>
-              <Text style={styles.summaryPerPlayer}>{perPlayerLabel}</Text>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: TEAM[500] }]} />
             </View>
           </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: TEAM[500] }]} />
-          </View>
-        </View>
+        )}
 
         {/* ── Player list ── */}
-        <Text style={styles.sectionLabel}>Players</Text>
-        {totalCount === 0 ? (
+        {!loadError && <Text style={styles.sectionLabel}>Players</Text>}
+        {loading || loadError ? null : totalCount === 0 ? (
           <View style={[styles.card, styles.emptyCard]}>
             <Text style={styles.emptyTitle}>No dues yet</Text>
             <Text style={styles.emptySub}>
@@ -333,7 +343,7 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const TEAM = teams[activeTeamPalette];
   const uid = user?.uid ?? 'anon';
   // Scoped to this player — the rule denies an unfiltered dues listen to non-managers.
-  const { dues } = useDues(activeTeamId, uid);
+  const { dues, loading, error, retry } = useDues(activeTeamId, uid);
   const selfRecord = dues.find(d => d.userId === uid);
   const selfPlayer = selfRecord ? toDuesPlayer(selfRecord) : null;
   const seasonDues = selfRecord?.seasonAmount ?? SEASON_DUES;
@@ -369,34 +379,40 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
         showsVerticalScrollIndicator={false}
       >
 
+        {!loading && error && (
+          <ErrorState message="Couldn't load your dues." onRetry={retry} />
+        )}
+
         {/* ── Balance card ── */}
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceTop}>
-            <View>
-              <Text style={styles.balanceLabel}>Season dues</Text>
-              <Text style={styles.balanceAmount}>${seasonDues}</Text>
+        {!error && (
+          <View style={styles.balanceCard}>
+            <View style={styles.balanceTop}>
+              <View>
+                <Text style={styles.balanceLabel}>Season dues</Text>
+                <Text style={styles.balanceAmount}>${seasonDues}</Text>
+              </View>
+              <StatusPill status={selfPlayer?.duesStatus ?? 'pending'} large />
             </View>
-            <StatusPill status={selfPlayer?.duesStatus ?? 'pending'} large />
-          </View>
 
-          <View style={styles.balanceMeta}>
-            <View style={styles.balanceMetaItem}>
-              <Text style={styles.balanceMetaLabel}>Due date</Text>
-              <Text style={styles.balanceMetaValue}>{dueDate}</Text>
+            <View style={styles.balanceMeta}>
+              <View style={styles.balanceMetaItem}>
+                <Text style={styles.balanceMetaLabel}>Due date</Text>
+                <Text style={styles.balanceMetaValue}>{dueDate}</Text>
+              </View>
+              <View style={styles.balanceMetaItem}>
+                <Text style={styles.balanceMetaLabel}>Season</Text>
+                <Text style={styles.balanceMetaValue}>Not set</Text>
+              </View>
             </View>
-            <View style={styles.balanceMetaItem}>
-              <Text style={styles.balanceMetaLabel}>Season</Text>
-              <Text style={styles.balanceMetaValue}>Not set</Text>
-            </View>
-          </View>
 
-          <Pressable
-            style={({ pressed }) => [styles.payBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.8 }]}
-            onPress={() => showToast('Payment coming in V2')}
-          >
-            <Text style={[styles.payBtnText, { color: TEAM.on }]}>Pay now</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              style={({ pressed }) => [styles.payBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.8 }]}
+              onPress={() => showToast('Payment coming in V2')}
+            >
+              <Text style={[styles.payBtnText, { color: TEAM.on }]}>Pay now</Text>
+            </Pressable>
+          </View>
+        )}
 
       </ScrollView>
 

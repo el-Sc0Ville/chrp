@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../config';
 
 interface UseBlackoutsResult {
   dates: string[];
   loading: boolean;
+  error: string | null;
+  retry: () => void;
 }
 
 export function useBlackouts(teamId: string, userId: string): UseBlackoutsResult {
   const [dates,   setDates]   = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!teamId || !userId) {
@@ -28,11 +32,18 @@ export function useBlackouts(teamId: string, userId: string): UseBlackoutsResult
         });
         setDates(all);
         setLoading(false);
+        setError(null);
       },
-      err => { console.error('[useBlackouts] snapshot error:', err); setLoading(false); },
+      err => { console.error('[useBlackouts] snapshot error:', err); setError(err.message); setLoading(false); },
     );
     return unsub;
-  }, [teamId, userId]);
+  }, [teamId, userId, attempt]);
 
-  return { dates, loading };
+  const retry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setAttempt(n => n + 1);
+  }, []);
+
+  return { dates, loading, error, retry };
 }

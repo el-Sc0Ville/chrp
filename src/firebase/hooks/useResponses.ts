@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../config';
 import type { AvailabilityResponse } from '../schema';
@@ -10,12 +10,14 @@ interface UseResponsesResult {
   responses: ResponseMap;
   loading: boolean;
   error: string | null;
+  retry: () => void;
 }
 
 export function useResponses(teamId: string, eventId: string | null): UseResponsesResult {
   const [responses, setResponses] = useState<ResponseMap>({});
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
+  const [attempt,   setAttempt]   = useState(0);
 
   useEffect(() => {
     if (!teamId || !eventId) {
@@ -44,7 +46,13 @@ export function useResponses(teamId: string, eventId: string | null): UseRespons
       },
     );
     return unsub;
-  }, [teamId, eventId]);
+  }, [teamId, eventId, attempt]);
 
-  return { responses, loading, error };
+  const retry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setAttempt(n => n + 1);
+  }, []);
+
+  return { responses, loading, error, retry };
 }

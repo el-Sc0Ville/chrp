@@ -194,6 +194,7 @@ export default function NotificationCentreScreen() {
             showToast('Request sent to manager');
           } catch (err) {
             console.error('[NotificationCentre] sub request write failed:', err);
+            showToast("Couldn't send your request. Please try again.");
           }
         }}
         onDismiss={() => setSubSheetVisible(false)}

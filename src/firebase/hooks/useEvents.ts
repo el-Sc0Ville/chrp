@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../config';
 import type { Event } from '../schema';
@@ -7,12 +7,16 @@ interface UseEventsResult {
   events: Event[];
   loading: boolean;
   error: string | null;
+  retry: () => void;
 }
 
 export function useEvents(teamId: string): UseEventsResult {
   const [events,  setEvents]  = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
+  // onSnapshot never recovers on its own from a terminal error, so the only way
+  // back is a fresh subscription. Bumping `attempt` re-runs the effect.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!teamId) { setLoading(false); return; }
@@ -32,7 +36,13 @@ export function useEvents(teamId: string): UseEventsResult {
       },
     );
     return unsub;
-  }, [teamId]);
+  }, [teamId, attempt]);
 
-  return { events, loading, error };
+  const retry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setAttempt(n => n + 1);
+  }, []);
+
+  return { events, loading, error, retry };
 }

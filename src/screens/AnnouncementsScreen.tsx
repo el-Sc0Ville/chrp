@@ -15,6 +15,7 @@ import { sendPushNotification } from '../firebase/sendNotification';
 import type { Announcement as FirestoreAnnouncement, Member } from '../firebase/schema';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import ErrorState from '../components/ErrorState';
 import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
@@ -79,7 +80,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
   const navigation = useNavigation<any>();
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { announcements: firestoreAnnouncements } = useAnnouncements(activeTeamId);
+  const { announcements: firestoreAnnouncements, loading, error, retry } = useAnnouncements(activeTeamId);
   const announcements = firestoreAnnouncements.map(toDisplayAnn);
   const [postVisible, setPostVisible]   = useState(false);
   const [editingId, setEditingId]       = useState<string | null>(null);
@@ -240,16 +241,20 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {sortAnnouncements(announcements).map((item, idx) => (
-          <AnnouncementCard
-            key={item.id}
-            announcement={item}
-            showSeenBy
-            style={idx === 0 ? undefined : styles.cardGap}
-            onPress={() => goToThread(item.id)}
-            onLongPress={item.authorId === user?.uid ? () => setActionItem(item) : undefined}
-          />
-        ))}
+        {!loading && error ? (
+          <ErrorState message="Couldn't load announcements." onRetry={retry} />
+        ) : (
+          sortAnnouncements(announcements).map((item, idx) => (
+            <AnnouncementCard
+              key={item.id}
+              announcement={item}
+              showSeenBy
+              style={idx === 0 ? undefined : styles.cardGap}
+              onPress={() => goToThread(item.id)}
+              onLongPress={item.authorId === user?.uid ? () => setActionItem(item) : undefined}
+            />
+          ))
+        )}
       </ScrollView>
 
       {/* ── Post sheet ── */}
@@ -294,7 +299,7 @@ function PlayerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { activeTeamId } = useUserContext();
-  const { announcements: firestoreAnnouncements } = useAnnouncements(activeTeamId);
+  const { announcements: firestoreAnnouncements, loading, error, retry } = useAnnouncements(activeTeamId);
   const announcements = firestoreAnnouncements.map(toDisplayAnn);
   const [readIds, setReadIds] = useState<Set<string>>(new Set<string>());
 
@@ -324,16 +329,20 @@ function PlayerView({ embedded }: { embedded?: boolean }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {sortAnnouncements(announcements).map((item, idx) => (
-          <AnnouncementCard
-            key={item.id}
-            announcement={item}
-            showSeenBy={false}
-            unread={!readIds.has(item.id)}
-            style={idx === 0 ? undefined : styles.cardGap}
-            onPress={() => goToThread(item.id)}
-          />
-        ))}
+        {!loading && error ? (
+          <ErrorState message="Couldn't load announcements." onRetry={retry} />
+        ) : (
+          sortAnnouncements(announcements).map((item, idx) => (
+            <AnnouncementCard
+              key={item.id}
+              announcement={item}
+              showSeenBy={false}
+              unread={!readIds.has(item.id)}
+              style={idx === 0 ? undefined : styles.cardGap}
+              onPress={() => goToThread(item.id)}
+            />
+          ))
+        )}
       </ScrollView>
     </View>
   );

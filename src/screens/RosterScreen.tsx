@@ -11,6 +11,7 @@ import { db } from '../firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
+import ErrorState from '../components/ErrorState';
 import { publishInviteCode } from '../firebase/invites';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useTeam } from '../firebase/hooks/useTeam';
@@ -60,8 +61,10 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { members, loading } = useMembers(activeTeamId);
-  const { team } = useTeam(activeTeamId);
+  const { members, loading, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
+  const { team, error: teamError, retry: retryTeam } = useTeam(activeTeamId);
+  const loadError = membersError ?? teamError;
+  const retryAll  = () => { retryMembers(); retryTeam(); };
   const [roster, setRoster] = useState<RosterPlayer[]>([]);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [spareBankExpanded, setSpareBankExpanded] = useState(true);
@@ -185,21 +188,24 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {loading && roster.length === 0
-          ? [1,2,3,4,5].map(i => (
-              <View key={i} style={[styles.rowOuter, { height: 68 }]}>
-                <View style={[styles.rowMain, { opacity: 0 }]} />
-              </View>
-            ))
-          : mainRoster.map(player => (
-              <PlayerRow
-                key={player.id}
-                player={player}
-                onLongPress={() => setActionPlayer(player)}
-              />
-            ))
-        }
-        {spares.length > 0 && (
+        {loading && roster.length === 0 ? (
+          [1,2,3,4,5].map(i => (
+            <View key={i} style={[styles.rowOuter, { height: 68 }]}>
+              <View style={[styles.rowMain, { opacity: 0 }]} />
+            </View>
+          ))
+        ) : loadError ? (
+          <ErrorState message="Couldn't load your roster." onRetry={retryAll} />
+        ) : (
+          mainRoster.map(player => (
+            <PlayerRow
+              key={player.id}
+              player={player}
+              onLongPress={() => setActionPlayer(player)}
+            />
+          ))
+        )}
+        {!loadError && spares.length > 0 && (
           <SpareBankSection
             spares={spares}
             expanded={spareBankExpanded}
@@ -257,7 +263,7 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { members, loading } = useMembers(activeTeamId);
+  const { members, loading, error, retry } = useMembers(activeTeamId);
   const roster = members.map(toRosterPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState<RosterPlayer | null>(null);
 
@@ -273,13 +279,17 @@ function PlayerRosterScreen({ embedded }: { embedded?: boolean }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {roster.map(player => (
-          <PlayerRow
-            key={player.id}
-            player={player}
-            onPress={() => setSelectedPlayer(player)}
-          />
-        ))}
+        {!loading && error ? (
+          <ErrorState message="Couldn't load your roster." onRetry={retry} />
+        ) : (
+          roster.map(player => (
+            <PlayerRow
+              key={player.id}
+              player={player}
+              onPress={() => setSelectedPlayer(player)}
+            />
+          ))
+        )}
       </ScrollView>
       <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom, spacing[12]) }]}>
         <Text style={styles.stickyCount}>

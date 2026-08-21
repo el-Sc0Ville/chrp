@@ -12,6 +12,7 @@ import { addDoc, collection, doc, updateDoc, serverTimestamp } from 'firebase/fi
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
+import ErrorState from '../components/ErrorState';
 import { useSubRequests } from '../firebase/hooks/useSubRequests';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useEvents } from '../firebase/hooks/useEvents';
@@ -40,6 +41,8 @@ interface SubRequest {
   gameTime: string;
   reason?: string;
   status: SubStatus;
+  invitedSpareId?: string;
+  invitedName?: string;
   filledBy?: string;
 }
 
@@ -86,7 +89,9 @@ function toDisplaySubRequest(r: FirestoreSubRequest): SubRequest {
     playerInitials: initials, playerJersey: 0,
     gameWeekday: r.gameWeekday, gameDay: r.gameDay, gameMonth: r.gameMonth,
     opponent: r.opponent, venue: r.gameVenue, gameTime: r.gameTime,
-    reason: r.reason, status: r.status, filledBy: r.filledBy,
+    reason: r.reason, status: r.status,
+    invitedSpareId: r.invitedSpareId, invitedName: r.invitedName,
+    filledBy: r.filledBy,
   };
 }
 
@@ -130,11 +135,13 @@ function ManagerSubsScreen() {
   const navigation = useNavigation<any>();
   const { activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
-  const { members } = useMembers(activeTeamId);
+  const { subRequests: firestoreRequests, loading, error: requestsError, retry: retryRequests } = useSubRequests(activeTeamId);
+  const { members, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
   const requests     = firestoreRequests.map(toDisplaySubRequest);
   const spareMembers: Spare[] = members.filter((m: Member) => m.role === 'spare').map(memberToSpare);
-  const [findSubTarget,  setFindSubTarget]  = useState<SubRequest | null>(null);
+  // The sheet holds an id, not a copy: a copy went stale the moment the invite
+  // wrote back, so a second invite was made against last render's request.
+  const [findSubId,      setFindSubId]      = useState<string | null>(null);
   const [invitedSpares,  setInvitedSpares]  = useState<Set<string>>(new Set());
   const [filledExpanded, setFilledExpanded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -142,6 +149,10 @@ function ManagerSubsScreen() {
 
   const openRequests   = requests.filter(r => r.status === 'pending');
   const filledRequests = requests.filter(r => r.status === 'filled');
+  const findSubTarget  = requests.find(r => r.id === findSubId) ?? null;
+
+  const loadError = requestsError ?? membersError;
+  const retryAll  = () => { retryRequests(); retryMembers(); };
 
   const showToast = (msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -150,30 +161,45 @@ function ManagerSubsScreen() {
   };
 
   const handleInvite = async (spare: Spare) => {
-    if (!findSubTarget) return;
-    const key = `${findSubTarget.id}:${spare.id}`;
+    const target = findSubTarget;
+    if (!target) return;
+    const key = `${target.id}:${spare.id}`;
     setInvitedSpares(prev => new Set([...prev, key]));
     try {
-      await updateDoc(doc(db, 'teams', activeTeamId, 'subRequests', findSubTarget.id), {
-        status: 'filled', filledBy: spare.name,
+      // Inviting is not filling. The request stays 'pending' so it keeps its
+      // place in Open and another spare can be invited; only a confirmation
+      // from the spare sets status 'filled' + filledBy.
+      await updateDoc(doc(db, 'teams', activeTeamId, 'subRequests', target.id), {
+        invitedSpareId: spare.id,
+        invitedName:    spare.name,
+        invitedAt:      serverTimestamp(),
       });
       showToast(`Invite sent to ${spare.name.split(' ')[0]}`);
       if (spare.pushToken) {
-        const body = `${findSubTarget.gameWeekday} ${findSubTarget.gameDay} ${findSubTarget.gameMonth} · ${findSubTarget.venue}`;
+        const body = `${target.gameWeekday} ${target.gameDay} ${target.gameMonth} · ${target.venue}`;
         sendPushNotification(
           spare.pushToken,
           'Sub request — are you available?',
           body,
-          { eventId: findSubTarget.eventId, teamId: activeTeamId, userId: spare.id, categoryId: 'SUB_REQUEST' },
+          { eventId: target.eventId, teamId: activeTeamId, userId: spare.id, categoryId: 'SUB_REQUEST' },
         ).catch(err => console.error('[SubsScreen] spare push failed:', err));
       }
     } catch (err) {
       console.error('[SubsScreen] invite write failed:', err);
+      setInvitedSpares(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      showToast("Couldn't send that invite. Please try again.");
     }
   };
 
   const isInvited = (spare: Spare) =>
-    !!findSubTarget && invitedSpares.has(`${findSubTarget.id}:${spare.id}`);
+    !!findSubTarget && (
+      findSubTarget.invitedSpareId === spare.id ||
+      invitedSpares.has(`${findSubTarget.id}:${spare.id}`)
+    );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -206,7 +232,10 @@ function ManagerSubsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Open requests ── */}
-        {openRequests.length === 0 && (
+        {!loading && loadError && (
+          <ErrorState message="Couldn't load sub requests." onRetry={retryAll} />
+        )}
+        {!loading && !loadError && openRequests.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No open requests</Text>
             <Text style={styles.emptyBody}>
@@ -214,20 +243,20 @@ function ManagerSubsScreen() {
             </Text>
           </View>
         )}
-        {openRequests.length > 0 && <Text style={styles.sectionLabel}>Open</Text>}
-        {openRequests.length > 0 && (
+        {!loadError && openRequests.length > 0 && <Text style={styles.sectionLabel}>Open</Text>}
+        {!loadError && openRequests.length > 0 && (
           <View style={styles.card}>
             {openRequests.map((req, idx) => (
               <React.Fragment key={req.id}>
                 {idx > 0 && <View style={styles.rowDivider} />}
-                <ManagerRequestRow request={req} onFindSub={() => setFindSubTarget(req)} />
+                <ManagerRequestRow request={req} onFindSub={() => setFindSubId(req.id)} />
               </React.Fragment>
             ))}
           </View>
         )}
 
         {/* ── Filled requests (collapsible) ── */}
-        {filledRequests.length > 0 && (
+        {!loadError && filledRequests.length > 0 && (
           <Pressable
             style={({ pressed }) => [styles.filledToggle, pressed && { opacity: 0.7 }]}
             onPress={() => setFilledExpanded(v => !v)}
@@ -236,7 +265,7 @@ function ManagerSubsScreen() {
             <Text style={[styles.filledChevron, filledExpanded && styles.filledChevronOpen]}>›</Text>
           </Pressable>
         )}
-        {filledRequests.length > 0 && filledExpanded && (
+        {!loadError && filledRequests.length > 0 && filledExpanded && (
           <View style={styles.card}>
             {filledRequests.map((req, idx) => (
               <React.Fragment key={req.id}>
@@ -257,7 +286,7 @@ function ManagerSubsScreen() {
           spares={spareMembers}
           isInvited={isInvited}
           onInvite={handleInvite}
-          onClose={() => setFindSubTarget(null)}
+          onClose={() => setFindSubId(null)}
         />
       )}
 
@@ -300,6 +329,11 @@ function ManagerRequestRow({ request, onFindSub }: { request: SubRequest; onFind
               "{request.reason}"
             </Text>
           )}
+          {request.invitedName != null && (
+            <Text style={styles.invitedNote} numberOfLines={1}>
+              Invited {request.invitedName} — awaiting reply
+            </Text>
+          )}
         </View>
       </View>
       <Pressable
@@ -309,7 +343,9 @@ function ManagerRequestRow({ request, onFindSub }: { request: SubRequest; onFind
         }, pressed && { opacity: 0.8 }]}
         onPress={onFindSub}
       >
-        <Text style={[styles.findSubBtnText, { color: TEAM.on }]}>Find a sub</Text>
+        <Text style={[styles.findSubBtnText, { color: TEAM.on }]}>
+          {request.invitedName != null ? 'Invite another' : 'Find a sub'}
+        </Text>
       </Pressable>
     </View>
   );
@@ -407,8 +443,10 @@ function PlayerSubsScreen() {
   const navigation = useNavigation<any>();
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { subRequests: firestoreRequests } = useSubRequests(activeTeamId);
-  const { events: allEvents } = useEvents(activeTeamId);
+  const { subRequests: firestoreRequests, loading, error: requestsError, retry: retryRequests } = useSubRequests(activeTeamId);
+  const { events: allEvents, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
+  const loadError = requestsError ?? eventsError;
+  const retryAll  = () => { retryRequests(); retryEvents(); };
   const ownRequests = firestoreRequests
     .filter(r => r.requestedBy === (user?.uid ?? ''))
     .map(toDisplaySubRequest);
@@ -482,8 +520,11 @@ function PlayerSubsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Upcoming games ── */}
-        {availableEvents.length > 0 && <Text style={styles.sectionLabel}>Upcoming games</Text>}
-        {availableEvents.length > 0 && (
+        {!loading && loadError && (
+          <ErrorState message="Couldn't load your sub requests." onRetry={retryAll} />
+        )}
+        {!loadError && availableEvents.length > 0 && <Text style={styles.sectionLabel}>Upcoming games</Text>}
+        {!loadError && availableEvents.length > 0 && (
           <View style={styles.card}>
             {availableEvents.map((event, idx) => (
               <React.Fragment key={event.id}>
@@ -495,8 +536,8 @@ function PlayerSubsScreen() {
         )}
 
         {/* ── Player's own requests ── */}
-        {ownRequests.length > 0 && <Text style={styles.sectionLabel}>Your requests</Text>}
-        {ownRequests.length > 0 && (
+        {!loadError && ownRequests.length > 0 && <Text style={styles.sectionLabel}>Your requests</Text>}
+        {!loadError && ownRequests.length > 0 && (
           <View style={styles.card}>
             {ownRequests.map((req, idx) => (
               <React.Fragment key={req.id}>
@@ -507,7 +548,7 @@ function PlayerSubsScreen() {
           </View>
         )}
 
-        {availableEvents.length === 0 && ownRequests.length === 0 && (
+        {!loading && !loadError && availableEvents.length === 0 && ownRequests.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No games need a sub</Text>
             <Text style={styles.emptyBody}>
@@ -592,6 +633,11 @@ function PlayerOwnRequestRow({ request }: { request: SubRequest }) {
         </Text>
         {request.reason != null && (
           <Text style={styles.ownRequestReason} numberOfLines={1}>"{request.reason}"</Text>
+        )}
+        {request.status === 'pending' && request.invitedName != null && (
+          <Text style={styles.invitedNote} numberOfLines={1}>
+            Invited {request.invitedName} — awaiting reply
+          </Text>
         )}
       </View>
       <View style={[styles.statusPill, { backgroundColor: s.bg }]}>
@@ -840,6 +886,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: navy[300],
     fontStyle: 'italic',
+  },
+  invitedNote: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 12,
+    color: statusColors.alert.pure,
+    marginTop: 2,
   },
   findSubBtn: {
     height: 40,

@@ -10,6 +10,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { navy, teams, fonts, spacing, radius } from '../theme';
 import { db } from '../firebase';
 import { useUserContext } from '../context/UserContext';
+import ErrorState from '../components/ErrorState';
 import { useBlackouts } from '../firebase/hooks/useBlackouts';
 
 const WEEKDAYS  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -53,7 +54,7 @@ export default function BlackoutScreen() {
   });
   const todayStr = toYMD(today);
 
-  const { dates: existingDates, loading } = useBlackouts(activeTeamId, user?.uid ?? '');
+  const { dates: existingDates, loading, error, retry } = useBlackouts(activeTeamId, user?.uid ?? '');
   const [selected, setSelected]     = useState<Set<string>>(new Set());
   const [saving,   setSaving]       = useState(false);
   const initializedRef              = useRef(false);
@@ -112,11 +113,13 @@ export default function BlackoutScreen() {
 
         <Text style={styles.headerTitle}>Blackout Dates</Text>
 
+        {/* A failed load leaves `selected` empty, so saving would wipe the real
+            blackouts. Save stays disabled until the dates arrive. */}
         <Pressable
           onPress={handleSave}
-          disabled={saving}
+          disabled={saving || error !== null}
           hitSlop={12}
-          style={[styles.saveBtn, { backgroundColor: TEAM[500] }, saving && styles.saveBtnDisabled]}
+          style={[styles.saveBtn, { backgroundColor: TEAM[500] }, (saving || error !== null) && styles.saveBtnDisabled]}
         >
           <Text style={[styles.saveBtnText, { color: TEAM.on }]}>
             {saving ? 'Saving…' : 'Save'}
@@ -132,11 +135,17 @@ export default function BlackoutScreen() {
           { paddingBottom: Math.max(insets.bottom, spacing[16]) + 80 },
         ]}
       >
-        <Text style={styles.hint}>
-          Tap dates when you know you can't play. Auto-in won't mark you available on these days.
-        </Text>
+        {!loading && error && (
+          <ErrorState message="Couldn't load your blackout dates." onRetry={retry} />
+        )}
 
-        {months.map(({ year, month, cells }) => (
+        {!error && (
+          <Text style={styles.hint}>
+            Tap dates when you know you can't play. Auto-in won't mark you available on these days.
+          </Text>
+        )}
+
+        {!error && months.map(({ year, month, cells }) => (
           <View key={`${year}-${month}`} style={styles.monthSection}>
             <Text style={styles.monthLabel}>{MONTH_NAMES[month]} {year}</Text>
 

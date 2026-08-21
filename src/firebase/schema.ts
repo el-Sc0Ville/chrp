@@ -92,6 +92,11 @@ export interface SubRequest {
   requestedByName: string;
   reason?: string;
   status: 'pending' | 'filled' | 'cancelled';
+  // An invite is not a fill. These record who the manager pinged while the
+  // request stays 'pending'; only a confirmation from the spare sets 'filled'.
+  invitedSpareId?: string;
+  invitedName?: string;
+  invitedAt?: Timestamp;
   filledBy?: string;
   createdAt: Timestamp;
   opponent: string;

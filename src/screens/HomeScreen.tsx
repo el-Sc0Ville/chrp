@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { doc, setDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, radius, spacing } from '../theme';
 import AvatarPill from '../components/AvatarPill';
+import ErrorState from '../components/ErrorState';
 import { useNotifications } from '../context/NotificationContext';
 import { sendPushNotification } from '../firebase/sendNotification';
 import { useUserContext } from '../context/UserContext';
@@ -57,10 +58,10 @@ function ManagerHomeScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { team }            = useTeam(activeTeamId);
-  const { events, loading } = useEvents(activeTeamId);
-  const { members }         = useMembers(activeTeamId);
-  const { announcements }   = useAnnouncements(activeTeamId);
+  const { team, error: teamError, retry: retryTeam } = useTeam(activeTeamId);
+  const { events, loading, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
+  const { members, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
+  const { announcements, error: annError, retry: retryAnn } = useAnnouncements(activeTeamId);
 
   const upcomingEvents = events.filter(
     e => e.startsAt.toDate() > new Date() && e.status !== 'cancelled',
@@ -70,7 +71,12 @@ function ManagerHomeScreen() {
   const activeEvent = upcomingEvents[safeIndex] ?? null;
   const uid         = user?.uid;
 
-  const { responses } = useResponses(activeTeamId, activeEvent?.id ?? null);
+  const { responses, error: responsesError, retry: retryResponses } = useResponses(activeTeamId, activeEvent?.id ?? null);
+
+  // Any dead listener here means the home screen is showing a partial team, so
+  // one error block stands in for the lot rather than five separate ones.
+  const loadError = teamError ?? eventsError ?? membersError ?? annError ?? responsesError;
+  const retryAll  = () => { retryTeam(); retryEvents(); retryMembers(); retryAnn(); retryResponses(); };
 
   const avail: AvailCounts = { in: 0, out: 0, maybe: 0, noResp: 0 };
   members.forEach(m => {
@@ -152,6 +158,8 @@ function ManagerHomeScreen() {
         <View style={styles.heroWrapper}>
           {loading ? (
             <HeroSkeleton />
+          ) : loadError ? (
+            <ErrorState message="Couldn't load your team right now." onRetry={retryAll} />
           ) : hasEvent ? (
             <>
               <FlatList
@@ -187,16 +195,18 @@ function ManagerHomeScreen() {
         </View>
 
         {/* Region 2: quick actions */}
-        {!loading && hasEvent && (
+        {!loading && !loadError && hasEvent && (
           <ManagerQuickActions noRespCount={avail.noResp} onAdd={goToCreateEvent} onRemind={handleRemind} />
         )}
 
         {/* Region 3: announcements */}
-        <AnnouncementsSection
-          announcements={announcements}
-          onViewAll={goToTeam}
-          onNavigateTo={id => navigation.navigate('AnnouncementThread', { announcementId: id })}
-        />
+        {!loadError && (
+          <AnnouncementsSection
+            announcements={announcements}
+            onViewAll={goToTeam}
+            onNavigateTo={id => navigation.navigate('AnnouncementThread', { announcementId: id })}
+          />
+        )}
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>
@@ -450,9 +460,9 @@ function PlayerHomeScreen() {
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const { team }            = useTeam(activeTeamId);
-  const { events, loading } = useEvents(activeTeamId);
-  const { announcements }   = useAnnouncements(activeTeamId);
+  const { team, error: teamError, retry: retryTeam } = useTeam(activeTeamId);
+  const { events, loading, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
+  const { announcements, error: annError, retry: retryAnn } = useAnnouncements(activeTeamId);
 
   const upcomingEvents = events.filter(
     e => e.startsAt.toDate() > new Date() && e.status !== 'cancelled',
@@ -462,10 +472,13 @@ function PlayerHomeScreen() {
   const activeEvent = upcomingEvents[safeIndex] ?? null;
 
   const uid = user?.uid;
-  const { responses: firestoreResponses } = useResponses(activeTeamId, activeEvent?.id ?? null);
+  const { responses: firestoreResponses, error: responsesError, retry: retryResponses } = useResponses(activeTeamId, activeEvent?.id ?? null);
   const response: Response = (firestoreResponses[uid ?? ''] as Response) ?? null;
   const inCount  = Object.values(firestoreResponses).filter(r => r === 'in').length;
   const outCount = Object.values(firestoreResponses).filter(r => r === 'out').length;
+
+  const loadError = teamError ?? eventsError ?? annError ?? responsesError;
+  const retryAll  = () => { retryTeam(); retryEvents(); retryAnn(); retryResponses(); };
 
   const [subSheetVisible, setSubSheetVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -561,6 +574,8 @@ function PlayerHomeScreen() {
         <View style={styles.heroWrapper}>
           {loading ? (
             <HeroSkeleton />
+          ) : loadError ? (
+            <ErrorState message="Couldn't load your team right now." onRetry={retryAll} />
           ) : hasEvent ? (
             <>
               <FlatList
@@ -595,11 +610,13 @@ function PlayerHomeScreen() {
           )}
         </View>
 
-        <AnnouncementsSection
-          announcements={announcements}
-          onViewAll={goToTeam}
-          onNavigateTo={id => navigation.navigate('AnnouncementThread', { announcementId: id })}
-        />
+        {!loadError && (
+          <AnnouncementsSection
+            announcements={announcements}
+            onViewAll={goToTeam}
+            onNavigateTo={id => navigation.navigate('AnnouncementThread', { announcementId: id })}
+          />
+        )}
 
         <View style={{ height: spacing[24] }} />
       </ScrollView>

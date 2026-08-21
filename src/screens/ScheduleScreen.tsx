@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { navy, teams, ice, status, fonts, type as T, spacing, radius } from '../theme';
 import AvatarPill from '../components/AvatarPill';
+import ErrorState from '../components/ErrorState';
 import { scoreResult } from '../context/ScoreContext';
 import { useUserContext } from '../context/UserContext';
 import { useEvents } from '../firebase/hooks/useEvents';
@@ -362,7 +363,7 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { activeTeamId } = useUserContext();
-  const { events, loading } = useEvents(activeTeamId);
+  const { events, loading, error, retry } = useEvents(activeTeamId);
 
   const now      = new Date();
   const upcoming = events.filter(e => e.startsAt.toDate() > now).map(toDisplayEvent);
@@ -381,11 +382,14 @@ export default function ScheduleScreen() {
       >
         <View>
           {loading && <ScheduleSkeleton />}
-          {!loading && upcoming.length === 0 && <EmptyState onAdd={goToCreateEvent} />}
-          {!loading && upcoming.length > 0 && (
+          {!loading && error && (
+            <ErrorState message="Couldn't load your schedule." onRetry={retry} />
+          )}
+          {!loading && !error && upcoming.length === 0 && <EmptyState onAdd={goToCreateEvent} />}
+          {!loading && !error && upcoming.length > 0 && (
             <Text style={styles.sectionLabel}>Upcoming</Text>
           )}
-          {!loading && upcoming.map(event => (
+          {!loading && !error && upcoming.map(event => (
             <EventRow
               key={event.id}
               event={event}
@@ -397,10 +401,12 @@ export default function ScheduleScreen() {
               }
             />
           ))}
-          <PastSection
-            events={past}
-            onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })}
-          />
+          {!error && (
+            <PastSection
+              events={past}
+              onNavigate={(id, title) => navigation.navigate('EventDetail', { eventId: id, title, isPast: true })}
+            />
+          )}
         </View>
       </ScrollView>
     </View>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../config';
 import type { Announcement } from '../schema';
@@ -7,12 +7,14 @@ interface UseAnnouncementsResult {
   announcements: Announcement[];
   loading: boolean;
   error: string | null;
+  retry: () => void;
 }
 
 export function useAnnouncements(teamId: string): UseAnnouncementsResult {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!teamId) { setLoading(false); return; }
@@ -24,7 +26,13 @@ export function useAnnouncements(teamId: string): UseAnnouncementsResult {
       err  => { setError(err.message); setLoading(false); },
     );
     return unsub;
-  }, [teamId]);
+  }, [teamId, attempt]);
 
-  return { announcements, loading, error };
+  const retry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setAttempt(n => n + 1);
+  }, []);
+
+  return { announcements, loading, error, retry };
 }

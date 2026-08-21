@@ -17,6 +17,7 @@ import { sendPushNotification } from '../firebase/sendNotification';
 import type { Member } from '../firebase/schema';
 import { useUserContext } from '../context/UserContext';
 import { scoreResult, type Score } from '../context/ScoreContext';
+import ErrorState from '../components/ErrorState';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useResponses } from '../firebase/hooks/useResponses';
@@ -161,10 +162,12 @@ function ManagerEventDetail() {
     );
   };
 
-  const { events } = useEvents(activeTeamId);
-  const { members } = useMembers(activeTeamId);
-  const { responses } = useResponses(activeTeamId, eventId);
+  const { events, loading: eventsLoading, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
+  const { members, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
+  const { responses, error: responsesError, retry: retryResponses } = useResponses(activeTeamId, eventId);
   const event = events.find(e => e.id === eventId) ?? null;
+  const loadError = eventsError ?? membersError ?? responsesError;
+  const retryAll  = () => { retryEvents(); retryMembers(); retryResponses(); };
 
   const handleRemind = () => {
     const targets = members.filter(
@@ -219,6 +222,15 @@ function ManagerEventDetail() {
       });
     } catch (err) { console.error('[EventDetail] override write failed:', err); }
   };
+
+  if (!eventsLoading && loadError) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <NavHeader onBack={() => navigation.goBack()} onEdit={handleEdit} />
+        <ErrorState message="Couldn't load this event." onRetry={retryAll} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -327,10 +339,12 @@ function PlayerEventDetail() {
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
 
-  const { events }                       = useEvents(activeTeamId);
-  const { members }                      = useMembers(activeTeamId);
-  const { responses: firestoreResponses } = useResponses(activeTeamId, eventId);
+  const { events, loading: eventsLoading, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
+  const { members, error: membersError, retry: retryMembers } = useMembers(activeTeamId);
+  const { responses: firestoreResponses, error: responsesError, retry: retryResponses } = useResponses(activeTeamId, eventId);
   const event = events.find(e => e.id === eventId) ?? null;
+  const loadError = eventsError ?? membersError ?? responsesError;
+  const retryAll  = () => { retryEvents(); retryMembers(); retryResponses(); };
 
   const uid      = user?.uid ?? 'anon';
   const response: PlayerResponse = (firestoreResponses[uid] as PlayerResponse) ?? null;
@@ -401,6 +415,15 @@ function PlayerEventDetail() {
       console.error('[EventDetail] response write failed:', err);
     }
   };
+
+  if (!eventsLoading && loadError) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <NavHeader onBack={() => navigation.goBack()} />
+        <ErrorState message="Couldn't load this event." onRetry={retryAll} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../config';
 import type { DuesRecord } from '../schema';
@@ -7,6 +7,7 @@ interface UseDuesResult {
   dues: DuesRecord[];
   loading: boolean;
   error: string | null;
+  retry: () => void;
 }
 
 // Pass `userId` from every non-manager caller. The dues rule only binds the
@@ -17,6 +18,7 @@ export function useDues(teamId: string, userId?: string): UseDuesResult {
   const [dues,    setDues]    = useState<DuesRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!teamId) { setLoading(false); return; }
@@ -28,7 +30,13 @@ export function useDues(teamId: string, userId?: string): UseDuesResult {
       err  => { setError(err.message); setLoading(false); },
     );
     return unsub;
-  }, [teamId, userId]);
+  }, [teamId, userId, attempt]);
 
-  return { dues, loading, error };
+  const retry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setAttempt(n => n + 1);
+  }, []);
+
+  return { dues, loading, error, retry };
 }
