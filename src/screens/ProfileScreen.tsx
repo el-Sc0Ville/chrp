@@ -37,7 +37,7 @@ function getInitials(n: string): string {
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { user, isManager, activeTeamId, activeTeamPalette, setNeedsOnboarding } = useUserContext();
+  const { user, isManager, activeTeamId, activeTeamPalette, setActiveTeamId, setNeedsOnboarding } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ProfileNavProp>();
@@ -65,7 +65,8 @@ export default function ProfileScreen() {
   const [memberRole, setMemberRole] = useState<'manager' | 'player' | 'spare'>(isManager ? 'manager' : 'player');
   const { dates: blackoutDates } = useBlackouts(activeTeamId, user?.uid ?? '');
   const { team } = useTeam(activeTeamId);
-  const { dues } = useDues(activeTeamId);
+  // Scoped to this user — the rule denies an unfiltered dues listen to non-managers.
+  const { dues } = useDues(activeTeamId, user?.uid);
   const myDues = dues.find(d => d.userId === user?.uid) ?? null;
 
   useEffect(() => {
@@ -208,6 +209,9 @@ export default function ProfileScreen() {
               batch.delete(doc(db, 'teams', activeTeamId, 'members', user.uid));
               batch.delete(doc(db, 'users', user.uid, 'teams', activeTeamId));
               await batch.commit();
+              // Clear the active team too, otherwise every hook keeps listening
+              // to a team this user is no longer a member of.
+              setActiveTeamId('');
               setNeedsOnboarding(true);
             } catch (err) {
               console.error('[ProfileScreen] leave team failed:', err);
@@ -603,12 +607,37 @@ function TipJarSheet({
   const showToastRef = useRef(showToast);
   useEffect(() => { showToastRef.current = showToast; }, [showToast]);
 
+  // Held in refs so cleanup can remove whatever is registered: assigning them
+  // inside the async IIFE let a fast close run the cleanup before the awaits
+  // resolved, which ended the connection but left the listeners attached.
+  const purchaseSubRef = useRef<RNIap.EventSubscription | null>(null);
+  const errorSubRef    = useRef<RNIap.EventSubscription | null>(null);
+
   useEffect(() => {
     if (!visible) return;
 
     let isMounted = true;
-    let purchaseSub: RNIap.EventSubscription | null = null;
-    let errorSub:    RNIap.EventSubscription | null = null;
+    setProductsLoading(true);
+
+    purchaseSubRef.current = RNIap.purchaseUpdatedListener(async (purchase) => {
+      try {
+        await RNIap.finishTransaction({ purchase, isConsumable: true });
+      } catch (err) {
+        console.error('[TipJar] finishTransaction failed:', err);
+      }
+      if (!isMounted) return;
+      setPurchasing(null);
+      onDismiss();
+      showToastRef.current('Thank you for supporting Chrp! 🙏');
+    });
+
+    errorSubRef.current = RNIap.purchaseErrorListener((error) => {
+      if (!isMounted) return;
+      setPurchasing(null);
+      if (error.code !== RNIap.ErrorCode.UserCancelled) {
+        showToastRef.current('Purchase failed — please try again');
+      }
+    });
 
     (async () => {
       try {
@@ -626,37 +655,21 @@ function TipJarSheet({
         setProductsLoading(false);
       } catch (err) {
         console.error('[TipJar] init/fetchProducts failed:', err);
-        if (isMounted) setProductsLoading(false);
+        if (isMounted) { setProducts({}); setProductsLoading(false); }
       }
-
-      purchaseSub = RNIap.purchaseUpdatedListener(async (purchase) => {
-        try {
-          await RNIap.finishTransaction({ purchase, isConsumable: true });
-        } catch (err) {
-          console.error('[TipJar] finishTransaction failed:', err);
-        }
-        if (!isMounted) return;
-        setPurchasing(null);
-        onDismiss();
-        showToastRef.current('Thank you for supporting Chrp! 🙏');
-      });
-
-      errorSub = RNIap.purchaseErrorListener((error) => {
-        if (!isMounted) return;
-        setPurchasing(null);
-        if (error.code !== RNIap.ErrorCode.UserCancelled) {
-          showToastRef.current('Purchase failed — please try again');
-        }
-      });
     })();
 
     return () => {
       isMounted = false;
-      purchaseSub?.remove();
-      errorSub?.remove();
+      purchaseSubRef.current?.remove();
+      purchaseSubRef.current = null;
+      errorSubRef.current?.remove();
+      errorSubRef.current = null;
       RNIap.endConnection().catch(err => console.error('[TipJar] endConnection failed:', err));
     };
   }, [visible]);
+
+  const availableTips = TIP_OPTIONS.filter(({ sku }) => products[sku] !== undefined);
 
   const handleTip = (sku: string) => {
     if (purchasing) return;
@@ -692,9 +705,17 @@ function TipJarSheet({
             <View style={styles.tipLoadingRow}>
               <ActivityIndicator color={TEAM[300]} />
             </View>
+          ) : availableTips.length === 0 ? (
+            // No products came back (not yet approved, or the native module is
+            // unavailable) — never render an empty grid of buy buttons.
+            <View style={styles.tipUnavailableRow}>
+              <Text style={styles.tipUnavailableText}>
+                Tips are temporarily unavailable. Thanks for the thought — please try again later.
+              </Text>
+            </View>
           ) : (
             <View style={styles.tipGrid}>
-              {TIP_OPTIONS.map(({ sku, emoji }) => {
+              {availableTips.map(({ sku, emoji }) => {
                 const product = products[sku];
                 const isPurchasing = purchasing === sku;
                 return (
@@ -1184,6 +1205,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[20],
+  },
+  tipUnavailableRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[8],
+    paddingVertical: spacing[20],
+    marginBottom: spacing[20],
+  },
+  tipUnavailableText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    lineHeight: 19,
+    color: navy[400],
+    textAlign: 'center',
   },
   tipGrid: {
     flexDirection: 'row',

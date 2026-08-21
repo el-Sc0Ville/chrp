@@ -22,6 +22,8 @@
           }
         ],
         "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Chrp uses your location to automatically check you in when you arrive at the venue.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Chrp checks you in automatically when you arrive at the venue, even if the app isn't open, so your team knows you made it.",
         "UIBackgroundModes": ["location"]
       }
     },

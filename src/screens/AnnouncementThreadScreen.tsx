@@ -2,15 +2,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TextInput, Pressable,
-  KeyboardAvoidingView, Platform, StyleSheet,
+  View, Text, ScrollView, TextInput, Pressable, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Alert, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { doc, collection, addDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import type { Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { navy, teams, fonts, spacing, radius } from '../theme';
+import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import { useReplies } from '../firebase/hooks/useReplies';
 import type { Announcement, AnnouncementReply } from '../firebase/schema';
@@ -39,6 +39,8 @@ function getInitials(name: string): string {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+type ThreadState = 'loading' | 'ready' | 'missing' | 'error';
+
 export default function AnnouncementThreadScreen() {
   const insets     = useSafeAreaInsets();
   const route      = useRoute<any>();
@@ -49,25 +51,47 @@ export default function AnnouncementThreadScreen() {
   const { announcementId } = route.params as { announcementId: string };
 
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [threadState,  setThreadState]  = useState<ThreadState>('loading');
+  const [retryKey,     setRetryKey]     = useState(0);
   const [draft,        setDraft]        = useState('');
   const [sending,      setSending]      = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  // `sending` alone cannot guard the send: it is read from the render closure and
+  // setSending is async, so two taps in the same render both get through.
+  const sendingRef = useRef(false);
 
   const { replies } = useReplies(activeTeamId, announcementId);
 
+  // activeTeamId belongs in the deps — without it the listener stayed pointed at
+  // the previous team's document after a team switch.
   useEffect(() => {
+    setThreadState('loading');
     const ref = doc(db, 'teams', activeTeamId, 'announcements', announcementId);
-    const unsub = onSnapshot(ref, snap => {
-      if (snap.exists()) setAnnouncement({ id: snap.id, ...snap.data() } as Announcement);
-    });
+    const unsub = onSnapshot(
+      ref,
+      snap => {
+        if (snap.exists()) {
+          setAnnouncement({ id: snap.id, ...snap.data() } as Announcement);
+          setThreadState('ready');
+        } else {
+          setAnnouncement(null);
+          setThreadState('missing');
+        }
+      },
+      err => {
+        console.error('[AnnouncementThread] snapshot error:', err);
+        setAnnouncement(null);
+        setThreadState('error');
+      },
+    );
     return unsub;
-  }, [announcementId]);
+  }, [activeTeamId, announcementId, retryKey]);
 
   const sendReply = async () => {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
-    setDraft('');
     try {
       await addDoc(
         collection(db, 'teams', activeTeamId, 'announcements', announcementId, 'replies'),
@@ -78,19 +102,57 @@ export default function AnnouncementThreadScreen() {
           createdAt:  serverTimestamp(),
         },
       );
+      setDraft(''); // only on success — a failed write must not eat what they typed
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
     } catch (err) {
       console.error('[AnnouncementThread] reply write failed:', err);
+      Alert.alert("Couldn't send reply", 'Your reply is still here. Please try again.');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
 
-  // Show a minimal shell while the document loads (avoids blank screen)
-  if (!announcement) {
+  const canSend = draft.trim().length > 0 && !sending;
+
+  if (threadState === 'loading') {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <NavHeader onBack={() => navigation.goBack()} />
+        <View style={styles.centered}>
+          <ActivityIndicator color={TEAM[500]} size="large" />
+        </View>
+      </View>
+    );
+  }
+
+  // A deleted doc or a denied read used to leave nothing but the back chevron.
+  if (threadState !== 'ready' || !announcement) {
+    const isMissing = threadState === 'missing';
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <NavHeader onBack={() => navigation.goBack()} />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>
+            {isMissing
+              ? 'This announcement is no longer available.'
+              : "Couldn't load this thread."}
+          </Text>
+          {!isMissing && (
+            <Pressable
+              style={[styles.retryBtn, { backgroundColor: TEAM[500] }]}
+              onPress={() => setRetryKey(k => k + 1)}
+            >
+              <Text style={[styles.retryBtnText, { color: TEAM.on }]}>Try again</Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={[styles.backLinkText, { color: TEAM[300] }]}>Back to announcements</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -164,8 +226,9 @@ export default function AnnouncementThreadScreen() {
             returnKeyType="default"
           />
           <Pressable
-            style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled, { backgroundColor: TEAM[500] }]}
+            style={[styles.sendBtn, !canSend && styles.sendBtnDisabled, { backgroundColor: TEAM[500] }]}
             onPress={sendReply}
+            disabled={!canSend}
           >
             <Text style={[styles.sendBtnText, { color: TEAM.on }]}>↑</Text>
           </Pressable>
@@ -222,6 +285,37 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+
+  // ── Loading / error state ─────────────────────────────────────────────────
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[20],
+    paddingHorizontal: spacing[24],
+    paddingBottom: 80,
+  },
+  errorText: {
+    fontFamily: fonts.ui,
+    fontSize: 15,
+    color: status.error.light,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    borderRadius: radius.m,
+    paddingVertical: spacing[14],
+    paddingHorizontal: spacing[32],
+    alignItems: 'center',
+  },
+  retryBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+  },
+  backLinkText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: TEAM[300],
   },
 
   // ── Nav header ────────────────────────────────────────────────────────────

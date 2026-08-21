@@ -64,6 +64,7 @@ export default function ProfileSetupScreen({ navigation, route }: Props) {
       navigation.navigate('JoinTeam', {
         displayName:  name,
         jerseyNumber: parseInt(jerseyNumber, 10) || 0,
+        inviteCode:   params.pendingInviteCode ?? '',
         teamId:       params.teamId,
         teamName:     params.teamName ?? '',
         teamPalette:  (params.teamPalette ?? 'trashdogs') as TeamKey,

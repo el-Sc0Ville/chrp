@@ -3,13 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
-import { setDoc, doc, serverTimestamp, getDocs, query, collection, where, limit } from 'firebase/firestore';
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './src/firebase';
 import { auth } from './src/firebase/config';
 import { navigationRef } from './src/navigation';
 import { registerNotificationCategories } from './src/firebase/notifications';
+import { resolveInviteCode } from './src/firebase/invites';
 import {
   useFonts,
   SpaceGrotesk_300Light,
@@ -109,33 +110,36 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
 };
 
 async function handleJoinDeepLink(url: string): Promise<void> {
-  const match = url.match(/[?&]code=([A-Z0-9]{1,6})/i);
+  const match = url.match(/[?&]code=([A-Za-z0-9]{6})(?:[&#]|$)/);
   if (!match) return;
-  const code = match[1].toUpperCase().padEnd(0).slice(0, 6);
-  if (code.length !== 6) return;
+  const code = match[1].toUpperCase();
 
   try {
-    console.log('[JoinDeepLink] looking up code:', code);
-    const snap = await getDocs(
-      query(collection(db, 'teams'), where('inviteCode', '==', code), limit(1)),
-    );
-    if (snap.empty) {
-      console.warn('[JoinDeepLink] invite code not found:', code);
-      return;
-    }
-    const teamDoc  = snap.docs[0];
-    const teamData = teamDoc.data();
-
-    await AsyncStorage.setItem('chrp_pending_invite_code',  code);
-    await AsyncStorage.setItem('chrp_pending_team_id',      teamDoc.id);
-    await AsyncStorage.setItem('chrp_pending_team_name',    teamData['name'] as string);
-    await AsyncStorage.setItem('chrp_pending_team_palette', (teamData['palette'] as string) ?? 'trashdogs');
+    // Store the pending code BEFORE signing in. The code lookup needs an
+    // authenticated caller, but onAuthStateChanged fires the moment we sign in
+    // and decides whether to start onboarding by checking this key — so it has
+    // to already be there. Team details are filled in immediately after.
+    await AsyncStorage.setItem('chrp_pending_invite_code', code);
 
     if (!auth.currentUser) {
       await signInAnonymously(auth);
-      // onAuthStateChanged in AppStack will call setMockUser + setNeedsOnboarding(true)
+      // onAuthStateChanged in AppStack sees the pending code above and calls
+      // setMockUser + setNeedsOnboarding(true).
     }
-    console.log('[JoinDeepLink] invite saved, signed in anonymously');
+
+    const target = await resolveInviteCode(code);
+    if (!target) {
+      console.warn('[JoinDeepLink] invite code not found:', code);
+      await AsyncStorage.removeItem('chrp_pending_invite_code');
+      return;
+    }
+
+    await AsyncStorage.multiSet([
+      ['chrp_pending_team_id',      target.teamId],
+      ['chrp_pending_team_name',    target.teamName],
+      ['chrp_pending_team_palette', target.palette],
+    ]);
+    console.log('[JoinDeepLink] invite resolved for team', target.teamId);
   } catch (err) {
     console.error('[JoinDeepLink] error:', err);
   }

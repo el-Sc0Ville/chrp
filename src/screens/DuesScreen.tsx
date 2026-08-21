@@ -1,7 +1,7 @@
 // Dues screen — B-09 Manager Dues / Player Dues.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, TextInput,
   StyleSheet, KeyboardAvoidingView, Platform,
@@ -80,7 +80,6 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   const spareMembers = members.filter((m: Member) => m.role === 'spare');
   const spareIds = new Set(spareMembers.map((m: Member) => m.userId));
   const players = dues.map(toDuesPlayer).filter(p => !spareIds.has(p.id));
-  const [seasonDues, setSeasonDues] = useState(SEASON_DUES);
   const [setAmountVisible, setSetAmountVisible] = useState(false);
   const [actionPlayer, setActionPlayer] = useState<DuesPlayer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -93,19 +92,27 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
   };
 
   const handleSetAmount = async (amount: number) => {
-    setSeasonDues(amount);
     setSetAmountVisible(false);
     try {
       const batch = writeBatch(db);
       const nonSpares = members.filter((m: Member) => m.role !== 'spare');
       if (nonSpares.length > 0) {
-        const existingDuesIds = new Set(dues.map((d: DuesRecord) => d.userId));
+        const existingDues = new Map(dues.map((d: DuesRecord) => [d.userId, d]));
         for (const member of nonSpares) {
+          const existing = existingDues.get(member.userId);
+          const paid     = existing?.amountPaid ?? 0;
+          // Recompute each member's status against the new amount. Writing a
+          // flat 'pending' here wiped every player's paid status whenever the
+          // season amount changed.
+          const nextStatus: DuesStatus =
+            paid >= amount && amount > 0 ? 'paid'
+            : paid > 0                   ? 'partial'
+            :                              'pending';
           batch.set(
             doc(db, 'teams', activeTeamId, 'dues', member.userId),
             {
-              seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: 'pending',
-              ...(!existingDuesIds.has(member.userId) && { amountPaid: 0 }),
+              seasonAmount: amount, userId: member.userId, displayName: member.displayName, status: nextStatus,
+              ...(existing === undefined && { amountPaid: 0 }),
             },
             { merge: true },
           );
@@ -119,11 +126,22 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
     }
   };
 
+  // Every money figure comes off the dues docs themselves — a local seasonDues
+  // state showed the fallback amount in the header while the rows rendered the
+  // real per-player amounts from Firestore.
   const paidCount  = players.filter(p => p.duesStatus === 'paid').length;
   const totalCount = players.length;
   const collected  = players.reduce((sum, p) => sum + p.paidAmount, 0);
-  const total      = totalCount * seasonDues;
+  const total      = players.reduce((sum, p) => sum + p.seasonAmount, 0);
   const progress   = total > 0 ? collected / total : 0;
+
+  // One per-player figure only when every dues doc agrees on it.
+  const uniqueAmounts = Array.from(new Set(players.map(p => p.seasonAmount)));
+  const seasonDues    = uniqueAmounts.length === 1 ? uniqueAmounts[0] : null;
+  const perPlayerLabel =
+    seasonDues !== null    ? `$${seasonDues}/player`
+    : totalCount === 0     ? 'Not set'
+    :                        'Mixed amounts';
 
   return (
     <View style={[styles.container, { paddingTop: embedded ? 0 : insets.top }]}>
@@ -180,7 +198,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
             </View>
             <View style={styles.summaryRight}>
               <Text style={styles.summaryFraction}>{paidCount}/{totalCount} paid in full</Text>
-              <Text style={styles.summaryPerPlayer}>${seasonDues}/player</Text>
+              <Text style={styles.summaryPerPlayer}>{perPlayerLabel}</Text>
             </View>
           </View>
           <View style={styles.progressTrack}>
@@ -190,30 +208,56 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
 
         {/* ── Player list ── */}
         <Text style={styles.sectionLabel}>Players</Text>
-        <View style={styles.card}>
-          {players.map((player, idx) => (
-            <React.Fragment key={player.id}>
-              {idx > 0 && <View style={styles.rowDivider} />}
+        {totalCount === 0 ? (
+          <View style={[styles.card, styles.emptyCard]}>
+            <Text style={styles.emptyTitle}>No dues yet</Text>
+            <Text style={styles.emptySub}>
+              {members.length === 0
+                ? 'Invite players to the team first, then set the season amount.'
+                : 'Set a season amount and Chrp creates a dues record for every player on the roster.'}
+            </Text>
+            {members.length > 0 && (
               <Pressable
-                style={({ pressed }) => [styles.playerRow, pressed && { backgroundColor: navy[600] }]}
-                onPress={() => setActionPlayer(player)}
+                onPress={() => setSetAmountVisible(true)}
+                style={({ pressed }) => [
+                  styles.emptyAddBtn,
+                  {
+                    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+                    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+                  },
+                  pressed && { opacity: 0.8 },
+                ]}
               >
-                <PlayerAvatar player={player} />
-                <View style={styles.playerInfo}>
-                  <Text style={styles.playerName}>{player.name}</Text>
-                  <Text style={styles.playerJersey}>#{player.jersey}</Text>
-                </View>
-                <View style={styles.playerRight}>
-                  {(player.duesStatus === 'partial' || (player.duesStatus === 'overdue' && player.paidAmount > 0))
-                    ? <Text style={styles.playerAmountPartial}>${player.paidAmount} of ${player.seasonAmount}</Text>
-                    : <Text style={styles.playerAmount}>${player.seasonAmount}</Text>
-                  }
-                  <StatusPill status={player.duesStatus} />
-                </View>
+                <Text style={[styles.emptyAddBtnText, { color: TEAM[300] }]}>Set amount</Text>
               </Pressable>
-            </React.Fragment>
-          ))}
-        </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.card}>
+            {players.map((player, idx) => (
+              <React.Fragment key={player.id}>
+                {idx > 0 && <View style={styles.rowDivider} />}
+                <Pressable
+                  style={({ pressed }) => [styles.playerRow, pressed && { backgroundColor: navy[600] }]}
+                  onPress={() => setActionPlayer(player)}
+                >
+                  <PlayerAvatar player={player} />
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{player.name}</Text>
+                    <Text style={styles.playerJersey}>#{player.jersey}</Text>
+                  </View>
+                  <View style={styles.playerRight}>
+                    {(player.duesStatus === 'partial' || (player.duesStatus === 'overdue' && player.paidAmount > 0))
+                      ? <Text style={styles.playerAmountPartial}>${player.paidAmount} of ${player.seasonAmount}</Text>
+                      : <Text style={styles.playerAmount}>${player.seasonAmount}</Text>
+                    }
+                    <StatusPill status={player.duesStatus} />
+                  </View>
+                </Pressable>
+              </React.Fragment>
+            ))}
+          </View>
+        )}
 
         {/* ── Spare Bank ── */}
         {spareMembers.length > 0 && (
@@ -252,7 +296,7 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
       {/* ── Set Amount Sheet ── */}
       <SetAmountSheet
         visible={setAmountVisible}
-        current={seasonDues}
+        current={seasonDues ?? SEASON_DUES}
         onSave={handleSetAmount}
         onClose={() => setSetAmountVisible(false)}
       />
@@ -287,8 +331,9 @@ function PlayerDuesScreen({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const { dues } = useDues(activeTeamId);
   const uid = user?.uid ?? 'anon';
+  // Scoped to this player — the rule denies an unfiltered dues listen to non-managers.
+  const { dues } = useDues(activeTeamId, uid);
   const selfRecord = dues.find(d => d.userId === uid);
   const selfPlayer = selfRecord ? toDuesPlayer(selfRecord) : null;
   const seasonDues = selfRecord?.seasonAmount ?? SEASON_DUES;
@@ -412,11 +457,26 @@ function SetAmountSheet({
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
-  const [raw, setRaw] = useState(String(current));
+  const [raw,   setRaw]   = useState(String(current));
+  const [error, setError] = useState<string | null>(null);
+
+  // The sheet stays mounted and only toggles `visible`, so the field has to be
+  // reseeded on open or it keeps the value from the last time it was shown.
+  useEffect(() => {
+    if (visible) {
+      setRaw(String(current));
+      setError(null);
+    }
+  }, [visible, current]);
 
   const handleSave = () => {
     const parsed = parseInt(raw.replace(/[^0-9]/g, ''), 10);
-    if (!isNaN(parsed) && parsed > 0) onSave(parsed);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setError('Enter an amount greater than $0');
+      return;
+    }
+    setError(null);
+    onSave(parsed);
   };
 
   return (
@@ -434,7 +494,7 @@ function SetAmountSheet({
                 <TextInput
                   style={styles.amountInput}
                   value={raw}
-                  onChangeText={text => setRaw(text.replace(/[^0-9]/g, '').slice(0, 4))}
+                  onChangeText={text => { setRaw(text.replace(/[^0-9]/g, '').slice(0, 4)); setError(null); }}
                   keyboardType="number-pad"
                   autoFocus
                   selectTextOnFocus
@@ -442,6 +502,8 @@ function SetAmountSheet({
                   placeholderTextColor={navy[400]}
                 />
               </View>
+
+              {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
               <Pressable
                 style={({ pressed }) => [styles.saveBtn, { backgroundColor: TEAM[500] }, pressed && { opacity: 0.8 }]}
@@ -475,6 +537,11 @@ function PlayerEditSheet({
   const [dueDate,         setDueDate]         = useState<Date | null>(player.dueDate);
   const [showDatePicker,  setShowDatePicker]  = useState(false);
   const [saving,          setSaving]          = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+  // `saving` alone cannot guard the save: it is read from the render closure and
+  // setSaving is async, so two taps landing in the same render both pass the
+  // check and fire two updateDoc calls. This ref is read and set synchronously.
+  const savingRef = useRef(false);
 
   const owed = parseInt(owedRaw.replace(/[^0-9]/g, ''), 10) || 0;
   const paid = parseInt(paidRaw.replace(/[^0-9]/g, ''), 10) || 0;
@@ -492,7 +559,13 @@ function PlayerEditSheet({
   }
 
   const handleSave = async () => {
-    if (saving) return;
+    if (savingRef.current) return;
+    if (!Number.isFinite(owed) || !Number.isFinite(paid) || owed < 0 || paid < 0) {
+      setError('Enter amounts of $0 or more');
+      return;
+    }
+    savingRef.current = true;
+    setError(null);
     setSaving(true);
     // Recompute status at save time with a fresh timestamp so overdue
     // records with dueDate set are evaluated correctly on write.
@@ -514,6 +587,8 @@ function PlayerEditSheet({
       onSave('Payment record updated');
     } catch (err) {
       console.error('[DuesScreen] save failed:', err);
+      setError('Could not save — please try again');
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -543,7 +618,7 @@ function PlayerEditSheet({
                 <TextInput
                   style={styles.amountInput}
                   value={owedRaw}
-                  onChangeText={t => setOwedRaw(t.replace(/[^0-9]/g, '').slice(0, 5))}
+                  onChangeText={t => { setOwedRaw(t.replace(/[^0-9]/g, '').slice(0, 5)); setError(null); }}
                   keyboardType="number-pad"
                   selectTextOnFocus
                   maxLength={5}
@@ -561,7 +636,7 @@ function PlayerEditSheet({
                 <TextInput
                   style={styles.amountInput}
                   value={paidRaw}
-                  onChangeText={t => setPaidRaw(t.replace(/[^0-9]/g, '').slice(0, 5))}
+                  onChangeText={t => { setPaidRaw(t.replace(/[^0-9]/g, '').slice(0, 5)); setError(null); }}
                   keyboardType="number-pad"
                   selectTextOnFocus
                   maxLength={5}
@@ -616,6 +691,8 @@ function PlayerEditSheet({
                 numberOfLines={2}
                 maxLength={200}
               />
+
+              {error !== null && <Text style={styles.errorText}>{error}</Text>}
 
               <Pressable
                 style={({ pressed }) => [
@@ -774,6 +851,38 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.05)',
     overflow: 'hidden',
+  },
+
+  // ── Empty state (no dues yet) ─────────────────────────────────────────────
+  emptyCard: {
+    alignItems: 'center',
+    paddingHorizontal: spacing[24],
+    paddingVertical: spacing[28],
+    gap: spacing[8],
+  },
+  emptyTitle: {
+    ...T.headingL,
+    color: navy[300],
+    textAlign: 'center',
+  },
+  emptySub: {
+    ...T.bodyM,
+    color: navy[400],
+    textAlign: 'center',
+  },
+  emptyAddBtn: {
+    marginTop: spacing[8],
+    paddingHorizontal: spacing[20],
+    paddingVertical: spacing[12],
+    borderRadius: radius.l,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.45)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.10)`,
+  },
+  emptyAddBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: TEAM[300],
   },
 
   // ── Player row ────────────────────────────────────────────────────────────
@@ -1024,6 +1133,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     flex: 1,
     paddingVertical: spacing[14],
+  },
+
+  // ── Inline error ──────────────────────────────────────────────────────────
+  errorText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: statusColors.error.pure,
+    marginTop: -spacing[4],
+    marginBottom: spacing[12],
   },
 
   // ── Save button ───────────────────────────────────────────────────────────

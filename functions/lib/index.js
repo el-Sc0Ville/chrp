@@ -39,8 +39,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
+// Imported directly rather than reached through the legacy `admin.firestore.*`
+// namespace: the Functions emulator patches firebase-admin in a way that leaves
+// admin.firestore.FieldValue undefined, so every write here threw locally even
+// though it works when deployed. Using the modular entry point makes the
+// emulator usable and drops the dependency on the legacy namespace.
+const firestore_1 = require("firebase-admin/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
-const firestore_1 = require("firebase-functions/v2/firestore");
+const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 admin.initializeApp();
@@ -122,8 +128,8 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                 .collection('teams')
                 .doc(teamId)
                 .collection('events')
-                .where('startsAt', '>=', admin.firestore.Timestamp.fromDate(windowStart))
-                .where('startsAt', '<=', admin.firestore.Timestamp.fromDate(windowEnd))
+                .where('startsAt', '>=', firestore_1.Timestamp.fromDate(windowStart))
+                .where('startsAt', '<=', firestore_1.Timestamp.fromDate(windowEnd))
                 .get();
             for (const eventDoc of eventsSnap.docs) {
                 const eventData = eventDoc.data();
@@ -174,7 +180,7 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
         }
     }
 });
-exports.onEventCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{teamId}/events/{eventId}', region: 'northamerica-northeast1' }, async (event) => {
+exports.onEventCreated = (0, firestore_2.onDocumentCreated)({ document: 'teams/{teamId}/events/{eventId}', region: 'northamerica-northeast1' }, async (event) => {
     const { teamId, eventId } = event.params;
     const eventData = event.data?.data();
     if (!eventData)
@@ -246,7 +252,7 @@ exports.recordAvailability = (0, https_1.onRequest)({ region: 'northamerica-nort
             userId,
             displayName: displayName ?? '',
             response,
-            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+            respondedAt: firestore_1.FieldValue.serverTimestamp(),
             setByManager: false,
         });
         res.status(200).json({ success: true });
@@ -256,7 +262,7 @@ exports.recordAvailability = (0, https_1.onRequest)({ region: 'northamerica-nort
         res.status(500).json({ error: 'Failed to record availability' });
     }
 });
-exports.onSubRequestCreated = (0, firestore_1.onDocumentCreated)({ document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' }, async (event) => {
+exports.onSubRequestCreated = (0, firestore_2.onDocumentCreated)({ document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' }, async (event) => {
     const { teamId, requestId } = event.params;
     const requestData = event.data?.data();
     console.log('[onSubRequestCreated] triggered', { teamId, requestId, requestData });

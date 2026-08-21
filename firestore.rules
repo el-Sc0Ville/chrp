@@ -2,12 +2,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helpers (top level so /users/** can check team roles too) ────────────
+    function teamRole(teamId) {
+      return get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role;
+    }
+    function isTeamManager(teamId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        && teamRole(teamId) == 'manager';
+    }
+
+    // ── Invite-code lookup table ─────────────────────────────────────────────
+    // /inviteCodes/{CODE} -> { teamId, teamName, palette }
+    //
+    // Joining a team needs a code -> team lookup by someone who is not yet a
+    // member. That cannot be done against /teams: a `list` there leaves
+    // {teamId} unbound so isMember() is unevaluable, and opening /teams to
+    // listing would expose every team's invite code. This tiny table is the
+    // only readable surface, and only by document id — never listable, so
+    // codes cannot be harvested.
+    match /inviteCodes/{code} {
+      allow get:  if request.auth != null;
+      allow list: if false;
+      // create only succeeds when the code is unclaimed. update/delete require
+      // managing the team the EXISTING doc points at, so one manager cannot
+      // repoint another team's code at their own.
+      allow create:         if isTeamManager(request.resource.data.teamId);
+      allow update, delete: if isTeamManager(resource.data.teamId);
+    }
+
     // ── User profiles ────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
       match /teams/{teamId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
+        // A manager removing a player must be able to clear that player's
+        // membership pointer. Without this the removal batch is denied and,
+        // because batches are atomic, the member doc survives too.
+        allow delete: if isTeamManager(teamId);
       }
     }
 
@@ -17,27 +50,53 @@ service cloud.firestore {
         return request.auth != null
           && exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
       }
+      function isManager() { return isTeamManager(teamId); }
 
-      function isManager() {
-        return request.auth != null
-          && get(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)).data.role == 'manager';
-      }
-
-      allow read: if isMember();
-      allow write: if isManager();
+      allow get:  if isMember();
+      allow list: if false;  // explicit: use /inviteCodes for code lookups
+      allow create, update, delete: if isManager();
 
       match /members/{memberId} {
-        allow read: if isMember();
-        allow write: if isManager() || (request.auth != null && request.auth.uid == memberId);
+        function isSelf() { return request.auth != null && request.auth.uid == memberId; }
+        // A brand-new team writes its founding manager member doc BEFORE the
+        // team doc exists (CreateTeamScreen), so isManager() cannot be true yet.
+        // Gating on the team not existing means this cannot be used to claim
+        // manager on an established team.
+        function isFoundingManager() {
+          return isSelf()
+            && !exists(/databases/$(database)/documents/teams/$(teamId))
+            && request.resource.data.role == 'manager';
+        }
 
-        // Blackout dates live under the member document, so the rule has to be
-        // nested here — security rules do not cascade into subcollections, and a
-        // sibling match on /teams/{teamId}/blackouts governs a different path.
-        // Managers need read access to every member's blackouts to compute
-        // auto-in when creating an event; only the owner may write their own.
+        // Self-enrolment must be backed by a real invite code for THIS team.
+        // Otherwise knowing a teamId — which leaks through push payloads and
+        // invite links — would be enough to join any team uninvited.
+        function joinedWithValidCode() {
+          return request.resource.data.inviteCode is string
+            && exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode))
+            && get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.teamId == teamId;
+        }
+
+        allow read: if isMember();
+        // role is pinned: a member may create themselves only as player/spare,
+        // and may never change their own role on update. Without this, `allow
+        // write: if request.auth.uid == memberId` let anyone who knew a teamId
+        // write role:'manager' and take over the team.
+        allow create: if isManager()
+          || isFoundingManager()
+          || (isSelf()
+              && request.resource.data.role in ['player', 'spare']
+              && joinedWithValidCode());
+        allow update: if isManager()
+          || (isSelf() && request.resource.data.role == resource.data.role);
+        allow delete: if isManager() || isSelf();
+
+        // Blackout dates live under the member doc. Rules do not cascade into
+        // subcollections, so this must be nested here. Managers read all of
+        // them to compute auto-in on event creation; only the owner writes.
         match /blackouts/{docId} {
-          allow read: if isManager() || (request.auth != null && request.auth.uid == memberId);
-          allow write: if request.auth != null && request.auth.uid == memberId;
+          allow read:  if isManager() || isSelf();
+          allow write: if isSelf();
         }
       }
 
@@ -54,28 +113,41 @@ service cloud.firestore {
 
       match /announcements/{announcementId} {
         allow read: if isMember();
-        allow write: if isMember();
+        // Previously `write: if isMember()`, which let any player delete or
+        // rewrite the manager's announcements and other members' replies.
+        allow create: if isManager()
+          && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if isManager()
+          || (request.auth != null && resource.data.authorId == request.auth.uid);
 
         match /replies/{replyId} {
           allow read: if isMember();
-          allow write: if isMember();
+          allow create: if isMember()
+            && request.resource.data.authorId == request.auth.uid;
+          allow update, delete: if isManager()
+            || (request.auth != null && resource.data.authorId == request.auth.uid);
         }
       }
 
       match /subRequests/{requestId} {
-        // Any team member can read sub requests (player sees own, manager sees all)
         allow read: if isMember();
-        // Any team member can create a sub request
-        allow create: if isMember();
-        // Only managers can update (e.g. mark as filled)
+        // Bind the author so a member cannot forge a request in someone
+        // else's name (which would push their name to the managers).
+        allow create: if isMember()
+          && request.resource.data.requestedBy == request.auth.uid;
         allow update: if isManager();
+        allow delete: if isManager()
+          || (request.auth != null && resource.data.requestedBy == request.auth.uid);
       }
 
       match /dues/{userId} {
-        allow read: if isMember() && (request.auth.uid == userId || isManager());
+        // Compare against the userId FIELD, not the document wildcard: on a
+        // list operation the wildcard is unbound, so the old rule could never
+        // be satisfied by a player and their dues screen was always empty.
+        allow read: if isManager()
+          || (isMember() && request.auth.uid == resource.data.userId);
         allow write: if isManager();
       }
-
     }
   }
 }

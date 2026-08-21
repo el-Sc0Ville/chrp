@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDocs, collection } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,9 +31,9 @@ import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
 import { UserProvider, useUserContext } from '../context/UserContext';
-import { navy, teams, fonts, spacing, type TeamKey } from '../theme';
+import { navy, teams, fonts, spacing, radius, type TeamKey } from '../theme';
 import { onAuthStateChanged, type User } from '../firebase/auth';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { registerForPushNotifications } from '../firebase/notifications';
 
 export type RootStackParamList = {
@@ -54,7 +54,10 @@ export type OnboardingStackParamList = {
   Welcome: undefined;
   ProfileSetup: { pendingInviteCode?: string; teamName?: string; teamId?: string; teamPalette?: TeamKey } | undefined;
   JoinOrCreate: { displayName: string; jerseyNumber: number };
-  JoinTeam: { displayName: string; jerseyNumber: number; teamId: string; teamName: string; teamPalette: TeamKey };
+  // inviteCode is required: the member doc records it so the security rules can
+  // verify the joiner actually holds a valid code for this team, rather than
+  // just happening to know a teamId (which leaks via push payloads and links).
+  JoinTeam: { displayName: string; jerseyNumber: number; inviteCode: string; teamId: string; teamName: string; teamPalette: TeamKey };
   CreateTeam: { displayName: string; jerseyNumber: number };
   OnboardingComplete: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
 };
@@ -232,6 +235,27 @@ const styles = StyleSheet.create({
     fontSize: 32, fontWeight: '700',
     letterSpacing: -0.8, color: '#FFFFFF',
   },
+  bootErrorText: {
+    fontFamily: fonts.ui,
+    fontSize: 15,
+    lineHeight: 21,
+    color: navy[300],
+    textAlign: 'center',
+    marginTop: spacing[16],
+    paddingHorizontal: spacing[32],
+  },
+  bootRetryBtn: {
+    marginTop: spacing[20],
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[32],
+    borderRadius: radius.m,
+    backgroundColor: teams.trashdogs[500],
+  },
+  bootRetryText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
 });
 
 // ─── Loading screen ────────────────────────────────────────────────────────────
@@ -246,6 +270,26 @@ function LoadingScreen() {
         size="small"
         style={{ marginTop: spacing[16] }}
       />
+    </View>
+  );
+}
+
+// Shown when the Firestore check after sign-in fails — an offline cold start,
+// or a transient error. Gives the user a way out instead of an endless spinner.
+function BootErrorScreen({ onRetry }: { onRetry: () => void }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.loadingScreen, { paddingTop: insets.top }]}>
+      <Text style={styles.loadingWordmark}>Chrp</Text>
+      <Text style={styles.bootErrorText}>
+        Couldn&apos;t load your team. Check your connection and try again.
+      </Text>
+      <Pressable
+        onPress={onRetry}
+        style={({ pressed }) => [styles.bootRetryBtn, pressed && { opacity: 0.8 }]}
+      >
+        <Text style={styles.bootRetryText}>Try again</Text>
+      </Pressable>
     </View>
   );
 }
@@ -288,53 +332,79 @@ function AppStack() {
   // undefined = resolving Firebase auth, null = signed out, User = signed in
   const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined);
 
-  useEffect(() => {
-    return onAuthStateChanged(async (u) => {
-      setFirebaseUser(u);
-      if (u && !u.isAnonymous) {
-        // Real Firebase user (magic link, etc.) — populate UserContext immediately
-        // so user.uid and user.displayName are available in all screens
-        setMockUser(u, false); // isManager defaults false; updated below once teams load
-        setNeedsOnboarding(undefined); // Force LoadingScreen while Firestore check runs
-        const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
-        setNeedsOnboarding(snap.empty);
-        if (!snap.empty) {
-          // Returning user — restore their active team and manager status
-          const isManagerRole = snap.docs.some(d => d.data().role === 'manager');
-          const firstTeam     = snap.docs[0].data();
+  // Set when the post-sign-in Firestore check fails. Without it a rejected
+  // getDocs left needsOnboarding stuck at undefined and the app sat on
+  // LoadingScreen forever, with no error and no way to retry.
+  const [bootError, setBootError] = useState(false);
+
+  const resolveSession = useCallback(async (u: User | null) => {
+    if (u && !u.isAnonymous) {
+      // Real Firebase user (magic link, etc.) — populate UserContext immediately
+      // so user.uid and user.displayName are available in all screens
+      setMockUser(u, false); // isManager defaults false; updated below once teams load
+      setNeedsOnboarding(undefined); // Force LoadingScreen while Firestore check runs
+      const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
+      setNeedsOnboarding(snap.empty);
+      if (!snap.empty) {
+        // Returning user — restore their active team and manager status
+        const isManagerRole = snap.docs.some(d => d.data().role === 'manager');
+        const firstTeam     = snap.docs[0].data();
+        setMockUser(u, isManagerRole);
+        setActiveTeamId(firstTeam.teamId as string);
+        setActiveTeamPalette(firstTeam.palette as TeamKey);
+        // Register / refresh push token for this user+team
+        registerForPushNotifications(u.uid, firstTeam.teamId as string).catch(console.error);
+      }
+    } else if (u && u.isAnonymous) {
+      const pendingCode = await AsyncStorage.getItem('chrp_pending_invite_code');
+      if (pendingCode) {
+        // Invite flow: anonymous sign-in with a pending invite code
+        setMockUser(u, false);
+        setNeedsOnboarding(true);
+      } else {
+        // Check if this anonymous user already completed onboarding (returning invite user)
+        const teamsSnap = await getDocs(collection(db, 'users', u.uid, 'teams'));
+        if (!teamsSnap.empty) {
+          const isManagerRole = teamsSnap.docs.some(d => d.data().role === 'manager');
+          const firstTeam = teamsSnap.docs[0].data();
           setMockUser(u, isManagerRole);
           setActiveTeamId(firstTeam.teamId as string);
           setActiveTeamPalette(firstTeam.palette as TeamKey);
-          // Register / refresh push token for this user+team
-          registerForPushNotifications(u.uid, firstTeam.teamId as string).catch(console.error);
+          setNeedsOnboarding(false);
         }
-      } else if (u && u.isAnonymous) {
-        const pendingCode = await AsyncStorage.getItem('chrp_pending_invite_code');
-        if (pendingCode) {
-          // Invite flow: anonymous sign-in with a pending invite code
-          setMockUser(u, false);
-          setNeedsOnboarding(true);
-        } else {
-          // Check if this anonymous user already completed onboarding (returning invite user)
-          const teamsSnap = await getDocs(collection(db, 'users', u.uid, 'teams'));
-          if (!teamsSnap.empty) {
-            const isManagerRole = teamsSnap.docs.some(d => d.data().role === 'manager');
-            const firstTeam = teamsSnap.docs[0].data();
-            setMockUser(u, isManagerRole);
-            setActiveTeamId(firstTeam.teamId as string);
-            setActiveTeamPalette(firstTeam.palette as TeamKey);
-            setNeedsOnboarding(false);
-          }
-          // If empty: dev bypass — AuthScreen's setMockUser handles context
-        }
-      } else if (!u) {
-        setMockUser(null, false);
-        setNeedsOnboarding(false);
+        // If empty: dev bypass — AuthScreen's setMockUser handles context
+      }
+    } else if (!u) {
+      setMockUser(null, false);
+      setNeedsOnboarding(false);
+    }
+  }, [setMockUser, setNeedsOnboarding, setActiveTeamId, setActiveTeamPalette]);
+
+  useEffect(() => {
+    return onAuthStateChanged(async (u) => {
+      setFirebaseUser(u);
+      setBootError(false);
+      try {
+        await resolveSession(u);
+      } catch (err) {
+        console.error('[Auth] could not resolve session:', err);
+        setBootError(true);
       }
     });
-  }, []);
+  }, [resolveSession]);
+
+  const retryBoot = useCallback(async () => {
+    setBootError(false);
+    try {
+      await resolveSession(auth.currentUser);
+    } catch (err) {
+      console.error('[Auth] retry failed:', err);
+      setBootError(true);
+    }
+  }, [resolveSession]);
 
   const resolvedUser = mockUser ?? firebaseUser;
+  if (bootError) return <BootErrorScreen onRetry={retryBoot} />;
   if (resolvedUser === undefined) return <LoadingScreen />;
 
   // Still waiting on Firestore onboarding check for a real (non-anonymous) Firebase user.

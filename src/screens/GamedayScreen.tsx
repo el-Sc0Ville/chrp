@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Animated, Linking, StyleSheet,
+  View, Text, ScrollView, Pressable, Animated, Linking, Switch, Alert, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -23,6 +23,17 @@ import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback
 
+const AUTO_CHECKIN_KEY = 'gameday_auto_checkin_optin';
+
+// Tears down the region and its background task. Module-level so the geofence
+// effect can call it without carrying it in a dep array.
+async function stopGeofence() {
+  const running = await Location.hasStartedGeofencingAsync(GEOFENCE_TASK).catch(() => false);
+  if (!running) return;
+  await Location.stopGeofencingAsync(GEOFENCE_TASK)
+    .catch(err => console.error('[GamedayScreen] stopGeofencing failed:', err));
+}
+
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function GamedayScreen() {
@@ -31,11 +42,13 @@ export default function GamedayScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const { events } = useEvents(activeTeamId);
+  const { events, loading } = useEvents(activeTeamId);
   const { members } = useMembers(activeTeamId);
 
   const [toast,          setToast]          = useState<string | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
+  const [autoCheckIn,    setAutoCheckIn]    = useState(false);
+  const [optInLoaded,    setOptInLoaded]    = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string) => {
@@ -56,45 +69,117 @@ export default function GamedayScreen() {
 
   const checkIns = useCheckIns(activeTeamId, todaysGame?.id ?? null);
 
-  // Start geofence when we have a game with venueCoords
+  // Primitives, not `todaysGame.venueCoords` — that object is a fresh identity on
+  // every useEvents snapshot, so keying the geofence effect on it re-armed the
+  // region and rewrote the AsyncStorage context on any event-collection change.
+  const gameId     = todaysGame?.id ?? null;
+  const venueLat   = todaysGame?.venueCoords?.lat ?? null;
+  const venueLng   = todaysGame?.venueCoords?.lng ?? null;
+  const uid        = user?.uid ?? null;
+  const myName     = user?.displayName ?? 'Player';
+
+  // Remembered opt-in, so the pre-prompt is only ever shown once.
   useEffect(() => {
-    const coords = todaysGame?.venueCoords;
-    const uid = user?.uid;
-    if (!todaysGame || !coords || !uid) return;
-
-    const gameId = todaysGame.id;
     (async () => {
-      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-      if (fgStatus !== 'granted') { setLocationDenied(true); return; }
+      try {
+        const stored = await AsyncStorage.getItem(AUTO_CHECKIN_KEY);
+        setAutoCheckIn(stored === 'true');
+      } catch (err) {
+        console.error('[GamedayScreen] auto check-in flag read failed:', err);
+      }
+      setOptInLoaded(true);
+    })();
+  }, []);
 
-      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+  // Geofence lifecycle. The region deliberately outlives this screen — background
+  // auto check-in has to keep working while the player drives to the rink with the
+  // app closed — so it is NOT torn down on unmount. It is torn down when there is
+  // no longer a game to watch for or the user has opted out, which is what left a
+  // 300m region and its background task running indefinitely after the game.
+  useEffect(() => {
+    if (!optInLoaded) return;
+
+    if (!autoCheckIn || !gameId || venueLat === null || venueLng === null || !uid) {
+      void stopGeofence();
+      return;
+    }
+
+    (async () => {
+      // Permissions are requested by the opt-in toggle, never here — asking for
+      // Always-Allow on mount with no user intent is a 5.1.1 rejection.
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
       if (bgStatus !== 'granted') { setLocationDenied(true); return; }
 
       await Promise.all([
         AsyncStorage.setItem('geofence_teamId',      activeTeamId),
         AsyncStorage.setItem('geofence_eventId',     gameId),
         AsyncStorage.setItem('geofence_userId',      uid),
-        AsyncStorage.setItem('geofence_displayName', user.displayName ?? 'Player'),
+        AsyncStorage.setItem('geofence_displayName', myName),
       ]);
 
       const alreadyRunning = await Location.hasStartedGeofencingAsync(GEOFENCE_TASK).catch(() => false);
       if (!alreadyRunning) {
         await Location.startGeofencingAsync(GEOFENCE_TASK, [{
-          latitude:   coords.lat,
-          longitude:  coords.lng,
+          latitude:   venueLat,
+          longitude:  venueLng,
           radius:     300,
           identifier: gameId,
         }]).catch(err => console.error('[GamedayScreen] startGeofencing failed:', err));
       }
     })();
-  }, [todaysGame?.id, todaysGame?.venueCoords, user?.uid, activeTeamId]);
+  }, [optInLoaded, autoCheckIn, gameId, venueLat, venueLng, uid, myName, activeTeamId]);
+
+  const handleAutoCheckInToggle = (value: boolean) => {
+    if (!value) {
+      setAutoCheckIn(false);
+      AsyncStorage.setItem(AUTO_CHECKIN_KEY, 'false')
+        .catch(err => console.error('[GamedayScreen] auto check-in flag write failed:', err));
+      return;
+    }
+    // Explain why before the OS dialog, and only escalate to background/Always
+    // once the user has actively asked for auto check-in.
+    Alert.alert(
+      'Auto check-in when you arrive?',
+      "Chrp will use your location in the background on gameday to check you in the moment you reach the rink, so your manager knows you're there without you opening the app.",
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: async () => {
+            const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+            if (fgStatus !== 'granted') { setLocationDenied(true); return; }
+
+            const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+            if (bgStatus !== 'granted') { setLocationDenied(true); return; }
+
+            setLocationDenied(false);
+            setAutoCheckIn(true);
+            try {
+              await AsyncStorage.setItem(AUTO_CHECKIN_KEY, 'true');
+            } catch (err) {
+              console.error('[GamedayScreen] auto check-in flag write failed:', err);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleManualCheckIn = async () => {
     if (!todaysGame || !user?.uid) return;
     try {
+      // userId/displayName must go in even though this merges: the response doc
+      // only pre-exists for members the auto-in batch covered, so for a spare or
+      // anyone with autoIn:false this is the doc's first write — and useCheckIns
+      // keys its map off data.userId.
       await setDoc(
         doc(db, 'teams', activeTeamId, 'events', todaysGame.id, 'responses', user.uid),
-        { status: 'here', checkedInAt: serverTimestamp() },
+        {
+          userId:      user.uid,
+          displayName: myName,
+          status:      'here',
+          checkedInAt: serverTimestamp(),
+        },
         { merge: true },
       );
       showToast("You're checked in!");
@@ -118,9 +203,11 @@ export default function GamedayScreen() {
   const notYet = nonSpares.filter(m => !checkIns[m.userId]);
   const myCheckIn = user?.uid ? checkIns[user.uid] : false;
 
-  // ── No game today ────────────────────────────────────────────────────────
+  // ── Loading / no game today ──────────────────────────────────────────────
+  // `loading` has to be checked first: while Firestore resolves, todaysGame is
+  // null and this screen used to claim "No game today" on an actual gameday.
 
-  if (!todaysGame) {
+  if (loading || !todaysGame) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.pageHeader}>
@@ -134,11 +221,14 @@ export default function GamedayScreen() {
           </Pressable>
           <Text style={styles.pageTitle}>Gameday</Text>
         </View>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>🏒</Text>
-          <Text style={styles.emptyTitle}>No game today</Text>
-          <Text style={styles.emptyBody}>Check the schedule for your next game.</Text>
-        </View>
+        {loading && <GamedaySkeleton />}
+        {!loading && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>🏒</Text>
+            <Text style={styles.emptyTitle}>No game today</Text>
+            <Text style={styles.emptyBody}>Check the schedule for your next game.</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -232,6 +322,23 @@ export default function GamedayScreen() {
           </Pressable>
         )}
 
+        {/* ── Auto check-in opt-in (manual "I'm here" works without it) ── */}
+        {venueLat !== null && venueLng !== null && (
+          <View style={styles.autoRow}>
+            <View style={styles.autoLeft}>
+              <Text style={styles.autoLabel}>📍  Auto check-in</Text>
+              <Text style={styles.autoSub}>Check me in when I get to the rink</Text>
+            </View>
+            <Switch
+              value={autoCheckIn}
+              onValueChange={handleAutoCheckInToggle}
+              trackColor={{ false: navy[600], true: TEAM[500] }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={navy[600]}
+            />
+          </View>
+        )}
+
         {/* ── Here ── */}
         <SectionHeader label="Here" count={here.length} pulse />
         {here.length > 0 ? (
@@ -309,6 +416,24 @@ export default function GamedayScreen() {
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║  Sub-components                                                          ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
+
+function GamedaySkeleton() {
+  return (
+    <View style={{ paddingHorizontal: spacing[16], paddingTop: spacing[4], gap: spacing[12] }}>
+      <View style={{ height: 132, borderRadius: radius.xxl, backgroundColor: navy[700] }} />
+      <View style={{ height: 50, borderRadius: radius.l, backgroundColor: navy[700] }} />
+      {[1, 2, 3].map(i => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[12], paddingVertical: spacing[10] }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: navy[600] }} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <View style={{ width: '55%', height: 14, borderRadius: radius.s, backgroundColor: navy[600] }} />
+            <View style={{ width: '25%', height: 12, borderRadius: radius.s, backgroundColor: navy[600] }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function SectionHeader({
   label, count, pulse, rightAction,
@@ -555,6 +680,35 @@ const styles = StyleSheet.create({
   checkInBtnText: {
     fontFamily: fonts.uiSemiBold,
     fontSize: 16,
+  },
+
+  // ── Auto check-in row ─────────────────────────────────────────────────────
+  autoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: spacing[16],
+    marginTop: spacing[12],
+    paddingHorizontal: spacing[16],
+    paddingVertical: spacing[12],
+    backgroundColor: navy[700],
+    borderRadius: radius.l,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  autoLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  autoLabel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: navy[100],
+  },
+  autoSub: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: navy[400],
   },
 
   // ── Section header ────────────────────────────────────────────────────────

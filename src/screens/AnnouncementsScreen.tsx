@@ -5,7 +5,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput, Switch,
-  Modal, KeyboardAvoidingView, Platform, StyleSheet,
+  Modal, KeyboardAvoidingView, Platform, Alert, StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -84,8 +84,13 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
   const [postVisible, setPostVisible]   = useState(false);
   const [editingId, setEditingId]       = useState<string | null>(null);
   const [actionItem, setActionItem]     = useState<DisplayAnn | null>(null);
+  const [posting, setPosting]           = useState(false);
   const [toast, setToast]               = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // `posting` alone cannot guard the submit: it is read from the render closure
+  // and setPosting is async, so two taps landing in the same render both pass the
+  // check and fire two addDoc calls. This ref is read and set synchronously.
+  const savingRef = useRef(false);
 
   const showToast = (msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -97,12 +102,39 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     ? announcements.find(a => a.id === editingId) ?? null
     : null;
 
+  // TODO Phase 2b: move to Firebase Cloud Function for reliability
+  const notifyTeam = async (authorName: string, body: string) => {
+    try {
+      const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+      const preview = body.length > 100 ? body.slice(0, 97) + '...' : body;
+      for (const memberDoc of membersSnap.docs) {
+        const m = memberDoc.data() as Member;
+        if (m.pushToken) {
+          sendPushNotification(
+            m.pushToken,
+            `${authorName} posted an announcement`,
+            preview,
+          ).catch(console.error);
+        }
+      }
+    } catch (err) {
+      // The announcement is already saved, so a failed fan-out must not read as
+      // a failed post.
+      console.error('[AnnouncementsScreen] push fan-out failed:', err);
+    }
+  };
+
   const handlePost = async (body: string, isPinned: boolean) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setPosting(true);
     try {
       if (editingId) {
         await updateDoc(doc(db, 'teams', activeTeamId, 'announcements', editingId), {
           body, pinned: isPinned,
         });
+        setPostVisible(false);
+        setEditingId(null);
         showToast('Announcement updated');
       } else {
         const authorName = user?.displayName ?? 'Manager';
@@ -113,26 +145,20 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
           pinned: isPinned,
           createdAt: serverTimestamp(),
         });
-        // TODO Phase 2b: move to Firebase Cloud Function for reliability
-        const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
-        const preview = body.length > 100 ? body.slice(0, 97) + '...' : body;
-        for (const memberDoc of membersSnap.docs) {
-          const m = memberDoc.data() as Member;
-          if (m.pushToken) {
-            sendPushNotification(
-              m.pushToken,
-              `${authorName} posted an announcement`,
-              preview,
-            ).catch(console.error);
-          }
-        }
+        // The post exists the moment addDoc resolves — close the sheet and clear
+        // the draft here, not after a serial push fan-out that takes seconds on a
+        // full roster and left the send button live the whole time.
+        setPostVisible(false);
+        setEditingId(null);
         showToast('Sent to all players');
+        void notifyTeam(authorName, body);
       }
-      setPostVisible(false);
-      setEditingId(null);
     } catch (err) {
       console.error('[AnnouncementsScreen] handlePost failed:', err);
       showToast('Something went wrong');
+    } finally {
+      savingRef.current = false;
+      setPosting(false);
     }
   };
 
@@ -143,16 +169,30 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     setPostVisible(true);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!actionItem) return;
-    try {
-      await deleteDoc(doc(db, 'teams', activeTeamId, 'announcements', actionItem.id));
-      setActionItem(null);
-      showToast('Announcement deleted');
-    } catch (err) {
-      console.error('[AnnouncementsScreen] handleDelete failed:', err);
-      showToast('Something went wrong');
-    }
+    const target = actionItem;
+    Alert.alert(
+      'Delete this announcement?',
+      'Players will no longer see it, and its replies go with it.',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'teams', activeTeamId, 'announcements', target.id));
+              setActionItem(null);
+              showToast('Announcement deleted');
+            } catch (err) {
+              console.error('[AnnouncementsScreen] handleDelete failed:', err);
+              showToast('Something went wrong');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const openPost = () => {
@@ -218,6 +258,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
         mode={editingId ? 'edit' : 'post'}
         initialBody={editingAnnouncement?.body ?? ''}
         initialPinned={editingAnnouncement?.isPinned ?? false}
+        submitting={posting}
         onSubmit={handlePost}
         onClose={() => { setPostVisible(false); setEditingId(null); }}
       />
@@ -367,12 +408,13 @@ function AnnouncementCard({
 // ─── Post sheet ───────────────────────────────────────────────────────────────
 
 function PostSheet({
-  visible, mode, initialBody, initialPinned, onSubmit, onClose,
+  visible, mode, initialBody, initialPinned, submitting, onSubmit, onClose,
 }: {
   visible: boolean;
   mode: 'post' | 'edit';
   initialBody: string;
   initialPinned: boolean;
+  submitting: boolean;
   onSubmit: (body: string, pinned: boolean) => void;
   onClose: () => void;
 }) {
@@ -390,7 +432,7 @@ function PostSheet({
   }, [visible]);
 
   const remaining = MAX_CHARS - body.length;
-  const canSubmit = body.trim().length > 0;
+  const canSubmit = body.trim().length > 0 && !submitting;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -444,10 +486,13 @@ function PostSheet({
                   !canSubmit && styles.sendBtnDisabled,
                   pressed && canSubmit && { opacity: 0.8 },
                 ]}
+                disabled={!canSubmit}
                 onPress={() => canSubmit && onSubmit(body.trim(), pinned)}
               >
                 <Text style={[styles.sendBtnText, { color: TEAM.on }]}>
-                  {mode === 'edit' ? 'Save changes' : 'Send to all players'}
+                  {submitting
+                    ? (mode === 'edit' ? 'Saving…' : 'Sending…')
+                    : mode === 'edit' ? 'Save changes' : 'Send to all players'}
                 </Text>
               </Pressable>
             </View>

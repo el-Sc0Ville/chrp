@@ -120,20 +120,46 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   };
 
   const removePlayer = async (id: string) => {
-    const wasManager = roster.find(p => p.id === id)?.role === 'manager';
-    setRoster(prev => prev.filter(p => p.id !== id));
-    setActionPlayer(null);
-    try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, 'teams', activeTeamId, 'members', id));
-      batch.delete(doc(db, 'users', id, 'teams', activeTeamId));
-      if (wasManager) {
-        batch.update(doc(db, 'teams', activeTeamId), { managerIds: arrayRemove(id) });
-      }
-      await batch.commit();
-    } catch (err) {
-      console.error('[Roster] removePlayer failed:', err);
-    }
+    const target = roster.find(p => p.id === id);
+    if (!target) return;
+    const wasManager = target.role === 'manager';
+
+    Alert.alert(
+      `Remove ${target.name}?`,
+      'They lose access to the team and stop getting notifications. They can rejoin with an invite code.',
+      [
+        { text: 'Keep on team', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const snapshot = roster;
+            setRoster(prev => prev.filter(p => p.id !== id));
+            setActionPlayer(null);
+            try {
+              const batch = writeBatch(db);
+              batch.delete(doc(db, 'teams', activeTeamId, 'members', id));
+              // Clears the player's own membership pointer. This is a cross-user
+              // write, so it needs the manager-delete rule on
+              // /users/{userId}/teams/{teamId} — without it the whole batch was
+              // denied and, batches being atomic, the member doc survived too
+              // while the UI showed the row as gone.
+              batch.delete(doc(db, 'users', id, 'teams', activeTeamId));
+              if (wasManager) {
+                batch.update(doc(db, 'teams', activeTeamId), { managerIds: arrayRemove(id) });
+              }
+              await batch.commit();
+            } catch (err) {
+              console.error('[Roster] removePlayer failed:', err);
+              // Put the row back rather than leaving the roster showing a
+              // removal that did not happen.
+              setRoster(snapshot);
+              Alert.alert('Could not remove player', 'Something went wrong. Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const mainRoster   = roster.filter(p => p.role !== 'spare');

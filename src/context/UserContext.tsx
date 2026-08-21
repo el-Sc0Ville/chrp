@@ -20,8 +20,12 @@ const UserContext = createContext<UserContextValue | null>(null);
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user,      setUser]      = useState<User | null>(null);
   const [isManager, setIsManager] = useState(false);
-  // TODO Phase 2b: populate user's teams from Firestore on real login
-  const [activeTeamId,      setActiveTeamId]      = useState('trashdogs');
+  // Empty until a real team is resolved from Firestore after sign-in. This used
+  // to default to the literal 'trashdogs', so on every cold start (and forever,
+  // if the teams lookup failed) every hook subscribed to teams/trashdogs/** —
+  // paths the rules deny, which surfaced as a plausible-looking empty app rather
+  // than an error. Every hook already no-ops on an empty teamId.
+  const [activeTeamId,      setActiveTeamId]      = useState('');
   const [activeTeamPalette, setActiveTeamPalette] = useState<TeamKey>('trashdogs');
   const [needsOnboarding, setNeedsOnboarding]     = useState<boolean | undefined>(undefined);
 

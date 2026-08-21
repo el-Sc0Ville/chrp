@@ -3,10 +3,9 @@ import {
   View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDocs, query, collection, where, limit } from 'firebase/firestore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
-import { db } from '../../firebase';
+import { resolveInviteCode } from '../../firebase/invites';
 import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'JoinOrCreate'>;
@@ -26,21 +25,18 @@ export default function JoinOrCreateScreen({ navigation, route }: Props) {
     setCodeLoading(true);
     setCodeError(null);
     try {
-      const snap = await getDocs(
-        query(collection(db, 'teams'), where('inviteCode', '==', upper), limit(1)),
-      );
-      if (snap.empty) {
+      const target = await resolveInviteCode(upper);
+      if (!target) {
         setCodeError("That invite code doesn't look right. Check with your team manager.");
         return;
       }
-      const teamDoc = snap.docs[0];
-      const data    = teamDoc.data();
       navigation.navigate('JoinTeam', {
         displayName,
         jerseyNumber,
-        teamId:      teamDoc.id,
-        teamName:    data['name'] as string,
-        teamPalette: (data['palette'] ?? 'trashdogs') as TeamKey,
+        inviteCode:  upper,
+        teamId:      target.teamId,
+        teamName:    target.teamName,
+        teamPalette: target.palette,
       });
     } catch (err) {
       console.error('[JoinOrCreate] invite lookup failed:', err);

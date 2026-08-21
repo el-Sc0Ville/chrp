@@ -7,18 +7,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, signal, spacing, radius } from '../theme';
-import { signInAnonymously } from 'firebase/auth';
-import { getDocs, query, collection, where, limit } from 'firebase/firestore';
+import { signInAnonymously, signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase/config';
-import { db } from '../firebase';
 import { sendMagicLink } from '../firebase/auth';
+import { resolveInviteCode } from '../firebase/invites';
 import { useUserContext } from '../context/UserContext';
 import { seedDatabase, updateMemberDefaults } from '../firebase/seed';
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { setMockUser, activeTeamPalette } = useUserContext();
+  const { setMockUser, setNeedsOnboarding, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const [email,       setEmail]       = useState('');
   const [loading,     setLoading]     = useState(false);
@@ -55,28 +54,37 @@ export default function AuthScreen() {
     if (upper.length < 6 || redeemLoading) return;
     setRedeemLoading(true);
     setRedeemError(null);
+    // The code lookup requires an authenticated caller, so sign in BEFORE
+    // resolving. Track whether this call created the session, so an invalid
+    // code can be rolled back instead of leaving the user signed in with no team.
+    let signedInHere = false;
     try {
-      console.log('Looking up invite code:', inviteCode);
-      const snap = await getDocs(
-        query(collection(db, 'teams'), where('inviteCode', '==', upper), limit(1)),
-      );
-      console.log('Query result:', snap.docs.length);
-      if (snap.empty) {
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+        signedInHere = true;
+      }
+      const target = await resolveInviteCode(upper);
+      if (!target) {
         setRedeemError("That invite code doesn't look right. Check with your team manager.");
+        if (signedInHere) await signOut(auth).catch(() => {});
         return;
       }
-      const teamDoc  = snap.docs[0];
-      const teamData = teamDoc.data();
       // Save invite context so WelcomeScreen can skip ahead to ProfileSetup
-      await AsyncStorage.setItem('chrp_pending_invite_code',    upper);
-      await AsyncStorage.setItem('chrp_pending_team_id',        teamDoc.id);
-      await AsyncStorage.setItem('chrp_pending_team_name',      teamData['name'] as string);
-      await AsyncStorage.setItem('chrp_pending_team_palette',   (teamData['palette'] as string) ?? 'trashdogs');
-      // Sign in anonymously — onAuthStateChanged detects pending invite and sets needsOnboarding
-      await signInAnonymously(auth);
+      await AsyncStorage.multiSet([
+        ['chrp_pending_invite_code',  upper],
+        ['chrp_pending_team_id',      target.teamId],
+        ['chrp_pending_team_name',    target.teamName],
+        ['chrp_pending_team_palette', target.palette],
+      ]);
+      // Drive onboarding directly instead of waiting on onAuthStateChanged:
+      // that listener already ran for this sign-in, before the pending invite
+      // was stored, so it would never see it.
+      setMockUser(auth.currentUser, false);
+      setNeedsOnboarding(true);
     } catch (err) {
       console.error('[AuthScreen] redeem error:', err);
       setRedeemError('Something went wrong. Please try again.');
+      if (signedInHere) await signOut(auth).catch(() => {});
     } finally {
       setRedeemLoading(false);
     }

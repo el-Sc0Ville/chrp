@@ -151,10 +151,33 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         return b
     }
 
+    /// Expo's push service delivers the `data` object nested under a top-level
+    /// "body" key for REMOTE notifications, and leaves it flat for locally
+    /// scheduled ones — see EXNotificationSerializer.m in expo-notifications:
+    ///   `return isRemote ? request.content.userInfo[@"body"] : ...userInfo;`
+    ///
+    /// Reading userInfo directly therefore yielded nothing on every real push:
+    /// eventId/teamId/userId all arrived empty, recordAvailability rejected the
+    /// request with 400, and the old code discarded the response and reported
+    /// success anyway. That is why tapping In/Out/Maybe never recorded anything.
+    private static func dataPayload(from userInfo: [AnyHashable: Any]) -> [AnyHashable: Any] {
+        if let nested = userInfo["body"] as? [AnyHashable: Any] {
+            return nested
+        }
+        // Some senders stringify the payload — accept that too rather than
+        // silently falling back to an empty read.
+        if let raw = userInfo["body"] as? String,
+           let data = raw.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [AnyHashable: Any] {
+            return parsed
+        }
+        return userInfo
+    }
+
     // MARK: - UNNotificationContentExtension
     func didReceive(_ notification: UNNotification) {
         let content = notification.request.content
-        let info    = content.userInfo
+        let info    = Self.dataPayload(from: content.userInfo)
 
         eventId     = info["eventId"]     as? String ?? ""
         teamId      = info["teamId"]      as? String ?? ""

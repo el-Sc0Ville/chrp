@@ -8,6 +8,7 @@ import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { db, auth } from '../../firebase';
+import { publishInviteCode } from '../../firebase/invites';
 import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'CreateTeam'>;
@@ -62,6 +63,11 @@ export default function CreateTeamScreen({ navigation, route }: Props) {
         inviteCode,
         createdAt: serverTimestamp(),
       });
+
+      // Publish the code -> team lookup entry. Without this nobody can redeem
+      // the invite code: joining is done by reading /inviteCodes/{CODE}, since
+      // a not-yet-member cannot query /teams.
+      await publishInviteCode(inviteCode, teamId, name, palette);
 
       await setDoc(doc(db, 'users', user.uid, 'teams', teamId), {
         teamId,

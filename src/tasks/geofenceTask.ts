@@ -31,9 +31,18 @@ TaskManager.defineTask<GeofencingTaskData>(GEOFENCE_TASK, async ({ data, error }
     return;
   }
 
+  // userId/displayName must be written even on a merge: the response doc only
+  // pre-exists for members the auto-in batch covered, so for a spare or anyone
+  // with autoIn:false this is the doc's first write — and useCheckIns keys its
+  // map off data.userId.
   await setDoc(
     doc(db, 'teams', teamId, 'events', eventId, 'responses', userId),
-    { status: 'here', checkedInAt: serverTimestamp() },
+    {
+      userId,
+      displayName: displayName ?? 'Player',
+      status:      'here',
+      checkedInAt: serverTimestamp(),
+    },
     { merge: true },
   ).catch(err => console.error('[GeofenceTask] check-in setDoc failed:', err));
 

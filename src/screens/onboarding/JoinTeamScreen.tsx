@@ -15,7 +15,7 @@ type Props = NativeStackScreenProps<OnboardingStackParamList, 'JoinTeam'>;
 
 export default function JoinTeamScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { displayName, jerseyNumber, teamId, teamName, teamPalette } = route.params;
+  const { displayName, jerseyNumber, inviteCode, teamId, teamName, teamPalette } = route.params;
   const TEAM = teams[teamPalette];
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +37,9 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
         role:        'player',
         email:       user.email ?? '',
         autoIn:      true,
+        // Recorded so the security rules can confirm this join was backed by a
+        // real invite code for this team. Knowing a teamId alone is not enough.
+        inviteCode,
         joinedAt:    serverTimestamp(),
       });
 

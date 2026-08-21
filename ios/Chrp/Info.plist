@@ -52,8 +52,16 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Chrp checks you in automatically when you arrive at the venue, even if the app isn't open, so your team knows you made it.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Chrp uses your location to automatically check you in when you arrive at the venue.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>location</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

@@ -1,5 +1,11 @@
 // Deploy with: firebase deploy --only functions
 import * as admin from 'firebase-admin';
+// Imported directly rather than reached through the legacy `admin.firestore.*`
+// namespace: the Functions emulator patches firebase-admin in a way that leaves
+// admin.firestore.FieldValue undefined, so every write here threw locally even
+// though it works when deployed. Using the modular entry point makes the
+// emulator usable and drops the dependency on the legacy namespace.
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
@@ -111,8 +117,8 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
         .collection('teams')
         .doc(teamId)
         .collection('events')
-        .where('startsAt', '>=', admin.firestore.Timestamp.fromDate(windowStart))
-        .where('startsAt', '<=', admin.firestore.Timestamp.fromDate(windowEnd))
+        .where('startsAt', '>=', Timestamp.fromDate(windowStart))
+        .where('startsAt', '<=', Timestamp.fromDate(windowEnd))
         .get();
 
       for (const eventDoc of eventsSnap.docs) {
@@ -249,7 +255,7 @@ export const recordAvailability = onRequest(
           userId,
           displayName: displayName ?? '',
           response,
-          respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+          respondedAt: FieldValue.serverTimestamp(),
           setByManager: false,
         });
       res.status(200).json({ success: true });
