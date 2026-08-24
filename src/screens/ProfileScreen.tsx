@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { updateProfile } from 'firebase/auth';
+import { signOut } from '../firebase/auth';
 import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import * as RNIap from 'react-native-iap';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
@@ -37,7 +38,7 @@ function getInitials(n: string): string {
 type ProfileNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const { user, isManager, activeTeamId, activeTeamPalette, setActiveTeamId, setNeedsOnboarding } = useUserContext();
+  const { user, isManager, activeTeamId, activeTeamPalette, setActiveTeamId, setMockUser, setNeedsOnboarding } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<ProfileNavProp>();
@@ -190,6 +191,32 @@ export default function ProfileScreen() {
       updateDoc(doc(db, 'teams', activeTeamId, 'members', user.uid), { locationEnabled: false })
         .catch(err => console.error('[ProfileScreen] locationEnabled update failed:', err));
     }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign out?',
+      "You'll need a new sign-in link to get back in. Your team and availability stay as they are.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Clear local context first so no screen keeps listening to a team
+              // this session can no longer read.
+              setActiveTeamId('');
+              setMockUser(null, false);
+              await signOut();
+            } catch (err) {
+              console.error('[ProfileScreen] sign out failed:', err);
+              Alert.alert('Could not sign out', 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleLeaveTeam = () => {
@@ -435,6 +462,17 @@ export default function ProfileScreen() {
               </View>
             </View>
             <Text style={styles.rowChevron}>›</Text>
+          </Pressable>
+        </View>
+
+        {/* ── Account ── */}
+        <Text style={styles.sectionLabel}>Account</Text>
+        <View style={styles.card}>
+          <Pressable
+            style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.75 }]}
+            onPress={handleSignOut}
+          >
+            <Text style={styles.signOutBtnText}>Sign out</Text>
           </Pressable>
         </View>
 
@@ -1123,6 +1161,16 @@ const styles = StyleSheet.create({
     height: 0.5,
     backgroundColor: navy[600],
     marginLeft: spacing[16],
+  },
+
+  signOutBtn: {
+    paddingVertical: spacing[16],
+    alignItems: 'center',
+  },
+  signOutBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 15,
+    color: navy[100],
   },
 
   // ── Leave team ────────────────────────────────────────────────────────────

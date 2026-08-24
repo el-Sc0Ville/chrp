@@ -9,6 +9,10 @@ export interface Team {
   palette: TeamKey;
   managerIds: string[];
   inviteCode?: string;
+  // IANA zone (e.g. 'America/Toronto'), captured from the manager's device.
+  // Cloud Functions run in UTC, so notification times need the team's own zone
+  // to read correctly.
+  timeZone?: string;
   createdAt: Timestamp;
 }
 

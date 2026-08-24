@@ -13,6 +13,7 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { useUserContext } from '../context/UserContext';
 import ErrorState from '../components/ErrorState';
 import { publishInviteCode } from '../firebase/invites';
+import { deviceTimeZone } from './onboarding/CreateTeamScreen';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useTeam } from '../firebase/hooks/useTeam';
 import type { Member } from '../firebase/schema';
@@ -42,6 +43,15 @@ function toRosterPlayer(m: Member): RosterPlayer {
     role: m.role,
     trend: [null, null, null, null, null],
   };
+}
+
+// A bare code is useless to a QR scanner — it hands the phone a meaningless
+// string, which is why scanning produced a web search. Encode the hosted join
+// link instead: /join?code= is served by web/join.html, which bounces to
+// chrp://join?code=, and App.tsx already stores that as a pending invite. Anyone
+// without the app installed still lands on a readable page.
+function joinLink(code: string): string {
+  return `https://chrp-app.web.app/join?code=${encodeURIComponent(code)}`;
 }
 
 // ─── Root export ──────────────────────────────────────────────────────────────
@@ -85,6 +95,15 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
     publishInviteCode(inviteCode, activeTeamId, team.name, activeTeamPalette)
       .catch(err => console.error('[Roster] invite code publish failed:', err));
   }, [inviteCode, activeTeamId, team?.name, activeTeamPalette]);
+
+  // Same idea for the team's timezone: notification times are formatted
+  // server-side in UTC, so a team created before this field existed would have
+  // its pushes read hours off. Backfill it once from the manager's device.
+  useEffect(() => {
+    if (!activeTeamId || !team || team.timeZone) return;
+    updateDoc(doc(db, 'teams', activeTeamId), { timeZone: deviceTimeZone() })
+      .catch(err => console.error('[Roster] timeZone backfill failed:', err));
+  }, [activeTeamId, team?.timeZone]);
 
   const makeManager = async (id: string) => {
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'manager' as PlayerRole } : p));
@@ -492,7 +511,7 @@ function InviteSheet({
   const handleShareInvite = async () => {
     try {
       const result = await Share.share({
-        message: `Join my team on Chrp! Use invite code: ${inviteCode}`,
+        message: `Join my team on Chrp!\n\n${joinLink(inviteCode)}\n\nOr enter code ${inviteCode} in the app.`,
       });
       if (result.action === Share.dismissedAction) return;
     } catch (err) {
@@ -545,7 +564,7 @@ function InviteSheet({
 
           {showQR && inviteCode ? (
             <Image
-              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteCode)}` }}
+              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinLink(inviteCode))}` }}
               style={styles.qrImage}
             />
           ) : null}

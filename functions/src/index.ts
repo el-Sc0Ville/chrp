@@ -14,18 +14,28 @@ import fetch from 'node-fetch';
 admin.initializeApp();
 const db = admin.firestore();
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Cloud Functions run in UTC, so getDay()/getHours() rendered a 7 PM Eastern
+// game as "11 PM" in every notification — including the "Tomorrow at X"
+// reminders, which is exactly the kind of thing that makes people miss games.
+// Format in the team's own zone instead.
+const DEFAULT_TIME_ZONE = 'America/Toronto';
 
-function formatDate(date: Date): string {
-  return `${DAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
+function formatDate(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', timeZone,
+  }).format(date);
 }
 
-function formatTime(date: Date): string {
-  const h = date.getHours() % 12 || 12;
-  const m = date.getMinutes();
-  const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
-  return m === 0 ? `${h} ${ampm}` : `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+function formatTime(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone,
+  }).formatToParts(date);
+  const pick = (t: string) => parts.find(p => p.type === t)?.value ?? '';
+  const minute = pick('minute') || '00';
+  // Keep the existing shape: "7 PM" on the hour, "7:30 PM" otherwise.
+  return minute === '00'
+    ? `${pick('hour')} ${pick('dayPeriod')}`
+    : `${pick('hour')}:${minute} ${pick('dayPeriod')}`;
 }
 
 const PALETTE_HEX: Record<string, string> = {
@@ -108,6 +118,7 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
     const teamData = teamDoc.data();
     const teamName: string = teamData['name'] ?? 'Your Team';
     const teamColor: string = PALETTE_HEX[teamData['palette']] ?? '#2540D6';
+    const teamTimeZone: string = teamData['timeZone'] ?? DEFAULT_TIME_ZONE;
 
     for (const window of REMINDER_WINDOWS) {
       const windowStart = new Date(now.getTime() + window.startHours * 60 * 60 * 1000);
@@ -133,8 +144,8 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
         ]);
 
         const respondedIds = new Set(responsesSnap.docs.map(d => d.id));
-        const dateLabel = formatDate(eventDate);
-        const timeLabel = formatTime(eventDate);
+        const dateLabel = formatDate(eventDate, teamTimeZone);
+        const timeLabel = formatTime(eventDate, teamTimeZone);
         const eventDateStr = `${dateLabel} · ${timeLabel}`;
         const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue']);
 
@@ -186,10 +197,11 @@ export const onEventCreated = onDocumentCreated(
     const teamData = teamDoc.data() ?? {};
     const teamName: string = teamData['name'] ?? 'Your Team';
     const teamColor: string = PALETTE_HEX[teamData['palette']] ?? '#2540D6';
+    const teamTimeZone: string = teamData['timeZone'] ?? DEFAULT_TIME_ZONE;
 
     const eventDate = eventData['startsAt'].toDate();
-    const dateLabel = formatDate(eventDate);
-    const timeLabel = formatTime(eventDate);
+    const dateLabel = formatDate(eventDate, teamTimeZone);
+    const timeLabel = formatTime(eventDate, teamTimeZone);
     const eventDateStr = `${dateLabel} · ${timeLabel}`;
 
     const notifications: ExpoMessage[] = [];
@@ -244,6 +256,30 @@ export const recordAvailability = onRequest(
     }
 
     try {
+      // This endpoint is unauthenticated — the notification extension cannot
+      // carry a Firebase token — so verify the target is a real member of the
+      // team before writing. Without this, any request with three plausible
+      // ids could create availability records for people who do not exist.
+      const memberSnap = await db
+        .collection('teams').doc(teamId)
+        .collection('members').doc(userId)
+        .get();
+
+      if (!memberSnap.exists) {
+        res.status(404).send('Not a member of this team');
+        return;
+      }
+
+      const eventSnap = await db
+        .collection('teams').doc(teamId)
+        .collection('events').doc(eventId)
+        .get();
+
+      if (!eventSnap.exists) {
+        res.status(404).send('Event not found');
+        return;
+      }
+
       await db
         .collection('teams')
         .doc(teamId)
@@ -253,7 +289,9 @@ export const recordAvailability = onRequest(
         .doc(userId)
         .set({
           userId,
-          displayName: displayName ?? '',
+          // Prefer the roster's own name over whatever the caller sent, so a
+          // spoofed displayName cannot land in the team's availability list.
+          displayName: (memberSnap.data()?.['displayName'] as string) || displayName || '',
           response,
           respondedAt: FieldValue.serverTimestamp(),
           setByManager: false,

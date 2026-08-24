@@ -12,6 +12,16 @@ import { publishInviteCode } from '../../firebase/invites';
 import { navy, fonts, teams, spacing, radius, type TeamKey } from '../../theme';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'CreateTeam'>;
+// Falls back rather than throwing: Hermes exposes Intl, but an unresolvable
+// zone should never block team creation.
+export function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Toronto';
+  } catch {
+    return 'America/Toronto';
+  }
+}
+
 
 const SPORTS = ['Hockey', 'Soccer', 'Basketball', 'Baseball', 'Other'] as const;
 
@@ -61,6 +71,9 @@ export default function CreateTeamScreen({ navigation, route }: Props) {
         palette,
         managerIds: [user.uid],
         inviteCode,
+        // Notification times are formatted server-side, where the clock is UTC.
+        // Capture the manager's zone so pushes read in the team's local time.
+        timeZone: deviceTimeZone(),
         createdAt: serverTimestamp(),
       });
 

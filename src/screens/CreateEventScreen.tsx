@@ -462,8 +462,16 @@ export default function CreateEventScreen() {
                 onNotFound={() => console.warn('[CreateEvent] Places: no results for query')}
                 onTimeout={() => console.warn('[CreateEvent] Places: request timed out')}
                 onPress={(data, details) => {
-                  const address = data.description;
-                  setVenue(address);
+                  // Save the place's own name, not Google's full description.
+                  // description splices in address components that are sometimes
+                  // recorded in another script entirely — a Montreal arena comes
+                  // back as "Dollard Civic Centre Arena, 쌀라베히 가 Dollard-Des
+                  // Ormeaux, QC" even with language=en, because that street name
+                  // is contributed in Korean. main_text is clean, and a venue
+                  // name is what belongs on a schedule card anyway; the precise
+                  // location already lives in venueCoords.
+                  const name = data.structured_formatting?.main_text || data.description;
+                  setVenue(name);
                   if (details?.geometry?.location) {
                     setVenueCoords({
                       lat: details.geometry.location.lat,
