@@ -22,6 +22,7 @@ import type { Member, Event as FirestoreEvent } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { useUserContext } from '../context/UserContext';
 import { useEvents } from '../firebase/hooks/useEvents';
 
@@ -217,6 +218,7 @@ export default function CreateEventScreen() {
           venueCoords: venueCoords ?? deleteField(),
           notes:       notesValue || deleteField(),
         });
+        haptics.success();
         navigation.goBack();
         return;
       }
@@ -229,6 +231,7 @@ export default function CreateEventScreen() {
         createdAt: serverTimestamp(),
       });
 
+      haptics.success();
       navigation.goBack();
 
       // Auto-in runs after navigation so the form is never blocked by it.
@@ -276,6 +279,7 @@ export default function CreateEventScreen() {
           // this. Swallowing it into console.error is how a permission failure
           // here stayed invisible while the UI promised the team was notified.
           console.error('[CreateEvent] auto-in failed:', err);
+          haptics.warning();
           Alert.alert(
             'Event saved',
             "Couldn't pre-fill the team's availability. Everyone can still reply from the event.",
@@ -284,6 +288,7 @@ export default function CreateEventScreen() {
       })();
     } catch (err) {
       console.error('[CreateEvent] write failed:', err);
+      haptics.error();
       Alert.alert('Couldn\'t save event', 'Something went wrong. Please try again.');
     } finally {
       savingRef.current = false;

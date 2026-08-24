@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { doc, addDoc, updateDoc, deleteDoc, getDocs, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { sendPushNotification } from '../firebase/sendNotification';
 import type { Announcement as FirestoreAnnouncement, Member } from '../firebase/schema';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
@@ -136,6 +137,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
         });
         setPostVisible(false);
         setEditingId(null);
+        haptics.success();
         showToast('Announcement updated');
       } else {
         const authorName = user?.displayName ?? 'Manager';
@@ -151,11 +153,13 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
         // full roster and left the send button live the whole time.
         setPostVisible(false);
         setEditingId(null);
+        haptics.success();
         showToast('Sent to all players');
         void notifyTeam(authorName, body);
       }
     } catch (err) {
       console.error('[AnnouncementsScreen] handlePost failed:', err);
+      haptics.error();
       showToast('Something went wrong');
     } finally {
       savingRef.current = false;
@@ -185,9 +189,11 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
             try {
               await deleteDoc(doc(db, 'teams', activeTeamId, 'announcements', target.id));
               setActionItem(null);
+              haptics.success();
               showToast('Announcement deleted');
             } catch (err) {
               console.error('[AnnouncementsScreen] handleDelete failed:', err);
+              haptics.error();
               showToast('Something went wrong');
             }
           },

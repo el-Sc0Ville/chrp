@@ -12,6 +12,7 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import ErrorState from '../components/ErrorState';
@@ -123,9 +124,11 @@ function ManagerDuesScreen({ embedded }: { embedded?: boolean }) {
         }
         await batch.commit();
       }
+      haptics.success();
       showToast(`Dues set to $${amount}/player`);
     } catch (err) {
       console.error('[DuesScreen] setAmount batch failed:', err);
+      haptics.error();
       showToast('Something went wrong');
     }
   };
@@ -577,6 +580,7 @@ function PlayerEditSheet({
   const handleSave = async () => {
     if (savingRef.current) return;
     if (!Number.isFinite(owed) || !Number.isFinite(paid) || owed < 0 || paid < 0) {
+      haptics.warning();
       setError('Enter amounts of $0 or more');
       return;
     }
@@ -600,9 +604,11 @@ function PlayerEditSheet({
         dueDate:      dueDate !== null ? Timestamp.fromDate(dueDate) : deleteField(),
         ...(paid > 0 && { lastPaymentAt: serverTimestamp() }),
       });
+      haptics.success();
       onSave('Payment record updated');
     } catch (err) {
       console.error('[DuesScreen] save failed:', err);
+      haptics.error();
       setError('Could not save — please try again');
       savingRef.current = false;
       setSaving(false);

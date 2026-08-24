@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import {
   useNotifications,
@@ -191,9 +192,11 @@ export default function NotificationCentreScreen() {
               gameVenue,
               gameTime:        subNotif.time,
             });
+            haptics.success();
             showToast('Request sent to manager');
           } catch (err) {
             console.error('[NotificationCentre] sub request write failed:', err);
+            haptics.error();
             showToast("Couldn't send your request. Please try again.");
           }
         }}
@@ -268,7 +271,7 @@ function AvailabilityCard({
                     : styles.respBtnGhost,
                   pressed && !isActive && { opacity: 0.7 },
                 ]}
-                onPress={() => onRespond(opt.id)}
+                onPress={() => { haptics.selection(); onRespond(opt.id); }}
               >
                 <Text style={[styles.respGlyph, { color: isActive ? opt.on : 'rgba(255,255,255,0.55)' }]}>
                   {opt.glyph}

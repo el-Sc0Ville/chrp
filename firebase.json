@@ -21,6 +21,10 @@
       {
         "source": "/join",
         "destination": "/join.html"
+      },
+      {
+        "source": "/privacy",
+        "destination": "/privacy.html"
       }
     ]
   }

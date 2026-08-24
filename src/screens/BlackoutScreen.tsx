@@ -9,6 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { navy, teams, fonts, spacing, radius } from '../theme';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { useUserContext } from '../context/UserContext';
 import ErrorState from '../components/ErrorState';
 import { useBlackouts } from '../firebase/hooks/useBlackouts';
@@ -70,6 +71,7 @@ export default function BlackoutScreen() {
   const months = useMemo(() => buildMonths(today), [today]);
 
   const toggleDate = (date: Date) => {
+    haptics.tapLight();
     const ymd = toYMD(date);
     setSelected(prev => {
       const next = new Set(prev);

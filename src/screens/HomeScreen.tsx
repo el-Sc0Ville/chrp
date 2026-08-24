@@ -16,6 +16,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { sendPushNotification } from '../firebase/sendNotification';
 import { useUserContext } from '../context/UserContext';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { useEvents } from '../firebase/hooks/useEvents';
 import { useTeam } from '../firebase/hooks/useTeam';
 import { useResponses } from '../firebase/hooks/useResponses';
@@ -127,6 +128,7 @@ function ManagerHomeScreen() {
         { eventId: activeEvent.id, teamId: activeTeamId, userId: m.userId, displayName: m.displayName, categoryId: 'AVAILABILITY_REQUEST' },
       ).catch(err => console.error('[HomeScreen] remind push failed for', m.userId, err));
     }
+    haptics.success();
     showToast(`Reminded ${targets.length} player${targets.length !== 1 ? 's' : ''}`);
   };
 
@@ -523,6 +525,7 @@ function PlayerHomeScreen() {
       return;
     }
     setSubSheetVisible(false);
+    haptics.success();
     showToast('Request sent to manager');
     const d = activeEvent.startsAt.toDate();
     const h = d.getHours();
@@ -895,7 +898,7 @@ function InOutMaybeToggle({ response, onRespond }: {
           <Pressable
             key={opt.id}
             style={styles.toggleSegment}
-            onPress={() => onRespond(opt.id)}
+            onPress={() => { haptics.selection(); onRespond(opt.id); }}
             android_ripple={{ color: 'rgba(255,255,255,0.1)', borderless: true }}
           >
             <View style={[

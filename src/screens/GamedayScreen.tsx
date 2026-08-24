@@ -19,6 +19,7 @@ import { useEvents } from '../firebase/hooks/useEvents';
 import { useMembers } from '../firebase/hooks/useMembers';
 import { useCheckIns } from '../firebase/hooks/useCheckIns';
 import { db } from '../firebase/config';
+import * as haptics from '../lib/haptics';
 import { GEOFENCE_TASK } from '../tasks/geofenceTask';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
@@ -185,9 +186,11 @@ export default function GamedayScreen() {
         },
         { merge: true },
       );
+      haptics.success();
       showToast("You're checked in!");
     } catch (err) {
       console.error('[GamedayScreen] manual check-in failed:', err);
+      haptics.error();
       showToast('Something went wrong');
     }
   };

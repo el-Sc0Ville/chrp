@@ -13,6 +13,7 @@ import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { doc, setDoc, updateDoc, addDoc, getDocs, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { sendPushNotification } from '../firebase/sendNotification';
 import type { Member } from '../firebase/schema';
 import { useUserContext } from '../context/UserContext';
@@ -373,6 +374,7 @@ function PlayerEventDetail() {
   const handleSubRequest = async () => {
     if (!event || !uid || uid === 'anon') return;
     setSubSheetVisible(false);
+    haptics.success();
     showToast('Request sent to manager');
     const d = event.startsAt.toDate();
     const h = d.getHours();
@@ -939,7 +941,7 @@ function InOutMaybeToggle({
           <Pressable
             key={opt.id}
             style={styles.toggleSegment}
-            onPress={() => onRespond(opt.id)}
+            onPress={() => { haptics.selection(); onRespond(opt.id); }}
             android_ripple={{ color: 'rgba(255,255,255,0.10)', borderless: true }}
           >
             <View style={[

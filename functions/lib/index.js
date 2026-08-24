@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
+exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
 // Imported directly rather than reached through the legacy `admin.firestore.*`
@@ -332,5 +332,80 @@ exports.onSubRequestCreated = (0, firestore_2.onDocumentCreated)({ document: 'te
     }
     console.log('[onSubRequestCreated] sending', notifications.length, 'notifications');
     await sendBatchNotifications(notifications);
+});
+// Apple requires any app offering account creation to offer in-app account
+// deletion (App Review Guideline 5.1.1(v)). The cascade cannot run on the
+// client: our rules deliberately stop a user touching other members' documents,
+// and nobody can delete their own Firebase Auth record's server-side data.
+//
+// onCall rather than onRequest so the caller's identity comes from the verified
+// ID token — an unauthenticated endpoint that deletes accounts would be a gift
+// to anyone who learned a uid.
+exports.deleteAccount = (0, https_1.onCall)({ region: 'northamerica-northeast1' }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+        throw new https_1.HttpsError('unauthenticated', 'Sign in to delete your account.');
+    }
+    const userTeamsSnap = await db.collection('users').doc(uid).collection('teams').get();
+    const teamIds = userTeamsSnap.docs.map(d => d.id);
+    // Pass 1 — decide what happens to each team, and refuse the whole operation
+    // before deleting anything if any team would be left without a manager.
+    const teamsToDelete = [];
+    const teamsToLeave = [];
+    const blockedBy = [];
+    for (const teamId of teamIds) {
+        const membersSnap = await db.collection('teams').doc(teamId).collection('members').get();
+        const me = membersSnap.docs.find(d => d.id === uid);
+        if (!me)
+            continue; // stale pointer; cleaned up below
+        const others = membersSnap.docs.filter(d => d.id !== uid);
+        if (others.length === 0) {
+            // Last person out turns off the lights.
+            teamsToDelete.push(teamId);
+            continue;
+        }
+        const iAmManager = me.data()['role'] === 'manager';
+        const anotherManager = others.some(d => d.data()['role'] === 'manager');
+        if (iAmManager && !anotherManager) {
+            const teamDoc = await db.collection('teams').doc(teamId).get();
+            blockedBy.push(teamDoc.data()?.['name'] || 'your team');
+            continue;
+        }
+        teamsToLeave.push(teamId);
+    }
+    if (blockedBy.length > 0) {
+        // failed-precondition so the client can tell this apart from a real error
+        // and show the team names rather than a generic failure.
+        throw new https_1.HttpsError('failed-precondition', 'Promote another manager first.', { teams: blockedBy });
+    }
+    // Pass 2 — carry it out. Nothing above has mutated anything yet.
+    for (const teamId of teamsToDelete) {
+        const teamRef = db.collection('teams').doc(teamId);
+        const teamDoc = await teamRef.get();
+        const inviteCode = teamDoc.data()?.['inviteCode'];
+        if (inviteCode) {
+            await db.collection('inviteCodes').doc(inviteCode).delete().catch(() => { });
+        }
+        // recursiveDelete clears every subcollection: members (and their
+        // blackouts), events (and their responses), announcements (and replies),
+        // subRequests, dues.
+        await db.recursiveDelete(teamRef);
+    }
+    for (const teamId of teamsToLeave) {
+        // Their member doc, which carries their blackouts underneath it.
+        await db.recursiveDelete(db.collection('teams').doc(teamId).collection('members').doc(uid));
+        await db.collection('teams').doc(teamId).collection('dues').doc(uid).delete().catch(() => { });
+        await db.collection('teams').doc(teamId).update({ managerIds: firestore_1.FieldValue.arrayRemove(uid) })
+            .catch(() => { }); // team may not track managerIds
+        // Their availability on every event.
+        const eventsSnap = await db.collection('teams').doc(teamId).collection('events').get();
+        for (const eventDoc of eventsSnap.docs) {
+            await eventDoc.ref.collection('responses').doc(uid).delete().catch(() => { });
+        }
+    }
+    // Their own profile tree, then the auth record itself.
+    await db.recursiveDelete(db.collection('users').doc(uid));
+    await admin.auth().deleteUser(uid);
+    return { deletedTeams: teamsToDelete.length, leftTeams: teamsToLeave.length };
 });
 //# sourceMappingURL=index.js.map

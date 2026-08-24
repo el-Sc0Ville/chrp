@@ -10,6 +10,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { doc, collection, addDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import type { Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import { useReplies } from '../firebase/hooks/useReplies';
@@ -106,6 +107,7 @@ export default function AnnouncementThreadScreen() {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
     } catch (err) {
       console.error('[AnnouncementThread] reply write failed:', err);
+      haptics.error();
       Alert.alert("Couldn't send reply", 'Your reply is still here. Please try again.');
     } finally {
       sendingRef.current = false;

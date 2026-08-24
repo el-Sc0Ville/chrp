@@ -13,10 +13,12 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { updateProfile } from 'firebase/auth';
 import { signOut } from '../firebase/auth';
+import { deleteAccount, ManagerHandoverRequired } from '../firebase/deleteAccount';
 import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import * as RNIap from 'react-native-iap';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { auth, db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { useUserContext } from '../context/UserContext';
 import { useBlackouts } from '../firebase/hooks/useBlackouts';
 import { useDues } from '../firebase/hooks/useDues';
@@ -55,6 +57,7 @@ export default function ProfileScreen() {
 
   // Tip jar
   const [tipJarVisible, setTipJarVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Settings toggles
   const [notifications, setNotifications] = useState(true);
@@ -126,6 +129,7 @@ export default function ProfileScreen() {
     setSavedJersey(cleanJersey);
     setIsEditingName(false);
     setIsEditingJersey(false);
+    haptics.success();
     showToast('Saved!');
     if (!user?.uid || !activeTeamId) return;
     try {
@@ -193,6 +197,62 @@ export default function ProfileScreen() {
     }
   };
 
+  // Apple requires in-app account deletion for any app with account creation
+  // (Guideline 5.1.1(v)). Two-step on purpose: this is unrecoverable.
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently removes your profile, your availability history, and your membership in every team. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you sure?',
+              'There is no way to recover this account or its data.',
+              [
+                { text: 'Keep my account', style: 'cancel' },
+                {
+                  text: 'Delete forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    if (deleting) return;
+                    setDeleting(true);
+                    try {
+                      await deleteAccount();
+                      haptics.success();
+                      // The auth record is gone; drop local state so nothing
+                      // keeps listening with a dead session.
+                      setActiveTeamId('');
+                      setMockUser(null, false);
+                      await signOut().catch(() => {});
+                    } catch (err) {
+                      haptics.error();
+                      if (err instanceof ManagerHandoverRequired) {
+                        const list = err.teams.join(', ');
+                        Alert.alert(
+                          'Promote another manager first',
+                          `You are the only manager of ${list}. Make someone else a manager from the roster, then delete your account.`,
+                        );
+                      } else {
+                        console.error('[ProfileScreen] delete account failed:', err);
+                        Alert.alert('Could not delete account', 'Something went wrong. Please try again.');
+                      }
+                    } finally {
+                      setDeleting(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   const handleSignOut = () => {
     Alert.alert(
       'Sign out?',
@@ -211,6 +271,7 @@ export default function ProfileScreen() {
               await signOut();
             } catch (err) {
               console.error('[ProfileScreen] sign out failed:', err);
+              haptics.error();
               Alert.alert('Could not sign out', 'Please try again.');
             }
           },
@@ -242,6 +303,7 @@ export default function ProfileScreen() {
               setNeedsOnboarding(true);
             } catch (err) {
               console.error('[ProfileScreen] leave team failed:', err);
+              haptics.error();
               Alert.alert('Error', 'Could not leave the team. Please try again.');
             }
           },
@@ -485,6 +547,16 @@ export default function ProfileScreen() {
           >
             <Text style={styles.leaveBtnText}>Leave team</Text>
           </Pressable>
+          <View style={styles.dangerDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.leaveBtn, pressed && { opacity: 0.75 }]}
+            onPress={handleDeleteAccount}
+            disabled={deleting}
+          >
+            {deleting
+              ? <ActivityIndicator color={status.error.pure} />
+              : <Text style={styles.leaveBtnText}>Delete account</Text>}
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -666,6 +738,7 @@ function TipJarSheet({
       if (!isMounted) return;
       setPurchasing(null);
       onDismiss();
+      haptics.success();
       showToastRef.current('Thank you for supporting Chrp! 🙏');
     });
 
@@ -673,6 +746,7 @@ function TipJarSheet({
       if (!isMounted) return;
       setPurchasing(null);
       if (error.code !== RNIap.ErrorCode.UserCancelled) {
+        haptics.error();
         showToastRef.current('Purchase failed — please try again');
       }
     });
@@ -1174,6 +1248,11 @@ const styles = StyleSheet.create({
   },
 
   // ── Leave team ────────────────────────────────────────────────────────────
+  dangerDivider: {
+    height: 0.5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: spacing[16],
+  },
   leaveBtn: {
     paddingVertical: spacing[16],
     alignItems: 'center',

@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { addDoc, collection, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
+import * as haptics from '../lib/haptics';
 import { useUserContext } from '../context/UserContext';
 import ErrorState from '../components/ErrorState';
 import { useSubRequests } from '../firebase/hooks/useSubRequests';
@@ -63,6 +64,12 @@ interface UpcomingEvent {
   venue: string;
   time: string;
   myResponse: 'out' | null;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function firstName(n: string): string {
+  return n.trim().split(' ')[0];
 }
 
 // ─── Member → Spare mapper ────────────────────────────────────────────────────
@@ -174,7 +181,8 @@ function ManagerSubsScreen() {
         invitedName:    spare.name,
         invitedAt:      serverTimestamp(),
       });
-      showToast(`Invite sent to ${spare.name.split(' ')[0]}`);
+      haptics.success();
+      showToast(`Invite sent to ${firstName(spare.name)}`);
       if (spare.pushToken) {
         const body = `${target.gameWeekday} ${target.gameDay} ${target.gameMonth} · ${target.venue}`;
         sendPushNotification(
@@ -191,7 +199,26 @@ function ManagerSubsScreen() {
         next.delete(key);
         return next;
       });
+      haptics.error();
       showToast("Couldn't send that invite. Please try again.");
+    }
+  };
+
+  // The only path that fills a request. Everything up to here is an invite the
+  // spare has not answered, so nothing before this may claim the game is covered.
+  const handleConfirm = async (target: SubRequest) => {
+    if (target.invitedSpareId == null || target.invitedName == null) return;
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'subRequests', target.id), {
+        status:   'filled',
+        filledBy: target.invitedName,
+      });
+      haptics.success();
+      showToast(`${firstName(target.invitedName)} is confirmed`);
+    } catch (err) {
+      console.error('[SubsScreen] confirm write failed:', err);
+      haptics.error();
+      showToast("Couldn't confirm that spare. Please try again.");
     }
   };
 
@@ -249,7 +276,11 @@ function ManagerSubsScreen() {
             {openRequests.map((req, idx) => (
               <React.Fragment key={req.id}>
                 {idx > 0 && <View style={styles.rowDivider} />}
-                <ManagerRequestRow request={req} onFindSub={() => setFindSubId(req.id)} />
+                <ManagerRequestRow
+                  request={req}
+                  onFindSub={() => setFindSubId(req.id)}
+                  onConfirm={() => handleConfirm(req)}
+                />
               </React.Fragment>
             ))}
           </View>
@@ -305,7 +336,11 @@ function ManagerSubsScreen() {
 
 // ─── Manager sub-components ───────────────────────────────────────────────────
 
-function ManagerRequestRow({ request, onFindSub }: { request: SubRequest; onFindSub: () => void }) {
+function ManagerRequestRow({ request, onFindSub, onConfirm }: {
+  request: SubRequest;
+  onFindSub: () => void;
+  onConfirm: () => void;
+}) {
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   return (
@@ -336,17 +371,37 @@ function ManagerRequestRow({ request, onFindSub }: { request: SubRequest; onFind
           )}
         </View>
       </View>
-      <Pressable
-        style={({ pressed }) => [styles.findSubBtn, {
-          backgroundColor: TEAM[500],
-          shadowColor: TEAM[500],
-        }, pressed && { opacity: 0.8 }]}
-        onPress={onFindSub}
-      >
-        <Text style={[styles.findSubBtnText, { color: TEAM.on }]}>
-          {request.invitedName != null ? 'Invite another' : 'Find a sub'}
-        </Text>
-      </Pressable>
+      {request.invitedName != null ? (
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [styles.confirmBtn, pressed && { opacity: 0.75 }]}
+            onPress={onConfirm}
+          >
+            <Text style={styles.confirmBtnText} numberOfLines={1}>
+              Confirm {firstName(request.invitedName)} is playing
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.inviteAnotherBtn, {
+              borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.55)`,
+              backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.12)`,
+            }, pressed && { opacity: 0.75 }]}
+            onPress={onFindSub}
+          >
+            <Text style={[styles.inviteAnotherBtnText, { color: TEAM[300] }]}>Another</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.findSubBtn, {
+            backgroundColor: TEAM[500],
+            shadowColor: TEAM[500],
+          }, pressed && { opacity: 0.8 }]}
+          onPress={onFindSub}
+        >
+          <Text style={[styles.findSubBtnText, { color: TEAM.on }]}>Find a sub</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -472,14 +527,24 @@ function PlayerSubsScreen() {
 
   const handleSubmitRequest = async () => {
     if (!requestTarget) return;
+    // The rules bind requestedBy to the caller's uid, so the old 'anon'
+    // fallback wrote a doc that could only ever be rejected. Bail instead.
+    const uid = user?.uid;
+    if (!uid) {
+      console.warn('[SubsScreen] cannot submit sub request: user.uid is undefined');
+      haptics.error();
+      showToast("You're not signed in. Please try again.");
+      return;
+    }
     const reason = noteText.trim() || undefined;
     setNoteText('');
     setRequestTarget(null);
+    haptics.success();
     showToast('Request sent to your manager');
     try {
       await addDoc(collection(db, 'teams', activeTeamId, 'subRequests'), {
         eventId:         requestTarget.id,
-        requestedBy:     user?.uid ?? 'anon',
+        requestedBy:     uid,
         requestedByName: user?.displayName ?? 'Player',
         reason:          reason ?? null,
         status:          'pending',
@@ -493,6 +558,8 @@ function PlayerSubsScreen() {
       });
     } catch (err) {
       console.error('[SubsScreen] sub request write failed:', err);
+      haptics.error();
+      showToast("Couldn't send that request. Please try again.");
     }
   };
 
@@ -910,6 +977,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: TEAM.on,
+  },
+
+  // ── Awaiting-reply actions (confirm / invite another) ─────────────────────
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[8],
+  },
+  confirmBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(statusColors.success.pure)}, 0.40)`,
+    backgroundColor: statusColors.success.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[10],
+  },
+  confirmBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 13,
+    fontWeight: '600',
+    color: statusColors.success.pure,
+  },
+  inviteAnotherBtn: {
+    height: 40,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[14],
+    flexShrink: 0,
+  },
+  inviteAnotherBtnText: {
+    fontFamily: fonts.uiSemiBold,
+    fontSize: 13,
+    color: TEAM[300],
   },
 
   // ── Filled requests (collapsed toggle) ───────────────────────────────────
