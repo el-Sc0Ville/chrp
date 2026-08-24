@@ -511,20 +511,24 @@ export default function ProfileScreen() {
             value={location}
             onValueChange={handleLocationToggle}
           />
-          <View style={styles.rowDivider} />
-          <Pressable
-            style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
-            onPress={() => setTipJarVisible(true)}
-          >
-            <View style={styles.toggleLeft}>
-              <Text style={styles.toggleIcon}>❤️</Text>
-              <View style={styles.toggleTextBlock}>
-                <Text style={styles.toggleLabel}>Support Chrp</Text>
-                <Text style={styles.toggleSubtitle}>Free, forever</Text>
-              </View>
-            </View>
-            <Text style={styles.rowChevron}>›</Text>
-          </Pressable>
+          {TIPS_ENABLED && (
+            <>
+              <View style={styles.rowDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
+                onPress={() => setTipJarVisible(true)}
+              >
+                <View style={styles.toggleLeft}>
+                  <Text style={styles.toggleIcon}>❤️</Text>
+                  <View style={styles.toggleTextBlock}>
+                    <Text style={styles.toggleLabel}>Support Chrp</Text>
+                    <Text style={styles.toggleSubtitle}>Free, forever</Text>
+                  </View>
+                </View>
+                <Text style={styles.rowChevron}>›</Text>
+              </Pressable>
+            </>
+          )}
         </View>
 
         {/* ── Account ── */}
@@ -560,11 +564,13 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      <TipJarSheet
-        visible={tipJarVisible}
-        onDismiss={() => setTipJarVisible(false)}
-        showToast={showToast}
-      />
+      {TIPS_ENABLED && (
+        <TipJarSheet
+          visible={tipJarVisible}
+          onDismiss={() => setTipJarVisible(false)}
+          showToast={showToast}
+        />
+      )}
 
       {/* ── Toast ── */}
       {toast !== null && (
@@ -686,6 +692,14 @@ function RolePill({ role, teamPalette }: { role: 'manager' | 'player' | 'spare';
 }
 
 // ─── Tip jar sheet ────────────────────────────────────────────────────────────
+
+// Tips are off for v1. The consumables cannot be approved until the Paid
+// Applications agreement and banking details are in place, and a "Support Chrp"
+// row that always reports itself unavailable is a poor first impression — and a
+// question App Review will ask. The implementation below is complete and
+// untouched: flip this to true once the agreement is signed and the products
+// are approved, and ship it in a point release.
+export const TIPS_ENABLED = false;
 
 const TIP_SKUS = [
   'com.chrp.app.tip.small',
