@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -380,18 +380,26 @@ function AppStack() {
     }
   }, [setMockUser, setNeedsOnboarding, setActiveTeamId, setActiveTeamPalette]);
 
+  // Held in a ref so the subscription below can be created exactly once. If the
+  // effect depended on resolveSession directly, any change to its identity would
+  // tear down and re-create the listener — and onAuthStateChanged fires
+  // immediately on subscribe, which sets state, which renders, which can change
+  // the identity again. That loop is what made the launch screen flicker.
+  const resolveSessionRef = useRef(resolveSession);
+  useEffect(() => { resolveSessionRef.current = resolveSession; }, [resolveSession]);
+
   useEffect(() => {
     return onAuthStateChanged(async (u) => {
       setFirebaseUser(u);
       setBootError(false);
       try {
-        await resolveSession(u);
+        await resolveSessionRef.current(u);
       } catch (err) {
         console.error('[Auth] could not resolve session:', err);
         setBootError(true);
       }
     });
-  }, [resolveSession]);
+  }, []);
 
   const retryBoot = useCallback(async () => {
     setBootError(false);
