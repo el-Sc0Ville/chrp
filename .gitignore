@@ -55,3 +55,6 @@ ui-debug.log
 *.ipa
 *.cer
 build.log
+
+# Firebase deploy cache
+.firebase/

@@ -6,6 +6,7 @@ import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { db, auth } from '../../firebase';
@@ -50,6 +51,15 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
         role:      'player',
         joinedAt:  serverTimestamp(),
       });
+
+      // Now the membership exists, the pending invite has served its purpose.
+      // Clearing it earlier meant an abandoned onboarding destroyed the code.
+      await AsyncStorage.multiRemove([
+        'chrp_pending_invite_code',
+        'chrp_pending_team_id',
+        'chrp_pending_team_name',
+        'chrp_pending_team_palette',
+      ]).catch(() => {});
 
       navigation.navigate('OnboardingComplete', {
         teamId,

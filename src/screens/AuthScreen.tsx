@@ -126,8 +126,8 @@ export default function AuthScreen() {
 
         {/* ── Sign-in card ── */}
         <View style={styles.card}>
-          {!sent && <Text style={styles.cardLabel}>Sign in</Text>}
-          {!sent && (
+          {!sent && !showInvite && <Text style={styles.cardLabel}>Sign in</Text>}
+          {!sent && !showInvite && (
             <TextInput
               style={styles.input}
               value={email}
@@ -141,10 +141,10 @@ export default function AuthScreen() {
               onSubmitEditing={handleSend}
             />
           )}
-          {!sent && error !== null && (
+          {!sent && !showInvite && error !== null && (
             <Text style={styles.errorText}>{error}</Text>
           )}
-          {!sent && (
+          {!sent && !showInvite && (
             <Pressable
               style={({ pressed }) => [
                 styles.sendBtn,
@@ -192,7 +192,9 @@ export default function AuthScreen() {
               ]}
               onPress={() => setShowInvite(v => !v)}
             >
-              <Text style={[styles.joinBtnText, { color: TEAM[300] }]}>Join a team instead</Text>
+              <Text style={[styles.joinBtnText, { color: TEAM[300] }]}>
+                {showInvite ? 'Sign in with email instead' : 'Join a team instead'}
+              </Text>
             </Pressable>
 
             {showInvite && (

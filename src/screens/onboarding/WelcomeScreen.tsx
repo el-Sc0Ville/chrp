@@ -25,7 +25,10 @@ export default function WelcomeScreen({ navigation }: Props) {
         .then(pairs => pairs.map(p => p[1]));
 
       if (code && teamId && teamName) {
-        await AsyncStorage.multiRemove([...INVITE_KEYS]);
+        // Deliberately NOT cleared here. Clearing on the way into onboarding
+        // meant abandoning it (or killing the app) destroyed the invite, and
+        // the next launch had an anonymous session with no code and no team.
+        // JoinTeamScreen clears these once the member doc is actually written.
         navigation.replace('ProfileSetup', {
           pendingInviteCode: code,
           teamId,

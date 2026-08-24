@@ -32,7 +32,7 @@ import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
 import { UserProvider, useUserContext } from '../context/UserContext';
 import { navy, teams, fonts, spacing, radius, type TeamKey } from '../theme';
-import { onAuthStateChanged, type User } from '../firebase/auth';
+import { onAuthStateChanged, signOut, type User } from '../firebase/auth';
 import { db, auth } from '../firebase';
 import { registerForPushNotifications } from '../firebase/notifications';
 
@@ -372,7 +372,17 @@ function AppStack() {
           setActiveTeamPalette(firstTeam.palette as TeamKey);
           setNeedsOnboarding(false);
         }
-        // If empty: dev bypass — AuthScreen's setMockUser handles context
+        else if (!__DEV__) {
+          // An anonymous session with no team and no pending invite is a dead
+          // end. Nothing sets needsOnboarding here, so the navigator falls
+          // through to the tabs and renders an empty shell — no team, no
+          // roster, and no route back to the sign-in screen. That is the state
+          // you land in after abandoning an invite part-way through.
+          // Discarding the session puts the user back on Auth, where they can
+          // request a link or redeem a code.
+          await signOut();
+        }
+        // In __DEV__ the AuthScreen bypass buttons drive the context directly.
       }
     } else if (!u) {
       setMockUser(null, false);
