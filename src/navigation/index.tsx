@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDocs, collection } from 'firebase/firestore';
+import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import AuthScreen from '../screens/AuthScreen';
@@ -323,6 +323,23 @@ function OnboardingNavigator() {
   );
 }
 
+// The manager UI was gated on users/{uid}/teams/{teamId}.role, but promoting
+// someone from the roster only writes teams/{teamId}/members/{uid}.role — and
+// the member document is also what the security rules enforce. So the two
+// disagreed: a newly promoted manager saw the player UI, and a demoted one kept
+// the manager UI until it hit permission errors. Read the member document, the
+// same source the rules use, and treat the user's team pointer as team
+// discovery only.
+async function resolveIsManager(teamId: string, uid: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(db, 'teams', teamId, 'members', uid));
+    return snap.data()?.role === 'manager';
+  } catch (err) {
+    console.error('[Auth] could not read member role:', err);
+    return false; // fail closed — never grant manager UI on an error
+  }
+}
+
 function AppStack() {
   const {
     user: mockUser,
@@ -347,8 +364,8 @@ function AppStack() {
       setNeedsOnboarding(snap.empty);
       if (!snap.empty) {
         // Returning user — restore their active team and manager status
-        const isManagerRole = snap.docs.some(d => d.data().role === 'manager');
         const firstTeam     = snap.docs[0].data();
+        const isManagerRole = await resolveIsManager(firstTeam.teamId as string, u.uid);
         setMockUser(u, isManagerRole);
         setActiveTeamId(firstTeam.teamId as string);
         setActiveTeamPalette(firstTeam.palette as TeamKey);
@@ -365,8 +382,8 @@ function AppStack() {
         // Check if this anonymous user already completed onboarding (returning invite user)
         const teamsSnap = await getDocs(collection(db, 'users', u.uid, 'teams'));
         if (!teamsSnap.empty) {
-          const isManagerRole = teamsSnap.docs.some(d => d.data().role === 'manager');
           const firstTeam = teamsSnap.docs[0].data();
+          const isManagerRole = await resolveIsManager(firstTeam.teamId as string, u.uid);
           setMockUser(u, isManagerRole);
           setActiveTeamId(firstTeam.teamId as string);
           setActiveTeamPalette(firstTeam.palette as TeamKey);
