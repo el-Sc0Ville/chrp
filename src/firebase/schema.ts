@@ -51,11 +51,17 @@ export interface Event {
   endsAt: Timestamp;
   recurring: boolean;
   status?: 'active' | 'cancelled';
+  // Optional note the manager gave when cancelling.
+  cancelReason?: string;
   scoreUs?: number;
   scoreThem?: number;
   notes?: string;
   createdBy: string;
   createdAt: Timestamp;
+  // Written only by the edit path, so an absent value means "never edited".
+  // Compared against a player's respondedAt to flag a response given against
+  // details that have since changed.
+  updatedAt?: Timestamp;
 }
 
 // /teams/{teamId}/events/{eventId}/responses/{userId}
@@ -101,6 +107,11 @@ export interface SubRequest {
   invitedSpareId?: string;
   invitedName?: string;
   invitedAt?: Timestamp;
+  // The invited spare's own answer, written straight from the notification.
+  // Separate from `status` so answering is not the same as being confirmed —
+  // the manager still decides, and a spare saying yes does not fill the slot.
+  spareResponse?: 'available' | 'unavailable';
+  spareRespondedAt?: Timestamp;
   filledBy?: string;
   createdAt: Timestamp;
   opponent: string;

@@ -61,7 +61,9 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
         'chrp_pending_team_palette',
       ]).catch(() => {});
 
-      navigation.navigate('OnboardingComplete', {
+      // Permission primers run here, once membership exists — they hand the
+      // same params on to OnboardingComplete.
+      navigation.navigate('NotificationPrimer', {
         teamId,
         teamName,
         palette:   teamPalette,

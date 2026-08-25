@@ -25,6 +25,8 @@ import ProfileSetupScreen from '../screens/onboarding/ProfileSetupScreen';
 import JoinOrCreateScreen from '../screens/onboarding/JoinOrCreateScreen';
 import JoinTeamScreen from '../screens/onboarding/JoinTeamScreen';
 import CreateTeamScreen from '../screens/onboarding/CreateTeamScreen';
+import NotificationPrimerScreen from '../screens/onboarding/NotificationPrimerScreen';
+import LocationPrimerScreen from '../screens/onboarding/LocationPrimerScreen';
 import OnboardingCompleteScreen from '../screens/onboarding/OnboardingCompleteScreen';
 
 import { GameResponseProvider } from '../context/GameResponseContext';
@@ -59,6 +61,10 @@ export type OnboardingStackParamList = {
   // just happening to know a teamId (which leaks via push payloads and links).
   JoinTeam: { displayName: string; jerseyNumber: number; inviteCode: string; teamId: string; teamName: string; teamPalette: TeamKey };
   CreateTeam: { displayName: string; jerseyNumber: number };
+  // The two permission primers sit between the team existing and onboarding
+  // finishing, and thread OnboardingComplete's params through untouched.
+  NotificationPrimer: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
+  LocationPrimer: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
   OnboardingComplete: { teamId: string; teamName: string; palette: TeamKey; isManager: boolean };
 };
 
@@ -318,6 +324,8 @@ function OnboardingNavigator() {
       <OnboardingStack.Screen name="JoinOrCreate"       component={JoinOrCreateScreen} />
       <OnboardingStack.Screen name="JoinTeam"           component={JoinTeamScreen} />
       <OnboardingStack.Screen name="CreateTeam"         component={CreateTeamScreen} />
+      <OnboardingStack.Screen name="NotificationPrimer" component={NotificationPrimerScreen} />
+      <OnboardingStack.Screen name="LocationPrimer"     component={LocationPrimerScreen} />
       <OnboardingStack.Screen name="OnboardingComplete" component={OnboardingCompleteScreen} />
     </OnboardingStack.Navigator>
   );

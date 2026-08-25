@@ -7,7 +7,7 @@ import * as admin from 'firebase-admin';
 // emulator usable and drops the dependency on the legacy namespace.
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import fetch from 'node-fetch';
 
@@ -438,5 +438,62 @@ export const deleteAccount = onCall(
     await admin.auth().deleteUser(uid);
 
     return { deletedTeams: teamsToDelete.length, leftTeams: teamsToLeave.length };
+  },
+);
+
+// When a manager invites a specific spare to cover a game, ask that spare
+// directly. Nothing notified them before — the manager invited someone and then
+// waited, with no way for the spare to know they had been asked.
+//
+// Note the separate category. The manager-facing notification above uses
+// SUB_REQUEST, which registers no action buttons; putting "I'm available" on
+// that category would have put those buttons on the manager's notification too.
+export const onSubSpareInvited = onDocumentUpdated(
+  { document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' },
+  async (event) => {
+    const { teamId, requestId } = event.params;
+    const before = event.data?.before.data();
+    const after  = event.data?.after.data();
+    if (!after) return;
+
+    const invitedId = after['invitedSpareId'] as string | undefined;
+    // Only fire when a NEW spare has just been invited. This trigger also runs
+    // when the spare answers and when the manager confirms, and neither of
+    // those should send another invitation.
+    if (!invitedId || invitedId === before?.['invitedSpareId']) return;
+
+    const spareDoc = await db
+      .collection('teams').doc(teamId)
+      .collection('members').doc(invitedId)
+      .get();
+    if (!spareDoc.exists) return;
+
+    const spare = spareDoc.data() ?? {};
+    if (!spare['pushToken']) return;
+    if (spare['notificationsEnabled'] === false) return;
+
+    const teamDoc  = await db.collection('teams').doc(teamId).get();
+    const teamData = teamDoc.data() ?? {};
+
+    const when  = [after['gameWeekday'], after['gameDay'], after['gameMonth']]
+      .filter(Boolean).join(' ');
+    const venue = after['gameVenue'] ? ` · ${after['gameVenue']}` : '';
+
+    await sendBatchNotifications([{
+      to: spare['pushToken'] as string,
+      sound: 'default',
+      title: `Sub needed — ${after['opponent'] ?? 'a game'}`,
+      body: `A teammate needs a replacement. Are you available?${when ? `\n${when}${venue}` : ''}`,
+      categoryId: 'SUB_OFFER',
+      data: {
+        eventId:     (after['eventId'] as string) ?? '',
+        teamId,
+        userId:      invitedId,
+        displayName: spare['displayName'] as string,
+        teamName:    (teamData['name'] as string) ?? 'Your Team',
+        teamColor:   PALETTE_HEX[teamData['palette']] ?? '#2540D6',
+        requestId,
+      },
+    }]);
   },
 );

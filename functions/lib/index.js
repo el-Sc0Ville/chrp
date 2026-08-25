@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
+exports.onSubSpareInvited = exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
 // Imported directly rather than reached through the legacy `admin.firestore.*`
@@ -407,5 +407,57 @@ exports.deleteAccount = (0, https_1.onCall)({ region: 'northamerica-northeast1' 
     await db.recursiveDelete(db.collection('users').doc(uid));
     await admin.auth().deleteUser(uid);
     return { deletedTeams: teamsToDelete.length, leftTeams: teamsToLeave.length };
+});
+// When a manager invites a specific spare to cover a game, ask that spare
+// directly. Nothing notified them before — the manager invited someone and then
+// waited, with no way for the spare to know they had been asked.
+//
+// Note the separate category. The manager-facing notification above uses
+// SUB_REQUEST, which registers no action buttons; putting "I'm available" on
+// that category would have put those buttons on the manager's notification too.
+exports.onSubSpareInvited = (0, firestore_2.onDocumentUpdated)({ document: 'teams/{teamId}/subRequests/{requestId}', region: 'northamerica-northeast1' }, async (event) => {
+    const { teamId, requestId } = event.params;
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after)
+        return;
+    const invitedId = after['invitedSpareId'];
+    // Only fire when a NEW spare has just been invited. This trigger also runs
+    // when the spare answers and when the manager confirms, and neither of
+    // those should send another invitation.
+    if (!invitedId || invitedId === before?.['invitedSpareId'])
+        return;
+    const spareDoc = await db
+        .collection('teams').doc(teamId)
+        .collection('members').doc(invitedId)
+        .get();
+    if (!spareDoc.exists)
+        return;
+    const spare = spareDoc.data() ?? {};
+    if (!spare['pushToken'])
+        return;
+    if (spare['notificationsEnabled'] === false)
+        return;
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    const teamData = teamDoc.data() ?? {};
+    const when = [after['gameWeekday'], after['gameDay'], after['gameMonth']]
+        .filter(Boolean).join(' ');
+    const venue = after['gameVenue'] ? ` · ${after['gameVenue']}` : '';
+    await sendBatchNotifications([{
+            to: spare['pushToken'],
+            sound: 'default',
+            title: `Sub needed — ${after['opponent'] ?? 'a game'}`,
+            body: `A teammate needs a replacement. Are you available?${when ? `\n${when}${venue}` : ''}`,
+            categoryId: 'SUB_OFFER',
+            data: {
+                eventId: after['eventId'] ?? '',
+                teamId,
+                userId: invitedId,
+                displayName: spare['displayName'],
+                teamName: teamData['name'] ?? 'Your Team',
+                teamColor: PALETTE_HEX[teamData['palette']] ?? '#2540D6',
+                requestId,
+            },
+        }]);
 });
 //# sourceMappingURL=index.js.map

@@ -44,6 +44,7 @@ interface SubRequest {
   status: SubStatus;
   invitedSpareId?: string;
   invitedName?: string;
+  spareResponse?: 'available' | 'unavailable';
   filledBy?: string;
 }
 
@@ -98,6 +99,7 @@ function toDisplaySubRequest(r: FirestoreSubRequest): SubRequest {
     opponent: r.opponent, venue: r.gameVenue, gameTime: r.gameTime,
     reason: r.reason, status: r.status,
     invitedSpareId: r.invitedSpareId, invitedName: r.invitedName,
+    spareResponse: r.spareResponse,
     filledBy: r.filledBy,
   };
 }
@@ -365,8 +367,22 @@ function ManagerRequestRow({ request, onFindSub, onConfirm }: {
             </Text>
           )}
           {request.invitedName != null && (
-            <Text style={styles.invitedNote} numberOfLines={1}>
-              Invited {request.invitedName} — awaiting reply
+            // The spare answers from the notification, so this is the only place
+            // the manager learns what they said. Saying "awaiting reply" after
+            // they have already answered would be worse than saying nothing.
+            <Text
+              style={[
+                styles.invitedNote,
+                request.spareResponse === 'available'   && { color: status.success.pure },
+                request.spareResponse === 'unavailable' && { color: status.error.pure },
+              ]}
+              numberOfLines={1}
+            >
+              {request.spareResponse === 'available'
+                ? `${request.invitedName} is available`
+                : request.spareResponse === 'unavailable'
+                  ? `${request.invitedName} can't make it`
+                  : `Invited ${request.invitedName} — awaiting reply`}
             </Text>
           )}
         </View>

@@ -67,9 +67,29 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
     teamId?: string;
     userId?: string;
     displayName?: string;
+    requestId?: string;
   };
 
   console.log('Notification response received:', actionIdentifier, data);
+
+  // An invited spare answering a sub request from the lock screen. Handled
+  // before the default-action branch because it must not open the app.
+  if (actionIdentifier === 'SUB_AVAILABLE' || actionIdentifier === 'SUB_UNAVAILABLE') {
+    if (!data.teamId || !data.requestId) {
+      console.warn('[Notification] sub offer missing teamId/requestId');
+      return;
+    }
+    await setDoc(
+      doc(db, 'teams', data.teamId, 'subRequests', data.requestId),
+      {
+        spareResponse: actionIdentifier === 'SUB_AVAILABLE' ? 'available' : 'unavailable',
+        spareRespondedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(err => console.error('[Notification] sub response write failed:', err));
+    console.log('[Notification] sub response written:', actionIdentifier);
+    return;
+  }
 
   // Tapping the notification body just opens the app — take the user straight
   // to the event. Availability itself is set from the notification content

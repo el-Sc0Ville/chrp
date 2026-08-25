@@ -28,6 +28,24 @@ Notifications.setNotificationHandler({
  */
 export async function registerNotificationCategories(): Promise<void> {
   await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', []);
+
+  // Separate category, and this one DOES carry buttons. No content extension is
+  // bound to SUB_OFFER, so these system action buttons are the only controls —
+  // there is nothing for them to duplicate. Keeping it apart from SUB_REQUEST
+  // matters: that category goes to managers, who should not be offered
+  // "I'm available" on a request they are only being told about.
+  await Notifications.setNotificationCategoryAsync('SUB_OFFER', [
+    {
+      identifier: 'SUB_AVAILABLE',
+      buttonTitle: "✓ I'm available",
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: 'SUB_UNAVAILABLE',
+      buttonTitle: "Can't make it",
+      options: { opensAppToForeground: false },
+    },
+  ]);
 }
 
 export async function registerForPushNotifications(

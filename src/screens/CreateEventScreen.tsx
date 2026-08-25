@@ -217,6 +217,10 @@ export default function CreateEventScreen() {
           ...core,
           venueCoords: venueCoords ?? deleteField(),
           notes:       notesValue || deleteField(),
+          // Only the edit path stamps this — an event that was never edited has
+          // no updatedAt at all, which is what the "updated after you responded"
+          // banner on B-03/C-03 tests for.
+          updatedAt:   serverTimestamp(),
         });
         haptics.success();
         navigation.goBack();

@@ -6,16 +6,17 @@ import {
   View, Text, ScrollView, Pressable, TouchableOpacity, Modal,
   TextInput, KeyboardAvoidingView, Platform, Linking, Alert, StyleSheet,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
-import { doc, setDoc, updateDoc, addDoc, getDocs, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, addDoc, getDocs, onSnapshot, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import * as haptics from '../lib/haptics';
 import { sendPushNotification } from '../firebase/sendNotification';
-import type { Member } from '../firebase/schema';
+import type { AvailabilityResponse, Member } from '../firebase/schema';
 import { useUserContext } from '../context/UserContext';
 import { scoreResult, type Score } from '../context/ScoreContext';
 import ErrorState from '../components/ErrorState';
@@ -27,6 +28,11 @@ import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
+// Per-event acknowledgement of the "updated after you responded" banner. The
+// stored value is the acknowledged event.updatedAt in millis, not a flag: a
+// later edit produces a different stamp, so the banner comes back on its own
+// while one key per event is all that ever accumulates.
+const UPDATE_ACK_PREFIX = 'chrp_event_update_ack_';
 
 type EventDetailRouteProp = RouteProp<RootStackParamList, 'EventDetail'>;
 type EventDetailNavProp   = NativeStackNavigationProp<RootStackParamList, 'EventDetail'>;
@@ -101,7 +107,13 @@ function ManagerEventDetail() {
   const { title: fallbackTitle, eventId, isPast = false } = route.params;
   const { user, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
-  const [scoreSheetVisible, setScoreSheetVisible] = useState(false);
+  const [scoreSheetVisible,  setScoreSheetVisible]  = useState(false);
+  const [cancelSheetVisible, setCancelSheetVisible] = useState(false);
+  const [cancelling,         setCancelling]         = useState(false);
+  // Same reason as savingRef in CreateEventScreen: `cancelling` is read from the
+  // render closure and setCancelling is async, so two taps in one render both
+  // pass the check and fire the cancel — and its pinned announcement — twice.
+  const cancellingRef = useRef(false);
 
   const handleSaveScore = async (s: Score) => {
     try {
@@ -117,50 +129,53 @@ function ManagerEventDetail() {
     navigation.navigate('CreateEvent', { editEventId: eventId });
   };
 
-  const handleCancelEvent = () => {
-    Alert.alert(
-      'Cancel this event?',
-      'All players will be notified.',
-      [
-        { text: 'Keep event', style: 'cancel' },
-        {
-          text: 'Cancel event',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await updateDoc(doc(db, 'teams', activeTeamId, 'events', eventId), {
-                status: 'cancelled',
-              });
-              if (event) {
-                const cancelBody = `🚫 ${event.title} on ${formatEventDate(event.startsAt)} has been cancelled.`;
-                await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
-                  body:       cancelBody,
-                  authorId:   user?.uid ?? 'manager',
-                  authorName: user?.displayName ?? 'Manager',
-                  pinned:     true,
-                  createdAt:  serverTimestamp(),
-                });
-                // TODO Phase 2b: move to Firebase Cloud Function for reliability
-                const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
-                for (const memberDoc of membersSnap.docs) {
-                  const m = memberDoc.data() as Member;
-                  if (m.pushToken) {
-                    sendPushNotification(
-                      m.pushToken,
-                      'Event cancelled',
-                      cancelBody,
-                    ).catch(console.error);
-                  }
-                }
-              }
-              navigation.goBack();
-            } catch (err) {
-              console.error('[EventDetail] cancel event failed:', err);
-            }
-          },
-        },
-      ],
-    );
+  const handleCancelEvent = async (reason: string) => {
+    if (cancellingRef.current) return;
+    cancellingRef.current = true;
+    setCancelling(true);
+    const reasonValue = reason.trim();
+    try {
+      await updateDoc(doc(db, 'teams', activeTeamId, 'events', eventId), {
+        status: 'cancelled',
+        // Omitted when blank rather than written as '' — nothing downstream
+        // should have to tell "no reason given" from "empty reason given".
+        ...(reasonValue ? { cancelReason: reasonValue } : {}),
+      });
+      if (event) {
+        const cancelBody = `🚫 ${event.title} on ${formatEventDate(event.startsAt)} has been cancelled.`
+          + (reasonValue ? ` Reason: ${reasonValue}` : '');
+        await addDoc(collection(db, 'teams', activeTeamId, 'announcements'), {
+          body:       cancelBody,
+          authorId:   user?.uid ?? 'manager',
+          authorName: user?.displayName ?? 'Manager',
+          pinned:     true,
+          createdAt:  serverTimestamp(),
+        });
+        // TODO Phase 2b: move to Firebase Cloud Function for reliability
+        const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+        for (const memberDoc of membersSnap.docs) {
+          const m = memberDoc.data() as Member;
+          if (m.pushToken) {
+            sendPushNotification(
+              m.pushToken,
+              'Event cancelled',
+              cancelBody,
+            ).catch(console.error);
+          }
+        }
+      }
+      haptics.warning();
+      setCancelSheetVisible(false);
+      navigation.goBack();
+    } catch (err) {
+      console.error('[EventDetail] cancel event failed:', err);
+      haptics.error();
+      Alert.alert("Couldn't cancel this game", 'Something went wrong. Please try again.');
+      // Only released on failure — on success the screen is already gone and
+      // the latch keeps a queued second tap from firing into the unmount.
+      cancellingRef.current = false;
+      setCancelling(false);
+    }
   };
 
   const { events, loading: eventsLoading, error: eventsError, retry: retryEvents } = useEvents(activeTeamId);
@@ -301,7 +316,7 @@ function ManagerEventDetail() {
           <View style={styles.footer}>
             <Pressable
               style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.75 }]}
-              onPress={handleCancelEvent}
+              onPress={() => setCancelSheetVisible(true)}
             >
               <Text style={styles.cancelBtnText}>Cancel event</Text>
             </Pressable>
@@ -320,6 +335,15 @@ function ManagerEventDetail() {
         player={editTarget?.player ?? null}
         onMark={markAs}
         onClose={() => setEditTarget(null)}
+      />
+      <CancelEventSheet
+        visible={cancelSheetVisible}
+        event={event}
+        fallbackTitle={fallbackTitle}
+        respondedCount={Object.keys(responses).length}
+        cancelling={cancelling}
+        onConfirm={handleCancelEvent}
+        onClose={() => { if (!cancellingRef.current) setCancelSheetVisible(false); }}
       />
     </View>
   );
@@ -349,6 +373,58 @@ function PlayerEventDetail() {
 
   const uid      = user?.uid ?? 'anon';
   const response: PlayerResponse = (firestoreResponses[uid] as PlayerResponse) ?? null;
+
+  // ── "Updated after you responded" banner ──────────────────────────────────
+  // useResponses only carries the response value, so this player's own doc is
+  // read directly for its respondedAt stamp. respondedAt can be null on a
+  // freshly written doc: the auto-in batch uses serverTimestamp(), which the
+  // local snapshot reports as null until the server round-trip lands.
+  const [respondedAt, setRespondedAt] = useState<Timestamp | null>(null);
+
+  useEffect(() => {
+    if (!activeTeamId || uid === 'anon') { setRespondedAt(null); return; }
+    return onSnapshot(
+      doc(db, 'teams', activeTeamId, 'events', eventId, 'responses', uid),
+      snap => {
+        const data = snap.data() as AvailabilityResponse | undefined;
+        setRespondedAt(data?.respondedAt ?? null);
+      },
+      err => console.error('[EventDetail] respondedAt listen failed:', err),
+    );
+  }, [activeTeamId, eventId, uid]);
+
+  // Both stamps are optional, so the banner stays hidden unless both exist:
+  // no response means there is nothing to review against, and no updatedAt
+  // means the event has never been edited.
+  const updatedAtMs   = event?.updatedAt?.toMillis() ?? null;
+  const respondedAtMs = respondedAt?.toMillis() ?? null;
+  const wasUpdatedAfterResponse =
+    updatedAtMs !== null && respondedAtMs !== null && updatedAtMs > respondedAtMs;
+
+  const [ackedUpdateAt, setAckedUpdateAt] = useState<string | null>(null);
+  const [ackLoaded,     setAckLoaded]     = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(`${UPDATE_ACK_PREFIX}${eventId}`)
+      .then(v => { if (!cancelled) setAckedUpdateAt(v); })
+      .catch(err => console.warn('[EventDetail] update ack read failed:', err))
+      // Held back until the read settles so a dismissed banner never flashes
+      // back in on every visit.
+      .finally(() => { if (!cancelled) setAckLoaded(true); });
+    return () => { cancelled = true; };
+  }, [eventId]);
+
+  const showUpdateBanner =
+    ackLoaded && wasUpdatedAfterResponse && ackedUpdateAt !== String(updatedAtMs);
+
+  const dismissUpdateBanner = () => {
+    if (updatedAtMs === null) return;
+    const stamp = String(updatedAtMs);
+    setAckedUpdateAt(stamp);
+    AsyncStorage.setItem(`${UPDATE_ACK_PREFIX}${eventId}`, stamp)
+      .catch(err => console.warn('[EventDetail] update ack write failed:', err));
+  };
 
   const availGroups = useMemo(() => {
     const g: Record<'in' | 'out' | 'maybe', Player[]> = { in: [], out: [], maybe: [] };
@@ -434,6 +510,8 @@ function PlayerEventDetail() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: spacing[48] }}
       >
+        {showUpdateBanner && <EventUpdatedBanner onDismiss={dismissUpdateBanner} />}
+
         <EventSummary event={event} fallbackTitle={fallbackTitle} />
 
         {!isPast && (
@@ -496,6 +574,31 @@ function PlayerEventDetail() {
 // ╔═══════════════════════════════════════════════════════════════════════════╗
 // ║  Shared components                                                       ║
 // ╚═══════════════════════════════════════════════════════════════════════════╝
+
+// ─── "Updated after you responded" banner ────────────────────────────────────
+
+function EventUpdatedBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <View style={styles.updateBanner}>
+      <Text style={styles.updateBannerGlyph}>⚠</Text>
+      <View style={styles.updateBannerCopy}>
+        <Text style={styles.updateBannerTitle}>
+          This event was updated after you responded.
+        </Text>
+        <Text style={styles.updateBannerBody}>
+          Review the new details — your response was kept the same.
+        </Text>
+      </View>
+      <Pressable
+        onPress={onDismiss}
+        hitSlop={10}
+        style={({ pressed }) => [styles.updateBannerAck, pressed && { opacity: 0.7 }]}
+      >
+        <Text style={styles.updateBannerAckText}>GOT IT</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 // ─── Nav header ───────────────────────────────────────────────────────────────
 
@@ -737,6 +840,122 @@ function ScoreSheet({
                 Save score
               </Text>
             </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Cancel game sheet (manager only) ────────────────────────────────────────
+
+const MAX_CANCEL_REASON = 140;
+
+// "VS. ICE SHARKS · FRI 7:30 PM" — the opponent when there is one, since the
+// title is already in the heading's blast radius, plus the weekday and time so
+// the manager can tell two fixtures against the same team apart.
+function formatCancelMeta(event: FirestoreEvent): string {
+  const d    = event.startsAt.toDate();
+  const h    = d.getHours();
+  const h12  = h % 12 === 0 ? 12 : h % 12;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const who  = event.opponent ? `vs. ${event.opponent}` : event.title;
+  return `${who} · ${WEEKDAY_ABBR[d.getDay()]} ${h12}:${String(d.getMinutes()).padStart(2, '0')} ${ampm}`;
+}
+
+function CancelEventSheet({
+  visible, event, fallbackTitle, respondedCount, cancelling, onConfirm, onClose,
+}: {
+  visible: boolean;
+  event: FirestoreEvent | null;
+  fallbackTitle: string;
+  respondedCount: number;
+  cancelling: boolean;
+  onConfirm: (reason: string) => void;
+  onClose: () => void;
+}) {
+  const { activeTeamPalette } = useUserContext();
+  const TEAM = teams[activeTeamPalette];
+  const insets = useSafeAreaInsets();
+  const [reason, setReason] = useState('');
+
+  useEffect(() => {
+    if (visible) setReason('');
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined}>
+          <Pressable onPress={() => {}}>
+            <View style={[styles.cancelSheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
+              <View style={styles.sheetHandle} />
+
+              <Text style={styles.cancelSheetGlyph}>⚠</Text>
+              <Text style={[styles.sheetTitle, styles.cancelSheetTitle]}>Cancel this game?</Text>
+              <Text style={styles.cancelSheetMeta}>
+                {event ? formatCancelMeta(event) : fallbackTitle}
+              </Text>
+
+              {/* Never "All 0 players" — with no responses the push still goes
+                  to the whole roster, so say that instead. */}
+              {respondedCount === 0 ? (
+                <Text style={styles.cancelSheetBody}>
+                  The whole team will be notified immediately.
+                </Text>
+              ) : (
+                <Text style={styles.cancelSheetBody}>
+                  {respondedCount === 1 ? 'The ' : 'All '}
+                  <Text style={styles.cancelSheetBodyStrong}>{respondedCount}</Text>
+                  {respondedCount === 1
+                    ? ' player will be notified immediately.'
+                    : ' players will be notified immediately.'}
+                </Text>
+              )}
+
+              <View style={styles.cancelReasonLabelRow}>
+                <Text style={styles.cancelReasonLabel}>Add a reason</Text>
+                <View style={styles.cancelReasonOptional}>
+                  <Text style={styles.cancelReasonOptionalText}>OPTIONAL</Text>
+                </View>
+              </View>
+              <TextInput
+                style={styles.cancelReasonInput}
+                value={reason}
+                onChangeText={t => setReason(t.slice(0, MAX_CANCEL_REASON))}
+                placeholder="e.g. Rink flooded — no ice tonight"
+                placeholderTextColor={navy[400]}
+                multiline
+                maxLength={MAX_CANCEL_REASON}
+                textAlignVertical="top"
+                editable={!cancelling}
+              />
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelConfirmBtn,
+                  cancelling && styles.cancelConfirmBtnDisabled,
+                  pressed && !cancelling && { opacity: 0.85 },
+                ]}
+                disabled={cancelling}
+                onPress={() => onConfirm(reason)}
+              >
+                <Text style={styles.cancelConfirmBtnText}>
+                  {cancelling ? 'Cancelling…' : 'Yes, cancel game'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelKeepBtn,
+                  { borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`, backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)` },
+                  pressed && { opacity: 0.75 },
+                ]}
+                disabled={cancelling}
+                onPress={onClose}
+              >
+                <Text style={[styles.cancelKeepBtnText, { color: TEAM[300] }]}>Keep it</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -1153,6 +1372,113 @@ const styles = StyleSheet.create({
     fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM.on,
   },
   saveScoreBtnTextDisabled: { color: navy[400] },
+
+  // ── Cancel game sheet ─────────────────────────────────────────────────────
+  cancelSheet: {
+    backgroundColor: navy[700],
+    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing[24], paddingTop: spacing[16],
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  cancelSheetGlyph: {
+    fontFamily: fonts.display, fontSize: 26, lineHeight: 30,
+    color: status.error.pure, textAlign: 'center', marginBottom: spacing[8],
+  },
+  cancelSheetTitle: { marginBottom: spacing[6] },
+  cancelSheetMeta: {
+    fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.2,
+    color: navy[400], textTransform: 'uppercase',
+    textAlign: 'center', marginBottom: spacing[12],
+  },
+  cancelSheetBody: {
+    fontFamily: fonts.ui, fontSize: 14, lineHeight: 20,
+    color: navy[300], textAlign: 'center', marginBottom: spacing[20],
+  },
+  cancelSheetBodyStrong: {
+    fontFamily: fonts.uiBold, fontWeight: '700', color: '#FFFFFF',
+  },
+  cancelReasonLabelRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[8],
+    marginBottom: spacing[6],
+  },
+  cancelReasonLabel: {
+    fontFamily: fonts.uiMedium, fontSize: 13, color: navy[100],
+  },
+  cancelReasonOptional: {
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: radius.xs, backgroundColor: navy[600],
+  },
+  cancelReasonOptionalText: {
+    fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1.2, color: navy[400],
+  },
+  cancelReasonInput: {
+    minHeight: 64,
+    backgroundColor: navy[600],
+    borderRadius: radius.m,
+    borderWidth: 0.5, borderColor: navy[500],
+    paddingHorizontal: spacing[12], paddingVertical: spacing[10],
+    fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: navy[50],
+    marginBottom: spacing[20],
+  },
+  cancelConfirmBtn: {
+    height: 52, borderRadius: radius.l,
+    backgroundColor: status.error.pure,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing[10],
+    shadowColor: status.error.pure,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
+  },
+  cancelConfirmBtnDisabled: {
+    backgroundColor: navy[600], shadowOpacity: 0, elevation: 0,
+  },
+  cancelConfirmBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: '#FFFFFF',
+  },
+  cancelKeepBtn: {
+    height: 52, borderRadius: radius.l, borderWidth: 1,
+    borderColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.40)`,
+    backgroundColor: `rgba(${hexToRgbVals(TEAM[500])}, 0.08)`,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing[4],
+  },
+  cancelKeepBtnText: {
+    fontFamily: fonts.uiSemiBold, fontSize: 15, fontWeight: '600', color: TEAM[300],
+  },
+
+  // ── "Updated after you responded" banner ──────────────────────────────────
+  updateBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing[10],
+    marginHorizontal: spacing[16], marginTop: spacing[8],
+    paddingHorizontal: spacing[14], paddingVertical: spacing[12],
+    borderRadius: radius.m,
+    backgroundColor: status.alert.subtle,
+    borderWidth: 0.5,
+    borderColor: `rgba(${hexToRgbVals(status.alert.pure)}, 0.40)`,
+  },
+  updateBannerGlyph: {
+    fontFamily: fonts.display, fontSize: 15, lineHeight: 20,
+    color: status.alert.pure,
+  },
+  updateBannerCopy: { flex: 1, gap: 2 },
+  updateBannerTitle: {
+    fontFamily: fonts.uiSemiBold, fontSize: 13.5, lineHeight: 19,
+    fontWeight: '600', color: '#FFFFFF',
+  },
+  updateBannerBody: {
+    fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 17, color: navy[300],
+  },
+  updateBannerAck: {
+    paddingHorizontal: spacing[10], paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 0.5,
+    borderColor: `rgba(${hexToRgbVals(status.alert.pure)}, 0.50)`,
+    backgroundColor: `rgba(${hexToRgbVals(status.alert.pure)}, 0.14)`,
+  },
+  updateBannerAckText: {
+    fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 1.2,
+    color: status.alert.light,
+  },
 
   // ── Section wrapper ───────────────────────────────────────────────────────
   section: {
