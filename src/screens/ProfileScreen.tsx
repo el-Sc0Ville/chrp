@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { updateProfile } from 'firebase/auth';
 import { signOut } from '../firebase/auth';
 import { deleteAccount, ManagerHandoverRequired } from '../firebase/deleteAccount';
-import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, updateDoc, writeBatch } from 'firebase/firestore';
 import * as RNIap from 'react-native-iap';
 import { navy, ice, signal, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { auth, db } from '../firebase';
@@ -293,6 +293,20 @@ export default function ProfileScreen() {
           onPress: async () => {
             if (!user?.uid || !activeTeamId) return;
             try {
+              // Same rule as account deletion: the last manager cannot walk
+              // away from a team that still has other members, or nobody is
+              // left who can schedule games or invite players.
+              if (memberRole === 'manager' || isManager) {
+                const membersSnap = await getDocs(collection(db, 'teams', activeTeamId, 'members'));
+                const others = membersSnap.docs.filter(d => d.id !== user.uid);
+                if (others.length > 0 && !others.some(d => d.data().role === 'manager')) {
+                  Alert.alert(
+                    'Promote another manager first',
+                    `You are the only manager of ${teamName}. Make someone else a manager from the roster, then leave the team.`,
+                  );
+                  return;
+                }
+              }
               const batch = writeBatch(db);
               batch.delete(doc(db, 'teams', activeTeamId, 'members', user.uid));
               batch.delete(doc(db, 'users', user.uid, 'teams', activeTeamId));

@@ -167,11 +167,25 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
     }
   };
 
+  // iOS cannot present the post sheet while the action sheet is still
+  // animating away, so the edit sheet opens only once that Modal has gone.
+  const pendingEditRef = useRef(false);
+  const lastActionItemRef = useRef<DisplayAnn | null>(null);
+  if (actionItem) lastActionItemRef.current = actionItem;
+
+  const openPendingEdit = () => {
+    if (!pendingEditRef.current) return;
+    pendingEditRef.current = false;
+    setPostVisible(true);
+  };
+
   const handleEdit = () => {
     if (!actionItem) return;
     setEditingId(actionItem.id);
+    pendingEditRef.current = true;
     setActionItem(null);
-    setPostVisible(true);
+    // Fallback in case onDismiss never fires; openPendingEdit runs only once.
+    setTimeout(openPendingEdit, 1500);
   };
 
   const handleDelete = () => {
@@ -275,14 +289,14 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
       />
 
       {/* ── Long-press action sheet ── */}
-      {actionItem && (
-        <ActionSheet
-          announcement={actionItem}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onClose={() => setActionItem(null)}
-        />
-      )}
+      <ActionSheet
+        visible={actionItem !== null}
+        announcement={actionItem ?? lastActionItemRef.current}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onClose={() => setActionItem(null)}
+        onDismiss={openPendingEdit}
+      />
 
       {/* ── Toast ── */}
       {toast !== null && (
@@ -521,22 +535,25 @@ function PostSheet({
 // ─── Long-press action sheet ──────────────────────────────────────────────────
 
 function ActionSheet({
-  announcement, onEdit, onDelete, onClose,
+  visible, announcement, onEdit, onDelete, onClose, onDismiss,
 }: {
-  announcement: DisplayAnn;
+  visible: boolean;
+  announcement: DisplayAnn | null;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const body = announcement?.body ?? '';
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onDismiss={onDismiss}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
         <Pressable onPress={() => {}}>
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle} numberOfLines={1}>
-              {announcement.body.slice(0, 48)}{announcement.body.length > 48 ? '…' : ''}
+              {body.slice(0, 48)}{body.length > 48 ? '…' : ''}
             </Text>
             <View style={styles.actionDivider} />
             <Pressable

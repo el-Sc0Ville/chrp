@@ -2,7 +2,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { sendPushNotification } from '../firebase/sendNotification';
 
 export const GEOFENCE_TASK = 'CHRP_GEOFENCE_TASK';
@@ -28,6 +28,15 @@ TaskManager.defineTask<GeofencingTaskData>(GEOFENCE_TASK, async ({ data, error }
 
   if (!teamId || !eventId || !userId) {
     console.error('[GeofenceTask] missing context — teamId/eventId/userId not set');
+    return;
+  }
+
+  // iOS wakes the app in the background to deliver this event, so the persisted
+  // session may not be restored yet; writing before it is would be denied by
+  // the rules. Skip if the stored context belongs to a different account.
+  await auth.authStateReady();
+  if (auth.currentUser?.uid !== userId) {
+    console.error('[GeofenceTask] no matching signed-in user — skipping check-in');
     return;
   }
 

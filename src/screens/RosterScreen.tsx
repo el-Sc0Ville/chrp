@@ -1,7 +1,7 @@
 // Roster screen — B-07 Manager Roster / C-07 Player Roster.
 // Flip IS_MANAGER to preview each view. Replace with auth role when Firebase is wired.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal, Share, StyleSheet, Alert, Image,
 } from 'react-native';
@@ -117,11 +117,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
   };
 
   const demoteToPlayer = async (id: string) => {
-    if (id === user?.uid) {
-      Alert.alert("Can't remove your own manager role", 'Ask another manager to do this.');
-      setActionPlayer(null);
-      return;
-    }
+    if (id === user?.uid) return; // the sheet hides this action for yourself
     setRoster(prev => prev.map(p => p.id === id ? { ...p, role: 'player' as PlayerRole } : p));
     setActionPlayer(null);
     try {
@@ -154,7 +150,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
 
   const removePlayer = async (id: string) => {
     const target = roster.find(p => p.id === id);
-    if (!target) return;
+    if (!target || id === user?.uid) return;
     const wasManager = target.role === 'manager';
 
     Alert.alert(
@@ -262,6 +258,7 @@ function ManagerRosterScreen({ embedded }: { embedded?: boolean }) {
       {actionPlayer && (
         <ActionSheet
           player={actionPlayer}
+          isSelf={actionPlayer.id === user?.uid}
           onMakeManager={() => makeManager(actionPlayer.id)}
           onDemote={() => demoteToPlayer(actionPlayer.id)}
           onMoveToSpare={() => moveToSpare(actionPlayer.id)}
@@ -508,19 +505,29 @@ function InviteSheet({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShareInvite = async () => {
-    try {
-      const result = await Share.share({
-        message: `Join my team on Chrp!\n\n${joinLink(inviteCode)}\n\nOr enter code ${inviteCode} in the app.`,
-      });
-      if (result.action === Share.dismissedAction) return;
-    } catch (err) {
-      console.error('[InviteSheet] share error:', err);
-    }
+  // The iOS share sheet must not be presented on top of this Modal: when the
+  // Messages composer it opens is dismissed, the Modal's view controller is
+  // left in a state that swallows every touch and the app looks frozen. Close
+  // the sheet first and open the share sheet once the Modal has fully gone.
+  const pendingShare = useRef(false);
+
+  const openShareSheet = () => {
+    if (!pendingShare.current) return;
+    pendingShare.current = false;
+    Share.share({
+      message: `Join my team on Chrp!\n\n${joinLink(inviteCode)}\n\nOr enter code ${inviteCode} in the app.`,
+    }).catch(err => console.error('[InviteSheet] share error:', err));
+  };
+
+  const handleShareInvite = () => {
+    pendingShare.current = true;
+    onClose();
+    // Fallback in case onDismiss never fires; openShareSheet runs only once.
+    setTimeout(openShareSheet, 1500);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onDismiss={openShareSheet}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
         <Pressable onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing[24]) }]}>
           <View style={styles.sheetHandle} />
@@ -578,6 +585,7 @@ function InviteSheet({
 
 function ActionSheet({
   player,
+  isSelf,
   onMakeManager,
   onDemote,
   onMoveToSpare,
@@ -586,6 +594,7 @@ function ActionSheet({
   onClose,
 }: {
   player: RosterPlayer;
+  isSelf: boolean;
   onMakeManager: () => void;
   onDemote: () => void;
   onMoveToSpare: () => void;
@@ -611,6 +620,14 @@ function ActionSheet({
 
           <View style={styles.actionDivider} />
 
+          {isSelf ? (
+            // Showing an Alert while this Modal unmounts can leave iOS with a
+            // stuck, touch-swallowing window, so self-actions are not offered.
+            <Text style={styles.actionSelfNote}>
+              This is you. Another manager can change your role, and you can leave the team from your Profile.
+            </Text>
+          ) : (
+          <>
           {player.role === 'player' && (
             <>
               <Pressable
@@ -650,6 +667,8 @@ function ActionSheet({
           >
             <Text style={[styles.actionRowText, { color: status.error.pure }]}>Remove from team</Text>
           </Pressable>
+          </>
+          )}
 
           <View style={styles.actionDivider} />
 
@@ -1091,6 +1110,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#FFFFFF',
+  },
+  actionSelfNote: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    color: navy[300],
+    lineHeight: 20,
+    paddingVertical: spacing[12],
+    paddingHorizontal: spacing[4],
   },
   actionRowCancel: {
     paddingVertical: spacing[14],
