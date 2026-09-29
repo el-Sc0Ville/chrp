@@ -899,19 +899,11 @@ function CancelEventSheet({
 
               {/* Never "All 0 players" — with no responses the push still goes
                   to the whole roster, so say that instead. */}
-              {respondedCount === 0 ? (
-                <Text style={styles.cancelSheetBody}>
-                  The whole team will be notified immediately.
-                </Text>
-              ) : (
-                <Text style={styles.cancelSheetBody}>
-                  {respondedCount === 1 ? 'The ' : 'All '}
-                  <Text style={styles.cancelSheetBodyStrong}>{respondedCount}</Text>
-                  {respondedCount === 1
-                    ? ' player will be notified immediately.'
-                    : ' players will be notified immediately.'}
-                </Text>
-              )}
+              {/* The push goes to every member with notifications on, not just
+                  those who responded, so don't imply a count. */}
+              <Text style={styles.cancelSheetBody}>
+                The whole team will be notified immediately.
+              </Text>
 
               <View style={styles.cancelReasonLabelRow}>
                 <Text style={styles.cancelReasonLabel}>Add a reason</Text>

@@ -59,6 +59,10 @@ export default function AuthScreen() {
     // code can be rolled back instead of leaving the user signed in with no team.
     let signedInHere = false;
     try {
+      // Store the code BEFORE signing in. onAuthStateChanged fires during
+      // sign-in and treats an anonymous session with no pending invite and no
+      // team as a dead end to be signed out — so the key has to exist first.
+      await AsyncStorage.setItem('chrp_pending_invite_code', upper);
       if (!auth.currentUser) {
         await signInAnonymously(auth);
         signedInHere = true;
@@ -66,6 +70,7 @@ export default function AuthScreen() {
       const target = await resolveInviteCode(upper);
       if (!target) {
         setRedeemError("That invite code doesn't look right. Check with your team manager.");
+        await AsyncStorage.removeItem('chrp_pending_invite_code').catch(() => {});
         if (signedInHere) await signOut(auth).catch(() => {});
         return;
       }
@@ -76,14 +81,14 @@ export default function AuthScreen() {
         ['chrp_pending_team_name',    target.teamName],
         ['chrp_pending_team_palette', target.palette],
       ]);
-      // Drive onboarding directly instead of waiting on onAuthStateChanged:
-      // that listener already ran for this sign-in, before the pending invite
-      // was stored, so it would never see it.
+      // Drive onboarding directly rather than relying on the auth listener's
+      // timing; it may have resolved before the team details were stored.
       setMockUser(auth.currentUser, false);
       setNeedsOnboarding(true);
     } catch (err) {
       console.error('[AuthScreen] redeem error:', err);
       setRedeemError('Something went wrong. Please try again.');
+      await AsyncStorage.removeItem('chrp_pending_invite_code').catch(() => {});
       if (signedInHere) await signOut(auth).catch(() => {});
     } finally {
       setRedeemLoading(false);

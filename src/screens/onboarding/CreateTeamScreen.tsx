@@ -92,7 +92,7 @@ export default function CreateTeamScreen({ navigation, route }: Props) {
 
       // Permission primers run here, once the team exists — they hand the same
       // params on to OnboardingComplete.
-      navigation.navigate('NotificationPrimer', { teamId, teamName: name, palette, isManager: true });
+      navigation.replace('NotificationPrimer', { teamId, teamName: name, palette, isManager: true });
     } catch (err) {
       Alert.alert('Error', 'Something went wrong. Please try again.');
       console.error('[CreateTeam]', err);

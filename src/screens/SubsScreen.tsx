@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { addDoc, collection, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme';
 import { db } from '../firebase';
 import * as haptics from '../lib/haptics';
@@ -182,18 +182,14 @@ function ManagerSubsScreen() {
         invitedSpareId: spare.id,
         invitedName:    spare.name,
         invitedAt:      serverTimestamp(),
+        // A previous spare's answer must not be shown as this spare's.
+        spareResponse:    deleteField(),
+        spareRespondedAt: deleteField(),
       });
       haptics.success();
       showToast(`Invite sent to ${firstName(spare.name)}`);
-      if (spare.pushToken) {
-        const body = `${target.gameWeekday} ${target.gameDay} ${target.gameMonth} · ${target.venue}`;
-        sendPushNotification(
-          spare.pushToken,
-          'Sub request — are you available?',
-          body,
-          { eventId: target.eventId, teamId: activeTeamId, userId: spare.id, categoryId: 'SUB_REQUEST' },
-        ).catch(err => console.error('[SubsScreen] spare push failed:', err));
-      }
+      // The invited spare is notified by the onSubSpareInvited Cloud Function,
+      // with answer buttons. A client push here as well sent them two.
     } catch (err) {
       console.error('[SubsScreen] invite write failed:', err);
       setInvitedSpares(prev => {

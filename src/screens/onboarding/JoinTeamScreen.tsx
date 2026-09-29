@@ -4,8 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { signInAnonymously, signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
@@ -19,6 +19,7 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
   const { displayName, jerseyNumber, inviteCode, teamId, teamName, teamPalette } = route.params;
   const TEAM = teams[teamPalette];
   const [error, setError] = useState<string | null>(null);
+  const [codeDead, setCodeDead] = useState(false);
 
   useEffect(() => { joinTeam(); }, []);
 
@@ -31,7 +32,11 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
         user = result.user;
       }
 
-      await setDoc(doc(db, 'teams', teamId, 'members', user.uid), {
+      // Already a member (e.g. tapped the invite link again): keep their
+      // member document — rewriting it would drop their push token and
+      // settings, and demote a promoted manager back to player.
+      const existing = await getDoc(doc(db, 'teams', teamId, 'members', user.uid)).catch(() => null);
+      if (!existing?.exists()) await setDoc(doc(db, 'teams', teamId, 'members', user.uid), {
         userId:      user.uid,
         displayName,
         jerseyNumber,
@@ -63,7 +68,7 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
 
       // Permission primers run here, once membership exists — they hand the
       // same params on to OnboardingComplete.
-      navigation.navigate('NotificationPrimer', {
+      navigation.replace('NotificationPrimer', {
         teamId,
         teamName,
         palette:   teamPalette,
@@ -71,8 +76,27 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
       });
     } catch (err) {
       console.error('[JoinTeam]', err);
-      setError('Something went wrong. Please try again.');
+      // permission-denied here means the code no longer resolves to this team
+      // (e.g. the team was deleted). Retrying can never succeed, so offer a
+      // way out instead of an endless "Try again".
+      if ((err as { code?: string }).code === 'permission-denied') {
+        setCodeDead(true);
+        setError("This invite code isn't valid anymore. Ask your manager for a new one.");
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
     }
+  }
+
+  async function useDifferentCode() {
+    await AsyncStorage.multiRemove([
+      'chrp_pending_invite_code',
+      'chrp_pending_team_id',
+      'chrp_pending_team_name',
+      'chrp_pending_team_palette',
+    ]).catch(() => {});
+    // Signing out returns to the sign-in screen, where a new code can be entered.
+    await signOut(auth).catch(() => {});
   }
 
   if (error) {
@@ -81,9 +105,11 @@ export default function JoinTeamScreen({ navigation, route }: Props) {
         <Text style={styles.errorText}>{error}</Text>
         <Pressable
           style={[styles.retryBtn, { backgroundColor: TEAM[500] }]}
-          onPress={joinTeam}
+          onPress={codeDead ? useDifferentCode : joinTeam}
         >
-          <Text style={[styles.retryBtnText, { color: TEAM.on }]}>Try again</Text>
+          <Text style={[styles.retryBtnText, { color: TEAM.on }]}>
+            {codeDead ? 'Use a different code' : 'Try again'}
+          </Text>
         </Pressable>
       </View>
     );

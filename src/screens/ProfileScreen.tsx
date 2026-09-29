@@ -171,7 +171,7 @@ export default function ProfileScreen() {
     if (value) {
       Alert.alert(
         'Allow location access?',
-        "Chrp uses your location on gameday to show travel time to the rink and let your teammates see who's nearby.",
+        "On game days Chrp checks whether you've arrived at the rink so it can check you in automatically. Your position is never stored or shared.",
         [
           { text: 'Not now', style: 'cancel' },
           {
@@ -359,17 +359,11 @@ export default function ProfileScreen() {
         <View style={styles.heroCard}>
 
           {/* Avatar with camera overlay */}
-          <Pressable
-            style={styles.avatarWrap}
-            onPress={() => showToast('Photo upload coming soon')}
-          >
+          <View style={styles.avatarWrap}>
             <View style={[styles.avatar, { backgroundColor: TEAM[500], shadowColor: TEAM[500] }]}>
               <Text style={[styles.avatarInitials, { color: TEAM.on }]}>{getInitials(name)}</Text>
             </View>
-            <View style={styles.cameraOverlay}>
-              <Text style={styles.cameraIcon}>📷</Text>
-            </View>
-          </Pressable>
+          </View>
 
           {/* Editable display name */}
           <Pressable

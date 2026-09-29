@@ -20,9 +20,21 @@ export default function WelcomeScreen({ navigation }: Props) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const [code, teamId, teamName, teamPalette] = await AsyncStorage.multiGet(INVITE_KEYS)
-        .then(pairs => pairs.map(p => p[1]));
+      const read = () => AsyncStorage.multiGet(INVITE_KEYS).then(pairs => pairs.map(p => p[1]));
+      let [code, teamId, teamName, teamPalette] = await read();
+
+      // Redeeming a code stores the code first (it must exist before the
+      // anonymous sign-in) and the team details only once the lookup returns,
+      // so this screen can mount in between. Wait briefly for the details
+      // rather than falling back to the generic welcome and making the user
+      // enter the code a second time.
+      for (let i = 0; code && !teamId && i < 20 && !cancelled; i++) {
+        await new Promise(r => setTimeout(r, 150));
+        [code, teamId, teamName, teamPalette] = await read();
+      }
+      if (cancelled) return;
 
       if (code && teamId && teamName) {
         // Deliberately NOT cleared here. Clearing on the way into onboarding
@@ -39,6 +51,7 @@ export default function WelcomeScreen({ navigation }: Props) {
       }
       setReady(true);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   if (!ready) return null;

@@ -339,14 +339,18 @@ function OnboardingNavigator() {
 // same source the rules use, and treat the user's team pointer as team
 // discovery only.
 async function resolveIsManager(teamId: string, uid: string): Promise<boolean> {
-  try {
-    const snap = await getDoc(doc(db, 'teams', teamId, 'members', uid));
-    return snap.data()?.role === 'manager';
-  } catch (err) {
-    console.error('[Auth] could not read member role:', err);
-    return false; // fail closed — never grant manager UI on an error
-  }
+  // Deliberately not caught: a failed read surfaces as the boot error screen
+  // with a retry, rather than silently demoting a manager for the session.
+  const snap = await getDoc(doc(db, 'teams', teamId, 'members', uid));
+  return snap.data()?.role === 'manager';
 }
+
+const PENDING_INVITE_KEYS = [
+  'chrp_pending_invite_code',
+  'chrp_pending_team_id',
+  'chrp_pending_team_name',
+  'chrp_pending_team_palette',
+];
 
 function AppStack() {
   const {
@@ -369,35 +373,42 @@ function AppStack() {
       setMockUser(u, false); // isManager defaults false; updated below once teams load
       setNeedsOnboarding(undefined); // Force LoadingScreen while Firestore check runs
       const snap = await getDocs(collection(db, 'users', u.uid, 'teams'));
-      setNeedsOnboarding(snap.empty);
       if (!snap.empty) {
-        // Returning user — restore their active team and manager status
+        // Returning user — restore their active team and manager status BEFORE
+        // leaving the loading screen, so a manager never briefly renders as a
+        // player with no team.
         const firstTeam     = snap.docs[0].data();
         const isManagerRole = await resolveIsManager(firstTeam.teamId as string, u.uid);
         setMockUser(u, isManagerRole);
         setActiveTeamId(firstTeam.teamId as string);
         setActiveTeamPalette(firstTeam.palette as TeamKey);
-        // Register / refresh push token for this user+team
+        // Refresh the push token — without prompting; the primer asks.
         registerForPushNotifications(u.uid, firstTeam.teamId as string).catch(console.error);
       }
+      setNeedsOnboarding(snap.empty);
     } else if (u && u.isAnonymous) {
+      // Membership first. A player who has already joined and then taps an
+      // invite link again must not be routed back through onboarding, where
+      // JoinTeam would overwrite their member document.
+      const teamsSnap = await getDocs(collection(db, 'users', u.uid, 'teams'));
       const pendingCode = await AsyncStorage.getItem('chrp_pending_invite_code');
-      if (pendingCode) {
+      if (!teamsSnap.empty) {
+        if (pendingCode) await AsyncStorage.multiRemove(PENDING_INVITE_KEYS).catch(() => {});
+        const firstTeam = teamsSnap.docs[0].data();
+        const isManagerRole = await resolveIsManager(firstTeam.teamId as string, u.uid);
+        setMockUser(u, isManagerRole);
+        setActiveTeamId(firstTeam.teamId as string);
+        setActiveTeamPalette(firstTeam.palette as TeamKey);
+        // Invite-code players otherwise never register a token if they left
+        // onboarding early — no reminders, no sub offers.
+        registerForPushNotifications(u.uid, firstTeam.teamId as string).catch(console.error);
+        setNeedsOnboarding(false);
+      } else if (pendingCode) {
         // Invite flow: anonymous sign-in with a pending invite code
         setMockUser(u, false);
         setNeedsOnboarding(true);
       } else {
-        // Check if this anonymous user already completed onboarding (returning invite user)
-        const teamsSnap = await getDocs(collection(db, 'users', u.uid, 'teams'));
-        if (!teamsSnap.empty) {
-          const firstTeam = teamsSnap.docs[0].data();
-          const isManagerRole = await resolveIsManager(firstTeam.teamId as string, u.uid);
-          setMockUser(u, isManagerRole);
-          setActiveTeamId(firstTeam.teamId as string);
-          setActiveTeamPalette(firstTeam.palette as TeamKey);
-          setNeedsOnboarding(false);
-        }
-        else if (!__DEV__) {
+        if (!__DEV__) {
           // An anonymous session with no team and no pending invite is a dead
           // end. Nothing sets needsOnboarding here, so the navigator falls
           // through to the tabs and renders an empty shell — no team, no

@@ -38,12 +38,14 @@ export async function registerNotificationCategories(): Promise<void> {
     {
       identifier: 'SUB_AVAILABLE',
       buttonTitle: "✓ I'm available",
-      options: { opensAppToForeground: false },
+      // Opens the app: a killed app often never runs JS in time to complete
+      // the write in the background, silently losing the answer.
+      options: { opensAppToForeground: true },
     },
     {
       identifier: 'SUB_UNAVAILABLE',
       buttonTitle: "Can't make it",
-      options: { opensAppToForeground: false },
+      options: { opensAppToForeground: true },
     },
   ]);
 }
@@ -55,14 +57,11 @@ export async function registerForPushNotifications(
   try {
     // expo-notifications v56: PermissionResponse re-export from 'expo' is broken in
     // TypeScript, so we cast to access .granted at runtime.
+    // Never prompts. Asking is the notification primer's job, where the user
+    // sees why first; prompting here fired the system dialog seconds after
+    // someone tapped "Maybe later", or cold on the next launch.
     const existing = (await Notifications.getPermissionsAsync()) as unknown as { granted: boolean };
-    if (!existing.granted) {
-      const requested = (await Notifications.requestPermissionsAsync()) as unknown as { granted: boolean };
-      if (!requested.granted) {
-        console.log('Push notification permission denied');
-        return null;
-      }
-    }
+    if (!existing.granted) return null;
 
     await registerNotificationCategories();
 

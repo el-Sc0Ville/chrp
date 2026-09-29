@@ -71,6 +71,9 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
   };
 
   console.log('Notification response received:', actionIdentifier, data);
+  // getLastNotificationResponseAsync returns the same response on every cold
+  // start until cleared, which re-wrote answers and re-navigated each launch.
+  Notifications.clearLastNotificationResponse();
 
   // An invited spare answering a sub request from the lock screen. Handled
   // before the default-action branch because it must not open the app.
