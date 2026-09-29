@@ -12,7 +12,7 @@
       "backgroundColor": "#070B14"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.chrp.app",
       "associatedDomains": ["applinks:chrp-app.firebaseapp.com"],
       "infoPlist": {
