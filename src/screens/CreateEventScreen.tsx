@@ -274,6 +274,9 @@ export default function CreateEventScreen() {
                 response:     blackedOut ? 'out' : 'in',
                 respondedAt:  serverTimestamp(),
                 setByManager: false,
+                // Lets the widget say "in (auto)". Every real reply overwrites
+                // the whole document, which clears this again.
+                autoIn:       !blackedOut,
               },
             );
           });

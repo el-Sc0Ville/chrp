@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,6 +37,7 @@ import { navy, teams, fonts, spacing, radius, type TeamKey } from '../theme';
 import { onAuthStateChanged, signOut, type User } from '../firebase/auth';
 import { db, auth } from '../firebase';
 import { registerForPushNotifications } from '../firebase/notifications';
+import { syncWidget, clearWidget, reloadWidget } from '../widget';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -357,6 +358,7 @@ function AppStack() {
     user: mockUser,
     needsOnboarding, setNeedsOnboarding,
     setMockUser, setActiveTeamId, setActiveTeamPalette,
+    activeTeamId,
   } = useUserContext();
   // undefined = resolving Firebase auth, null = signed out, User = signed in
   const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined);
@@ -445,6 +447,28 @@ function AppStack() {
         setBootError(true);
       }
     });
+  }, []);
+
+  // Home Screen widget: follow the real signed-in account and its active team.
+  // Only an actual sign-out clears it — activeTeamId is briefly empty on every
+  // launch while the session resolves, and clearing then would blank the widget.
+  const widgetUid = firebaseUser ? firebaseUser.uid : firebaseUser;
+  useEffect(() => {
+    if (widgetUid === null) {
+      clearWidget();
+    } else if (widgetUid && activeTeamId) {
+      syncWidget(widgetUid, activeTeamId).catch(err =>
+        console.error('[Widget] sync failed:', err),
+      );
+    }
+  }, [widgetUid, activeTeamId]);
+
+  // Replies made inside the app should show on the widget straight away.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'background') reloadWidget();
+    });
+    return () => sub.remove();
   }, []);
 
   const retryBoot = useCallback(async () => {

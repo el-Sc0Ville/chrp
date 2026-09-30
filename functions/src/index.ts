@@ -10,6 +10,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import fetch from 'node-fetch';
+import * as crypto from 'crypto';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -495,5 +496,124 @@ export const onSubSpareInvited = onDocumentUpdated(
         requestId,
       },
     }]);
+  },
+);
+
+// ─── Home Screen widget ───────────────────────────────────────────────────────
+// The iOS widget shows the player's next game and lets them answer In / Maybe /
+// Out without opening the app. It has to fetch for itself: the players it is
+// for are exactly the ones who never open the app, so anything the app cached
+// would go stale after the first game.
+//
+// A widget cannot hold a Firebase session, so each device gets a random key
+// (stored in users/{uid}.widgetKeys by the app, readable only by that user) and
+// every call must present it. That keeps event details from being readable
+// with ids alone, which leak through push payloads and invite links.
+const WIDGET_RESPONSES = ['in', 'out', 'maybe'];
+
+function keyMatches(keys: unknown, key: string): boolean {
+  if (!Array.isArray(keys)) return false;
+  const given = Buffer.from(key);
+  return keys.some(k => {
+    if (typeof k !== 'string') return false;
+    const stored = Buffer.from(k);
+    return stored.length === given.length && crypto.timingSafeEqual(stored, given);
+  });
+}
+
+async function nextEventFor(teamId: string, uid: string) {
+  const teamSnap = await db.collection('teams').doc(teamId).get();
+  const team = teamSnap.data() ?? {};
+  const upcoming = await db
+    .collection('teams').doc(teamId)
+    .collection('events')
+    .where('startsAt', '>', Timestamp.now())
+    .orderBy('startsAt', 'asc')
+    .limit(10)
+    .get();
+  const eventDoc = upcoming.docs.find(d => d.data()['status'] !== 'cancelled');
+  const base = {
+    teamName:  (team['name'] as string) ?? 'Your team',
+    teamColor: PALETTE_HEX[team['palette']] ?? '#2540D6',
+  };
+  if (!eventDoc) return { ...base, event: null };
+
+  const e = eventDoc.data();
+  const responseSnap = await eventDoc.ref.collection('responses').doc(uid).get();
+  const r = responseSnap.data();
+  return {
+    ...base,
+    event: {
+      eventId:  eventDoc.id,
+      type:     (e['type'] as string) ?? 'game',
+      title:    (e['title'] as string) ?? 'Game',
+      venue:    (e['venue'] as string) ?? '',
+      startsAt: (e['startsAt'] as Timestamp).toMillis(),
+      response: WIDGET_RESPONSES.includes(r?.['response']) ? (r?.['response'] as string) : null,
+      // Set only by the auto-in batch at event creation; any real reply
+      // overwrites the whole document and so clears it.
+      autoIn:   r?.['autoIn'] === true,
+    },
+  };
+}
+
+export const widgetApi = onRequest(
+  { region: 'northamerica-northeast1' },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed');
+      return;
+    }
+    const { uid, key, teamId, action, eventId, response } = req.body ?? {};
+    if (typeof uid !== 'string' || typeof key !== 'string' || typeof teamId !== 'string'
+        || !uid || !key || !teamId) {
+      res.status(400).send('Missing required fields');
+      return;
+    }
+
+    try {
+      const userSnap = await db.collection('users').doc(uid).get();
+      if (!keyMatches(userSnap.data()?.['widgetKeys'], key)) {
+        res.status(403).send('Unknown widget key');
+        return;
+      }
+      const memberSnap = await db
+        .collection('teams').doc(teamId)
+        .collection('members').doc(uid)
+        .get();
+      if (!memberSnap.exists) {
+        res.status(403).send('Not a member of this team');
+        return;
+      }
+
+      if (action === 'respond') {
+        if (typeof eventId !== 'string' || !WIDGET_RESPONSES.includes(response)) {
+          res.status(400).send('Invalid response');
+          return;
+        }
+        const eventRef = db.collection('teams').doc(teamId).collection('events').doc(eventId);
+        const eventSnap = await eventRef.get();
+        const ev = eventSnap.data();
+        if (!ev || ev['status'] === 'cancelled'
+            || (ev['startsAt'] as Timestamp).toMillis() <= Date.now()) {
+          res.status(409).send('Event is no longer open');
+          return;
+        }
+        // Same shape as every in-app reply: a full overwrite, which also clears
+        // the autoIn marker.
+        await eventRef.collection('responses').doc(uid).set({
+          userId:       uid,
+          displayName:  (memberSnap.data()?.['displayName'] as string) || '',
+          response,
+          respondedAt:  FieldValue.serverTimestamp(),
+          setByManager: false,
+        });
+      }
+
+      res.status(200).json(await nextEventFor(teamId, uid));
+    } catch (err) {
+      console.error('[widgetApi] failed:', err);
+      res.status(500).json({ error: 'Widget request failed' });
+    }
   },
 );

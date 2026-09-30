@@ -72,6 +72,8 @@ export interface AvailabilityResponse {
   respondedAt: Timestamp;
   setByManager: boolean;
   status?: 'here';
+  // Written only by the auto-in batch when an event is created.
+  autoIn?: boolean;
   checkedInAt?: Timestamp;
 }
 

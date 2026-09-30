@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onSubSpareInvited = exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
+exports.widgetApi = exports.onSubSpareInvited = exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
 // Imported directly rather than reached through the legacy `admin.firestore.*`
@@ -49,6 +49,7 @@ const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const node_fetch_1 = __importDefault(require("node-fetch"));
+const crypto = __importStar(require("crypto"));
 admin.initializeApp();
 const db = admin.firestore();
 // Cloud Functions run in UTC, so getDay()/getHours() rendered a 7 PM Eastern
@@ -459,5 +460,117 @@ exports.onSubSpareInvited = (0, firestore_2.onDocumentUpdated)({ document: 'team
                 requestId,
             },
         }]);
+});
+// ─── Home Screen widget ───────────────────────────────────────────────────────
+// The iOS widget shows the player's next game and lets them answer In / Maybe /
+// Out without opening the app. It has to fetch for itself: the players it is
+// for are exactly the ones who never open the app, so anything the app cached
+// would go stale after the first game.
+//
+// A widget cannot hold a Firebase session, so each device gets a random key
+// (stored in users/{uid}.widgetKeys by the app, readable only by that user) and
+// every call must present it. That keeps event details from being readable
+// with ids alone, which leak through push payloads and invite links.
+const WIDGET_RESPONSES = ['in', 'out', 'maybe'];
+function keyMatches(keys, key) {
+    if (!Array.isArray(keys))
+        return false;
+    const given = Buffer.from(key);
+    return keys.some(k => {
+        if (typeof k !== 'string')
+            return false;
+        const stored = Buffer.from(k);
+        return stored.length === given.length && crypto.timingSafeEqual(stored, given);
+    });
+}
+async function nextEventFor(teamId, uid) {
+    const teamSnap = await db.collection('teams').doc(teamId).get();
+    const team = teamSnap.data() ?? {};
+    const upcoming = await db
+        .collection('teams').doc(teamId)
+        .collection('events')
+        .where('startsAt', '>', firestore_1.Timestamp.now())
+        .orderBy('startsAt', 'asc')
+        .limit(10)
+        .get();
+    const eventDoc = upcoming.docs.find(d => d.data()['status'] !== 'cancelled');
+    const base = {
+        teamName: team['name'] ?? 'Your team',
+        teamColor: PALETTE_HEX[team['palette']] ?? '#2540D6',
+    };
+    if (!eventDoc)
+        return { ...base, event: null };
+    const e = eventDoc.data();
+    const responseSnap = await eventDoc.ref.collection('responses').doc(uid).get();
+    const r = responseSnap.data();
+    return {
+        ...base,
+        event: {
+            eventId: eventDoc.id,
+            type: e['type'] ?? 'game',
+            title: e['title'] ?? 'Game',
+            venue: e['venue'] ?? '',
+            startsAt: e['startsAt'].toMillis(),
+            response: WIDGET_RESPONSES.includes(r?.['response']) ? r?.['response'] : null,
+            // Set only by the auto-in batch at event creation; any real reply
+            // overwrites the whole document and so clears it.
+            autoIn: r?.['autoIn'] === true,
+        },
+    };
+}
+exports.widgetApi = (0, https_1.onRequest)({ region: 'northamerica-northeast1' }, async (req, res) => {
+    if (req.method !== 'POST') {
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    const { uid, key, teamId, action, eventId, response } = req.body ?? {};
+    if (typeof uid !== 'string' || typeof key !== 'string' || typeof teamId !== 'string'
+        || !uid || !key || !teamId) {
+        res.status(400).send('Missing required fields');
+        return;
+    }
+    try {
+        const userSnap = await db.collection('users').doc(uid).get();
+        if (!keyMatches(userSnap.data()?.['widgetKeys'], key)) {
+            res.status(403).send('Unknown widget key');
+            return;
+        }
+        const memberSnap = await db
+            .collection('teams').doc(teamId)
+            .collection('members').doc(uid)
+            .get();
+        if (!memberSnap.exists) {
+            res.status(403).send('Not a member of this team');
+            return;
+        }
+        if (action === 'respond') {
+            if (typeof eventId !== 'string' || !WIDGET_RESPONSES.includes(response)) {
+                res.status(400).send('Invalid response');
+                return;
+            }
+            const eventRef = db.collection('teams').doc(teamId).collection('events').doc(eventId);
+            const eventSnap = await eventRef.get();
+            const ev = eventSnap.data();
+            if (!ev || ev['status'] === 'cancelled'
+                || ev['startsAt'].toMillis() <= Date.now()) {
+                res.status(409).send('Event is no longer open');
+                return;
+            }
+            // Same shape as every in-app reply: a full overwrite, which also clears
+            // the autoIn marker.
+            await eventRef.collection('responses').doc(uid).set({
+                userId: uid,
+                displayName: memberSnap.data()?.['displayName'] || '',
+                response,
+                respondedAt: firestore_1.FieldValue.serverTimestamp(),
+                setByManager: false,
+            });
+        }
+        res.status(200).json(await nextEventFor(teamId, uid));
+    }
+    catch (err) {
+        console.error('[widgetApi] failed:', err);
+        res.status(500).json({ error: 'Widget request failed' });
+    }
 });
 //# sourceMappingURL=index.js.map

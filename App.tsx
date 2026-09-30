@@ -40,6 +40,7 @@ import {
 import AppNavigator from './src/navigation';
 import { navy } from './src/theme';
 import { confirmMagicLink, getPendingEmail } from './src/firebase/auth';
+import { reloadWidget } from './src/widget';
 import './src/tasks/geofenceTask';
 
 /**
@@ -129,6 +130,8 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
       userId: data.userId,
     },
   ).catch(err => console.error('[Notification] Firestore write failed:', err));
+  // An answer given from the notification should show on the widget too.
+  reloadWidget();
   console.log('Notification response written:', responseValue);
 };
 

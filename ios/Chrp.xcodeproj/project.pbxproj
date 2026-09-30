@@ -17,6 +17,7 @@
 		9FBDB61696571E519F039F32 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE6EEADE980F3163455C965 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		D1C3A0012FE0000000A1B2C3 /* ChrpWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1C3A0032FE0000000A1B2C3 /* ChrpWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,6 +27,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 00C8D47D2FD70578006DC8D5;
 			remoteInfo = ChrpNotificationContent;
+		};
+		D1C3A0022FE0000000A1B2C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D1C3A0092FE0000000A1B2C3;
+			remoteInfo = ChrpWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -37,6 +45,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				00C8D48C2FD70578006DC8D5 /* ChrpNotificationContent.appex in Embed Foundation Extensions */,
+				D1C3A0012FE0000000A1B2C3 /* ChrpWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -60,6 +69,7 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Chrp/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Chrp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Chrp-Bridging-Header.h"; path = "Chrp/Chrp-Bridging-Header.h"; sourceTree = "<group>"; };
+		D1C3A0032FE0000000A1B2C3 /* ChrpWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ChrpWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -69,6 +79,13 @@
 				Info.plist,
 			);
 			target = 00C8D47D2FD70578006DC8D5 /* ChrpNotificationContent */;
+		};
+		D1C3A0042FE0000000A1B2C3 /* Exceptions for "ChrpWidget" folder in "ChrpWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D1C3A0092FE0000000A1B2C3 /* ChrpWidget */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -83,6 +100,18 @@
 			explicitFolders = (
 			);
 			path = ChrpNotificationContent;
+			sourceTree = "<group>";
+		};
+		D1C3A0052FE0000000A1B2C3 /* ChrpWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D1C3A0042FE0000000A1B2C3 /* Exceptions for "ChrpWidget" folder in "ChrpWidget" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ChrpWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -102,6 +131,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				4AAC8BC58582E34F5995DDC1 /* libPods-Chrp.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1C3A0062FE0000000A1B2C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -162,6 +198,7 @@
 				13B07FAE1A68108700A75B9A /* Chrp */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				00C8D4832FD70578006DC8D5 /* ChrpNotificationContent */,
+				D1C3A0052FE0000000A1B2C3 /* ChrpWidget */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				D09CE13C2B8A3E61024441D6 /* Pods */,
@@ -177,6 +214,7 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* Chrp.app */,
 				00C8D47E2FD70578006DC8D5 /* ChrpNotificationContent.appex */,
+				D1C3A0032FE0000000A1B2C3 /* ChrpWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -222,6 +260,26 @@
 			productReference = 00C8D47E2FD70578006DC8D5 /* ChrpNotificationContent.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		D1C3A0092FE0000000A1B2C3 /* ChrpWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1C3A00D2FE0000000A1B2C3 /* Build configuration list for PBXNativeTarget "ChrpWidget" */;
+			buildPhases = (
+				D1C3A0082FE0000000A1B2C3 /* Sources */,
+				D1C3A0062FE0000000A1B2C3 /* Frameworks */,
+				D1C3A0072FE0000000A1B2C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D1C3A0052FE0000000A1B2C3 /* ChrpWidget */,
+			);
+			name = ChrpWidget;
+			productName = ChrpWidget;
+			productReference = D1C3A0032FE0000000A1B2C3 /* ChrpWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		13B07F861A680F5B00A75B9A /* Chrp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Chrp" */;
@@ -240,6 +298,7 @@
 			);
 			dependencies = (
 				00C8D48B2FD70578006DC8D5 /* PBXTargetDependency */,
+				D1C3A00A2FE0000000A1B2C3 /* PBXTargetDependency */,
 			);
 			name = Chrp;
 			productName = Chrp;
@@ -256,6 +315,9 @@
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					00C8D47D2FD70578006DC8D5 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					D1C3A0092FE0000000A1B2C3 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 					13B07F861A680F5B00A75B9A = {
@@ -278,6 +340,7 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* Chrp */,
 				00C8D47D2FD70578006DC8D5 /* ChrpNotificationContent */,
+				D1C3A0092FE0000000A1B2C3 /* ChrpWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -298,6 +361,13 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				4593C79946707DA1E832394B /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1C3A0072FE0000000A1B2C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -450,6 +520,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D1C3A0082FE0000000A1B2C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -457,6 +534,11 @@
 			isa = PBXTargetDependency;
 			target = 00C8D47D2FD70578006DC8D5 /* ChrpNotificationContent */;
 			targetProxy = 00C8D48A2FD70578006DC8D5 /* PBXContainerItemProxy */;
+		};
+		D1C3A00A2FE0000000A1B2C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D1C3A0092FE0000000A1B2C3 /* ChrpWidget */;
+			targetProxy = D1C3A0022FE0000000A1B2C3 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -740,6 +822,89 @@
 			};
 			name = Release;
 		};
+		D1C3A00B2FE0000000A1B2C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = ChrpWidget/ChrpWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 9AR4YP352M;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChrpWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Chrp;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chrp.app.ChrpWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		D1C3A00C2FE0000000A1B2C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = ChrpWidget/ChrpWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 9AR4YP352M;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChrpWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Chrp;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.chrp.app.ChrpWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -766,6 +931,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1C3A00D2FE0000000A1B2C3 /* Build configuration list for PBXNativeTarget "ChrpWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1C3A00B2FE0000000A1B2C3 /* Debug */,
+				D1C3A00C2FE0000000A1B2C3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
