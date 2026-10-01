@@ -1,6 +1,7 @@
 import UIKit
 import UserNotifications
 import UserNotificationsUI
+import WidgetKit
 
 /// Notification Content Extension for the AVAILABILITY_REQUEST category.
 ///
@@ -319,6 +320,9 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         urlSession.dataTask(with: request) { _, urlResponse, error in
             let code = (urlResponse as? HTTPURLResponse)?.statusCode ?? 0
             let ok   = error == nil && (200..<300).contains(code)
+            // The Home Screen widget would otherwise keep showing the old
+            // answer until its next scheduled refresh.
+            if ok { WidgetCenter.shared.reloadAllTimelines() }
             DispatchQueue.main.async { completion(ok) }
         }.resume()
     }
