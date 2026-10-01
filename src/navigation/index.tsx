@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
+import { getDocs, getDoc, doc, collection, disableNetwork, enableNetwork } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import AuthScreen from '../screens/AuthScreen';
@@ -464,9 +464,28 @@ function AppStack() {
   }, [widgetUid, activeTeamId]);
 
   // Replies made inside the app should show on the widget straight away.
+  //
+  // Coming back to the foreground: iOS suspends the app in the background and
+  // the Firestore connection goes stale without the SDK noticing, so listeners
+  // can sit on old data for a long time — an answer given from the widget or a
+  // notification only appeared after a hard close. Cycling the network makes
+  // the SDK reconnect at once and every listener resync. Skipped for short
+  // interruptions (Control Centre, a notification banner) to avoid churn.
   useEffect(() => {
+    let backgroundedAt: number | null = null;
     const sub = AppState.addEventListener('change', state => {
-      if (state === 'background') reloadWidget();
+      if (state === 'background') {
+        backgroundedAt = Date.now();
+        reloadWidget();
+      } else if (state === 'active' && backgroundedAt !== null) {
+        const away = Date.now() - backgroundedAt;
+        backgroundedAt = null;
+        if (away > 3000) {
+          disableNetwork(db)
+            .then(() => enableNetwork(db))
+            .catch(err => console.error('[Firestore] reconnect failed:', err));
+        }
+      }
     });
     return () => sub.remove();
   }, []);
