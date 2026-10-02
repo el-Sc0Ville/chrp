@@ -48,10 +48,16 @@ const firestore_1 = require("firebase-admin/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_2 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
+const v2_1 = require("firebase-functions/v2");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const crypto = __importStar(require("crypto"));
 admin.initializeApp();
 const db = admin.firestore();
+// Spending ceiling. recordAvailability and widgetApi are public endpoints, so a
+// bug or someone hammering them could otherwise scale up without limit and run
+// up the bill. Ten concurrent instances is far more than this app needs: each
+// one handles many requests, and a request takes well under a second.
+(0, v2_1.setGlobalOptions)({ maxInstances: 10 });
 // Cloud Functions run in UTC, so getDay()/getHours() rendered a 7 PM Eastern
 // game as "11 PM" in every notification — including the "Tomorrow at X"
 // reminders, which is exactly the kind of thing that makes people miss games.
@@ -491,7 +497,9 @@ async function nextEventFor(teamId, uid) {
         .collection('events')
         .where('startsAt', '>', firestore_1.Timestamp.now())
         .orderBy('startsAt', 'asc')
-        .limit(10)
+        // Every document returned is a billed read, and this runs on each widget
+        // refresh. Five still skips past a run of cancelled games.
+        .limit(5)
         .get();
     const eventDoc = upcoming.docs.find(d => d.data()['status'] !== 'cancelled');
     const base = {

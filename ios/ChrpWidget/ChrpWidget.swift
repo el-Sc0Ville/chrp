@@ -62,10 +62,12 @@ struct ChrpProvider: TimelineProvider {
     return ChrpEntry(date: Date(), state: state, saveFailed: ChrpStore.recentlyFailed())
   }
 
-  // Every 30 minutes, and right after the game starts so it rolls over to the
-  // next one. Sooner after a failed save, so the error does not linger.
+  // Hourly, and right after the game starts so it rolls over to the next one.
+  // Sooner after a failed save, so the error does not linger. Hourly is enough
+  // because the app and the notification extension reload the widget the
+  // moment an answer changes; this schedule only catches new or edited games.
   static func nextRefresh(after entry: ChrpEntry) -> Date {
-    var next = entry.date.addingTimeInterval(30 * 60)
+    var next = entry.date.addingTimeInterval(60 * 60)
     if case .ready(let payload, _) = entry.state,
        let start = payload.event?.startDate,
        start > entry.date, start < next {
