@@ -58,3 +58,7 @@ build.log
 
 # Firebase deploy cache
 .firebase/
+
+# Firebase admin keys (used once by functions/scripts/seed-demo.js; never commit)
+*firebase-adminsdk*.json
+*-service-account*.json
