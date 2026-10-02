@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "865858877596",
+    "project_id": "chrp-app",
+    "storage_bucket": "chrp-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:865858877596:android:1a67f19b832078da925559",
+        "android_client_info": {
+          "package_name": "com.chrp.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIjZQRF_RATE0qrb0ia9hvFzTYw31pJuY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
