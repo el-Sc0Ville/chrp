@@ -16,6 +16,7 @@ import { doc, setDoc, updateDoc, addDoc, getDocs, onSnapshot, collection, server
 import { db } from '../firebase';
 import * as haptics from '../lib/haptics';
 import { sendPushNotification } from '../firebase/sendNotification';
+import { replyHint } from '../firebase/notifications';
 import type { AvailabilityResponse, Member } from '../firebase/schema';
 import { useUserContext } from '../context/UserContext';
 import { scoreResult, type Score } from '../context/ScoreContext';
@@ -193,7 +194,7 @@ function ManagerEventDetail() {
       sendPushNotification(
         m.pushToken!,
         `Are you in for ${event?.opponent ?? event?.title ?? 'next game'}?`,
-        `${event ? formatEventDate(event.startsAt) : ''} — Swipe ↓ or hold to reply`,
+        `${event ? formatEventDate(event.startsAt) : ''} — ${replyHint(m.pushPlatform)}`,
         { eventId, teamId: activeTeamId, userId: m.userId, displayName: m.displayName, categoryId: 'AVAILABILITY_REQUEST' },
       ).catch(err => console.error('[EventDetail] remind push failed for', m.userId, err));
     }

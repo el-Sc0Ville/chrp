@@ -29,13 +29,21 @@
     },
     "android": {
       "package": "com.chrp.app",
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#070B14",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -44,7 +52,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/chrp-icon-1024.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#2F6BFF",
           "sounds": []
         }
@@ -53,7 +61,8 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue.",
-          "locationWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue."
+          "locationWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ],

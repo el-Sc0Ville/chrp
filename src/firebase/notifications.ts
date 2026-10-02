@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from './config';
@@ -13,7 +14,17 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Registers the AVAILABILITY_REQUEST category with NO action buttons.
+ * How to answer an availability notification on the recipient's phone. iOS
+ * replies through the content extension (swipe down or long-press); Android
+ * shows the In / Maybe / Out buttons on the notification itself. Keep in step
+ * with replyHint() in functions/src/index.ts.
+ */
+export function replyHint(platform?: string): string {
+  return platform === 'android' ? 'Tap In, Maybe or Out below' : 'Swipe ↓ or hold to reply';
+}
+
+/**
+ * iOS: registers the AVAILABILITY_REQUEST category with NO action buttons.
  *
  * This is deliberate. The In/Out/Maybe controls are rendered by the iOS
  * Notification Content Extension (ios/ChrpNotificationContent), which is bound
@@ -25,9 +36,22 @@ Notifications.setNotificationHandler({
  * Registering system action buttons here as well would render a SECOND set of
  * In/Out/Maybe controls underneath the extension's own — that is exactly the
  * duplicate-UI bug. Keep this array empty; add buttons to the extension, not here.
+ *
+ * Android has no content extension, so there the system buttons ARE the
+ * controls. They open the app: a killed app on Android does not run JS in time
+ * to finish a background write, which would silently lose the answer.
+ * App.tsx handleNotificationResponse records the choice (identifier lowercased).
  */
 export async function registerNotificationCategories(): Promise<void> {
-  await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', []);
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', [
+      { identifier: 'IN',    buttonTitle: "✓ I'm in", options: { opensAppToForeground: true } },
+      { identifier: 'MAYBE', buttonTitle: 'Maybe',    options: { opensAppToForeground: true } },
+      { identifier: 'OUT',   buttonTitle: "✗ Out",    options: { opensAppToForeground: true } },
+    ]);
+  } else {
+    await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', []);
+  }
 
   // Separate category, and this one DOES carry buttons. No content extension is
   // bound to SUB_OFFER, so these system action buttons are the only controls —
@@ -74,6 +98,7 @@ export async function registerForPushNotifications(
     // Save token to Firestore member document
     await updateDoc(doc(db, 'teams', teamId, 'members', userId), {
       pushToken: token.data,
+      pushPlatform: Platform.OS === 'android' ? 'android' : 'ios',
     });
 
     return token.data;

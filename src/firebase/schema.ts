@@ -26,6 +26,10 @@ export interface Member {
   joinedAt: Timestamp;
   autoIn?: boolean;
   pushToken?: string;
+  // Platform the pushToken belongs to, so notification text can say how to
+  // reply on that phone. Absent on tokens registered before Android existed
+  // (all of which are iOS).
+  pushPlatform?: 'ios' | 'android';
   notificationsEnabled?: boolean;
   remindersEnabled?: boolean;
   locationEnabled?: boolean;

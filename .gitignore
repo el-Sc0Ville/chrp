@@ -34,15 +34,21 @@ yarn-error.*
 .env
 .env*.local
 
-# Firebase credentials (provided at build time, never committed)
+# Firebase app config files. The Android one is committed (like the web config in
+# src/firebase/config.ts it holds no secrets; Firebase ships it inside every APK),
+# because the build needs it and a gitignored file never reaches an EAS build.
 GoogleService-Info.plist
 google-services.json
+!android/app/google-services.json
 
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/android
+# Native build output (android/ itself is committed, like ios/: bare workflow)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
 ios/Pods/
 ios/build/
 

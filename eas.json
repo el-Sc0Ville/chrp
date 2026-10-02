@@ -14,6 +14,12 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "AIzaSyBD14XfIViAEZZY2Iz0R-hpopBa2vNDOYk"
+      },
+      "android": {
+        "buildType": "apk"
+      },
       "ios": {
         "credentialsSource": "remote"
       }

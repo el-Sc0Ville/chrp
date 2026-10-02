@@ -96,23 +96,30 @@ async function sendBatchNotifications(messages: ExpoMessage[]): Promise<void> {
   }
 }
 
+// How to answer on the recipient's phone. Keep in step with replyHint() in
+// src/firebase/notifications.ts. Tokens saved before Android existed carry no
+// pushPlatform; they are all iOS.
+function replyHint(member: FirebaseFirestore.DocumentData): string {
+  return member['pushPlatform'] === 'android' ? 'Tap In, Maybe or Out below' : 'Swipe ↓ or hold to reply';
+}
+
 const REMINDER_WINDOWS = [
   {
     hoursOut: 48,
     startHours: 47,
     endHours: 49,
-    buildNotification: (title: string, dateLabel: string, _timeLabel: string, venue: string) => ({
+    buildNotification: (title: string, dateLabel: string, _timeLabel: string, venue: string, hint: string) => ({
       title: `Are you in for ${title}?`,
-      body: `📅 ${dateLabel} at ${venue} — Swipe ↓ or hold to reply`,
+      body: `📅 ${dateLabel} at ${venue} — ${hint}`,
     }),
   },
   {
     hoursOut: 24,
     startHours: 23,
     endHours: 25,
-    buildNotification: (title: string, _dateLabel: string, timeLabel: string, venue: string) => ({
+    buildNotification: (title: string, _dateLabel: string, timeLabel: string, venue: string, hint: string) => ({
       title: `Last chance — are you in for ${title}?`,
-      body: `⏰ Tomorrow at ${timeLabel} at ${venue} — Swipe ↓ or hold to reply`,
+      body: `⏰ Tomorrow at ${timeLabel} at ${venue} — ${hint}`,
     }),
   },
 ];
@@ -155,7 +162,6 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
         const dateLabel = formatDate(eventDate, teamTimeZone);
         const timeLabel = formatTime(eventDate, teamTimeZone);
         const eventDateStr = `${dateLabel} · ${timeLabel}`;
-        const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue']);
 
         const notifications: ExpoMessage[] = [];
         for (const memberDoc of membersSnap.docs) {
@@ -165,6 +171,9 @@ export const sendAvailabilityReminders = onSchedule({ schedule: 'every 60 minute
           if (!member['pushToken']) continue;
           if (member['notificationsEnabled'] === false) continue;
 
+          const { title, body } = window.buildNotification(
+            eventData['title'], dateLabel, timeLabel, eventData['venue'], replyHint(member),
+          );
           notifications.push({
             to: member['pushToken'],
             sound: 'default',
@@ -223,7 +232,7 @@ export const onEventCreated = onDocumentCreated(
         to: member['pushToken'],
         sound: 'default',
         title: `New event: ${eventData['title']}`,
-        body: `📅 ${dateLabel} at ${eventData['venue']} — Hold to reply`,
+        body: `📅 ${dateLabel} at ${eventData['venue']} — ${member['pushPlatform'] === 'android' ? 'Tap In, Maybe or Out below' : 'Hold to reply'}`,
         categoryId: 'AVAILABILITY_REQUEST',
         data: {
           eventId,

@@ -72,6 +72,9 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
   };
 
   console.log('Notification response received:', actionIdentifier, data);
+  // A tap on an action button can cold-start the app; the writes below are
+  // denied by the rules until the persisted session has been restored.
+  await auth.authStateReady();
   // getLastNotificationResponseAsync returns the same response on every cold
   // start until cleared, which re-wrote answers and re-navigated each launch.
   Notifications.clearLastNotificationResponse();
@@ -106,9 +109,8 @@ const handleNotificationResponse = async (response: Notifications.NotificationRe
     return;
   }
 
-  // Safety net: the AVAILABILITY_REQUEST category registers no system action
-  // buttons today, so this branch is normally unreachable. It stays so that any
-  // future action button still records a response rather than silently no-oping.
+  // Android's In / Maybe / Out buttons land here (iOS registers no buttons for
+  // this category; its content extension records the answer itself).
   if (!data.eventId || !data.teamId || !data.userId) {
     console.warn('Missing notification data, cannot write response');
     return;

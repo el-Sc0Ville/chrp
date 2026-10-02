@@ -14,6 +14,7 @@ import AvatarPill from '../components/AvatarPill';
 import ErrorState from '../components/ErrorState';
 import { useNotifications } from '../context/NotificationContext';
 import { sendPushNotification } from '../firebase/sendNotification';
+import { replyHint } from '../firebase/notifications';
 import { useUserContext } from '../context/UserContext';
 import { db } from '../firebase';
 import * as haptics from '../lib/haptics';
@@ -124,7 +125,7 @@ function ManagerHomeScreen() {
       sendPushNotification(
         m.pushToken!,
         `Are you in for ${activeEvent.opponent ?? activeEvent.title}?`,
-        `${formatRelativeDay(activeEvent.startsAt)} ${formatTime(activeEvent.startsAt)} — Swipe ↓ or hold to reply`,
+        `${formatRelativeDay(activeEvent.startsAt)} ${formatTime(activeEvent.startsAt)} — ${replyHint(m.pushPlatform)}`,
         { eventId: activeEvent.id, teamId: activeTeamId, userId: m.userId, displayName: m.displayName, categoryId: 'AVAILABILITY_REQUEST' },
       ).catch(err => console.error('[HomeScreen] remind push failed for', m.userId, err));
     }

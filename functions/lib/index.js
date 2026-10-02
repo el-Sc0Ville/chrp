@@ -110,23 +110,29 @@ async function sendBatchNotifications(messages) {
         }
     }
 }
+// How to answer on the recipient's phone. Keep in step with replyHint() in
+// src/firebase/notifications.ts. Tokens saved before Android existed carry no
+// pushPlatform; they are all iOS.
+function replyHint(member) {
+    return member['pushPlatform'] === 'android' ? 'Tap In, Maybe or Out below' : 'Swipe ↓ or hold to reply';
+}
 const REMINDER_WINDOWS = [
     {
         hoursOut: 48,
         startHours: 47,
         endHours: 49,
-        buildNotification: (title, dateLabel, _timeLabel, venue) => ({
+        buildNotification: (title, dateLabel, _timeLabel, venue, hint) => ({
             title: `Are you in for ${title}?`,
-            body: `📅 ${dateLabel} at ${venue} — Swipe ↓ or hold to reply`,
+            body: `📅 ${dateLabel} at ${venue} — ${hint}`,
         }),
     },
     {
         hoursOut: 24,
         startHours: 23,
         endHours: 25,
-        buildNotification: (title, _dateLabel, timeLabel, venue) => ({
+        buildNotification: (title, _dateLabel, timeLabel, venue, hint) => ({
             title: `Last chance — are you in for ${title}?`,
-            body: `⏰ Tomorrow at ${timeLabel} at ${venue} — Swipe ↓ or hold to reply`,
+            body: `⏰ Tomorrow at ${timeLabel} at ${venue} — ${hint}`,
         }),
     },
 ];
@@ -163,7 +169,6 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                 const dateLabel = formatDate(eventDate, teamTimeZone);
                 const timeLabel = formatTime(eventDate, teamTimeZone);
                 const eventDateStr = `${dateLabel} · ${timeLabel}`;
-                const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue']);
                 const notifications = [];
                 for (const memberDoc of membersSnap.docs) {
                     const member = memberDoc.data();
@@ -175,6 +180,7 @@ exports.sendAvailabilityReminders = (0, scheduler_1.onSchedule)({ schedule: 'eve
                         continue;
                     if (member['notificationsEnabled'] === false)
                         continue;
+                    const { title, body } = window.buildNotification(eventData['title'], dateLabel, timeLabel, eventData['venue'], replyHint(member));
                     notifications.push({
                         to: member['pushToken'],
                         sound: 'default',
@@ -228,7 +234,7 @@ exports.onEventCreated = (0, firestore_2.onDocumentCreated)({ document: 'teams/{
             to: member['pushToken'],
             sound: 'default',
             title: `New event: ${eventData['title']}`,
-            body: `📅 ${dateLabel} at ${eventData['venue']} — Hold to reply`,
+            body: `📅 ${dateLabel} at ${eventData['venue']} — ${member['pushPlatform'] === 'android' ? 'Tap In, Maybe or Out below' : 'Hold to reply'}`,
             categoryId: 'AVAILABILITY_REQUEST',
             data: {
                 eventId,
