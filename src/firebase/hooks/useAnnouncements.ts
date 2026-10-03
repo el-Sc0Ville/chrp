@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../config';
 import type { Announcement } from '../schema';
+import { useModeration, announcementKey } from '../../moderation';
 
 interface UseAnnouncementsResult {
   announcements: Announcement[];
@@ -34,5 +35,12 @@ export function useAnnouncements(teamId: string): UseAnnouncementsResult {
     setAttempt(n => n + 1);
   }, []);
 
-  return { announcements, loading, error, retry };
+  // Posts by people this user blocked, or that they reported, never reach a screen.
+  const { isHidden } = useModeration();
+  const visible = useMemo(
+    () => announcements.filter(a => !isHidden(a.authorId, announcementKey(a.id))),
+    [announcements, isHidden],
+  );
+
+  return { announcements: visible, loading, error, retry };
 }

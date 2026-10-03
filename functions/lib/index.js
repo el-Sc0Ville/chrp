@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.widgetApi = exports.onSubSpareInvited = exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
+exports.onReportCreated = exports.widgetApi = exports.onSubSpareInvited = exports.deleteAccount = exports.onSubRequestCreated = exports.recordAvailability = exports.onEventCreated = exports.sendAvailabilityReminders = void 0;
 // Deploy with: firebase deploy --only functions
 const admin = __importStar(require("firebase-admin"));
 // Imported directly rather than reached through the legacy `admin.firestore.*`
@@ -580,5 +580,43 @@ exports.widgetApi = (0, https_1.onRequest)({ region: 'northamerica-northeast1' }
         console.error('[widgetApi] failed:', err);
         res.status(500).json({ error: 'Widget request failed' });
     }
+});
+// ─── Content reports ──────────────────────────────────────────────────────────
+// A member reported an announcement or reply (App Store guideline 1.2). Tell the
+// team's managers so they can review and remove it, and write a "[REPORT]" log
+// line the developer can alert on in Cloud Logging. Blocks are logged too but
+// not pushed: blocking is private to the person who blocked.
+exports.onReportCreated = (0, firestore_2.onDocumentCreated)({ document: 'reports/{reportId}', region: 'northamerica-northeast1' }, async (event) => {
+    const report = event.data?.data();
+    if (!report)
+        return;
+    const teamId = report['teamId'];
+    const what = report['replyId'] ? 'reply' : 'announcement';
+    console.warn(`[REPORT] ${report['reason']} ${what} by ${report['contentAuthorName']} (${report['contentAuthorId']}) ` +
+        `in team ${teamId}, announcement ${report['announcementId']}${report['replyId'] ? `, reply ${report['replyId']}` : ''}, ` +
+        `reporter ${report['reporterId']}, report ${event.params.reportId}: ${String(report['body']).slice(0, 200)}`);
+    if (report['reason'] !== 'reported' || !teamId)
+        return;
+    const [teamDoc, membersSnap] = await Promise.all([
+        db.collection('teams').doc(teamId).get(),
+        db.collection('teams').doc(teamId).collection('members').where('role', '==', 'manager').get(),
+    ]);
+    const teamName = teamDoc.data()?.['name'] ?? 'your team';
+    const messages = [];
+    for (const m of membersSnap.docs) {
+        const member = m.data();
+        if (m.id === report['reporterId'])
+            continue;
+        if (!member['pushToken'] || member['notificationsEnabled'] === false)
+            continue;
+        messages.push({
+            to: member['pushToken'],
+            sound: 'default',
+            title: `A post was reported in ${teamName}`,
+            body: `${report['contentAuthorName']}'s ${what} was reported as objectionable. Open Announcements to review it, and delete it if it breaks the rules.`,
+            data: { eventId: '', teamId, userId: m.id },
+        });
+    }
+    await sendBatchNotifications(messages);
 });
 //# sourceMappingURL=index.js.map

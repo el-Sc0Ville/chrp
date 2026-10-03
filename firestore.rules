@@ -31,6 +31,21 @@ service cloud.firestore {
       allow update, delete: if isTeamManager(resource.data.teamId);
     }
 
+    // ── Content reports ──────────────────────────────────────────────────────
+    // Filed from the ⋯ menu on announcements and replies (and on every block).
+    // Write-only from the app: a member of the team can file one as themselves;
+    // nobody can read, change or delete them except through the console/admin.
+    match /reports/{reportId} {
+      allow create: if request.auth != null
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.teamId is string
+        && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId)/members/$(request.auth.uid))
+        && request.resource.data.reason in ['reported', 'blocked']
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 1000;
+      allow read, update, delete: if false;
+    }
+
     // ── User profiles ────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

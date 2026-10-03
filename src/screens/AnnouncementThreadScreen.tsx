@@ -15,6 +15,8 @@ import { navy, teams, status, fonts, spacing, radius } from '../theme';
 import { useUserContext } from '../context/UserContext';
 import { useReplies } from '../firebase/hooks/useReplies';
 import type { Announcement, AnnouncementReply } from '../firebase/schema';
+import { useModeration, openContentMenu, announcementKey } from '../moderation';
+import { containsObjectionable, OBJECTIONABLE_MESSAGE } from '../lib/contentFilter';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
@@ -46,8 +48,9 @@ export default function AnnouncementThreadScreen() {
   const insets     = useSafeAreaInsets();
   const route      = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user, activeTeamId, activeTeamPalette } = useUserContext();
+  const { user, isManager, activeTeamId, activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
+  const { isHidden } = useModeration();
 
   const { announcementId } = route.params as { announcementId: string };
 
@@ -91,6 +94,11 @@ export default function AnnouncementThreadScreen() {
   const sendReply = async () => {
     const text = draft.trim();
     if (!text || sendingRef.current) return;
+    if (containsObjectionable(text)) {
+      haptics.error();
+      Alert.alert('Reply not sent', OBJECTIONABLE_MESSAGE);
+      return;
+    }
     sendingRef.current = true;
     setSending(true);
     try {
@@ -116,6 +124,7 @@ export default function AnnouncementThreadScreen() {
   };
 
   const canSend = draft.trim().length > 0 && !sending;
+  const viewer = { uid: user?.uid ?? '', isManager };
 
   if (threadState === 'loading') {
     return (
@@ -129,8 +138,10 @@ export default function AnnouncementThreadScreen() {
   }
 
   // A deleted doc or a denied read used to leave nothing but the back chevron.
-  if (threadState !== 'ready' || !announcement) {
-    const isMissing = threadState === 'missing';
+  // A post this user reported, or by someone they blocked, reads as gone too.
+  const hiddenForMe = !!announcement && isHidden(announcement.authorId, announcementKey(announcement.id));
+  if (threadState !== 'ready' || !announcement || hiddenForMe) {
+    const isMissing = threadState === 'missing' || hiddenForMe;
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <NavHeader onBack={() => navigation.goBack()} />
@@ -194,6 +205,17 @@ export default function AnnouncementThreadScreen() {
                 <Text style={styles.authorName}>{announcement.authorName}</Text>
                 <Text style={styles.cardTimestamp}>{formatTimestamp(announcement.createdAt)}</Text>
               </View>
+              <MoreButton
+                label="Options for this announcement"
+                onPress={() => openContentMenu(
+                  {
+                    teamId: activeTeamId, announcementId,
+                    authorId: announcement.authorId, authorName: announcement.authorName, body: announcement.body,
+                  },
+                  viewer,
+                  () => navigation.goBack(),
+                )}
+              />
             </View>
             <Text style={styles.cardBody}>{announcement.body}</Text>
           </View>
@@ -207,7 +229,17 @@ export default function AnnouncementThreadScreen() {
 
           {/* ── Replies ── */}
           {replies.map(reply => (
-            <ReplyRow key={reply.id} reply={reply} />
+            <ReplyRow
+              key={reply.id}
+              reply={reply}
+              onMore={() => openContentMenu(
+                {
+                  teamId: activeTeamId, announcementId, replyId: reply.id,
+                  authorId: reply.authorId, authorName: reply.authorName, body: reply.body,
+                },
+                viewer,
+              )}
+            />
           ))}
 
           {replies.length === 0 && (
@@ -259,7 +291,23 @@ function NavHeader({ onBack }: { onBack: () => void }) {
   );
 }
 
-function ReplyRow({ reply }: { reply: AnnouncementReply }) {
+// The ⋯ that opens Report / Block / Delete. A visible button rather than only a
+// long-press, so people (and App Review) can find it.
+function MoreButton({ onPress, label }: { onPress: () => void; label: string }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.5 }]}
+    >
+      <Text style={styles.moreBtnText}>⋯</Text>
+    </Pressable>
+  );
+}
+
+function ReplyRow({ reply, onMore }: { reply: AnnouncementReply; onMore: () => void }) {
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
   return (
@@ -271,6 +319,8 @@ function ReplyRow({ reply }: { reply: AnnouncementReply }) {
         <View style={styles.replyMeta}>
           <Text style={styles.replyAuthor}>{reply.authorName}</Text>
           <Text style={styles.replyTimestamp}>{formatTimestamp(reply.createdAt)}</Text>
+          <View style={styles.flex} />
+          <MoreButton label={`Options for ${reply.authorName}'s reply`} onPress={onMore} />
         </View>
         <Text style={styles.replyBody}>{reply.body}</Text>
       </View>
@@ -281,6 +331,15 @@ function ReplyRow({ reply }: { reply: AnnouncementReply }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  moreBtn: {
+    paddingHorizontal: spacing[8],
+    paddingVertical: 2,
+  },
+  moreBtnText: {
+    fontSize: 20,
+    lineHeight: 22,
+    color: navy[300],
+  },
   container: {
     flex: 1,
     backgroundColor: navy[800],

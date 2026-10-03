@@ -6,7 +6,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
   Switch, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator,
+  ActivityIndicator, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +25,10 @@ import { useDues } from '../firebase/hooks/useDues';
 import { useTeam } from '../firebase/hooks/useTeam';
 import type { DuesRecord } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
+import { useModeration } from '../moderation';
+
+const TERMS_URL = 'https://chrp-app.web.app/terms';
+const SUPPORT_EMAIL = 'leSc0vill3@gmail.com';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 
@@ -539,6 +543,10 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* ── Privacy & safety ── */}
+        <Text style={styles.sectionLabel}>Privacy & safety</Text>
+        <SafetyCard />
+
         {/* ── Account ── */}
         <Text style={styles.sectionLabel}>Account</Text>
         <View style={styles.card}>
@@ -593,6 +601,96 @@ export default function ProfileScreen() {
         </View>
       )}
     </KeyboardAvoidingView>
+  );
+}
+
+// ─── Privacy & safety ─────────────────────────────────────────────────────────
+// Blocked people (with Unblock), the Terms of Use, and a way to reach us.
+// App Store guideline 1.2 asks for all three in apps with user content.
+
+function SafetyCard() {
+  const { blocked, unblock } = useModeration();
+  const [showBlocked, setShowBlocked] = useState(false);
+  const blockedList = Object.entries(blocked).sort((a, b) => a[1].localeCompare(b[1]));
+
+  const confirmUnblock = (uid: string, name: string) => Alert.alert(
+    `Unblock ${name}?`,
+    "You'll see their announcements and replies again.",
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Unblock',
+        onPress: () => unblock(uid).catch(err => {
+          console.error('[Profile] unblock failed:', err);
+          Alert.alert("Couldn't unblock", 'Please try again.');
+        }),
+      },
+    ],
+  );
+
+  const open = (url: string) => Linking.openURL(url).catch(() =>
+    Alert.alert("Couldn't open link", url),
+  );
+
+  return (
+    <View style={styles.card}>
+      <Pressable
+        style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
+        onPress={() => setShowBlocked(v => !v)}
+      >
+        <View style={styles.toggleLeft}>
+          <Text style={styles.toggleIcon}>🚫</Text>
+          <View style={styles.toggleTextBlock}>
+            <Text style={styles.toggleLabel}>Blocked people</Text>
+            <Text style={styles.toggleSubtitle}>
+              {blockedList.length === 0 ? 'No one' : `${blockedList.length} blocked`}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.rowChevron}>{showBlocked ? '⌄' : '›'}</Text>
+      </Pressable>
+      {showBlocked && blockedList.length === 0 && (
+        <Text style={[styles.toggleSubtitle, { paddingHorizontal: spacing[16], paddingBottom: spacing[12] }]}>
+          To block someone, tap ⋯ on one of their announcements or replies.
+        </Text>
+      )}
+      {showBlocked && blockedList.map(([uid, name]) => (
+        <View key={uid} style={[styles.supportRow, { paddingLeft: spacing[48] }]}>
+          <Text style={styles.toggleLabel}>{name}</Text>
+          <Pressable onPress={() => confirmUnblock(uid, name)} hitSlop={8}>
+            <Text style={[styles.toggleLabel, { color: signal[300] }]}>Unblock</Text>
+          </Pressable>
+        </View>
+      ))}
+      <View style={styles.rowDivider} />
+      <Pressable
+        style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
+        onPress={() => open(TERMS_URL)}
+      >
+        <View style={styles.toggleLeft}>
+          <Text style={styles.toggleIcon}>📄</Text>
+          <View style={styles.toggleTextBlock}>
+            <Text style={styles.toggleLabel}>Terms of Use</Text>
+            <Text style={styles.toggleSubtitle}>Zero tolerance for abuse</Text>
+          </View>
+        </View>
+        <Text style={styles.rowChevron}>›</Text>
+      </Pressable>
+      <View style={styles.rowDivider} />
+      <Pressable
+        style={({ pressed }) => [styles.supportRow, pressed && { opacity: 0.75 }]}
+        onPress={() => open(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Chrp support')}`)}
+      >
+        <View style={styles.toggleLeft}>
+          <Text style={styles.toggleIcon}>✉️</Text>
+          <View style={styles.toggleTextBlock}>
+            <Text style={styles.toggleLabel}>Contact support</Text>
+            <Text style={styles.toggleSubtitle}>{SUPPORT_EMAIL}</Text>
+          </View>
+        </View>
+        <Text style={styles.rowChevron}>›</Text>
+      </Pressable>
+    </View>
   );
 }
 

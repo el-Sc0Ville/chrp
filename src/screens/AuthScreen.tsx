@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, Alert,
-  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navy, teams, status, fonts, signal, spacing, radius } from '../theme';
@@ -237,6 +237,27 @@ export default function AuthScreen() {
             )}
           </View>
         )}
+        {/* Both ways in (email link and invite code) pass this line, so everyone
+            agrees to the Terms before they can post (App Store guideline 1.2). */}
+        <Text style={styles.termsText}>
+          By continuing you agree to Chrp's{' '}
+          <Text
+            style={[styles.termsLink, { color: TEAM[300] }]}
+            onPress={() => Linking.openURL('https://chrp-app.web.app/terms').catch(() => {})}
+            accessibilityRole="link"
+          >
+            Terms of Use
+          </Text>
+          {' '}and{' '}
+          <Text
+            style={[styles.termsLink, { color: TEAM[300] }]}
+            onPress={() => Linking.openURL('https://chrp-app.web.app/privacy').catch(() => {})}
+            accessibilityRole="link"
+          >
+            Privacy Policy
+          </Text>
+          . There is zero tolerance for objectionable content or abusive behaviour.
+        </Text>
         {/* ── Dev bypass — tap wordmark 5× to reveal ── */}
         {__DEV__ && showDevPanel && (
           <View style={styles.devArea}>
@@ -337,6 +358,19 @@ export default function AuthScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  termsText: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    lineHeight: 18,
+    color: navy[400],
+    textAlign: 'center',
+    marginTop: spacing[24],
+    paddingHorizontal: spacing[8],
+  },
+  termsLink: {
+    fontFamily: fonts.uiSemiBold,
+    textDecorationLine: 'underline',
+  },
   root: {
     flex: 1,
     backgroundColor: navy[900],

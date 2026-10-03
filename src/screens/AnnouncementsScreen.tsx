@@ -18,6 +18,8 @@ import { navy, teams, status, fonts, type as T, spacing, radius } from '../theme
 import { useUserContext } from '../context/UserContext';
 import ErrorState from '../components/ErrorState';
 import { useAnnouncements } from '../firebase/hooks/useAnnouncements';
+import { openContentMenu } from '../moderation';
+import { containsObjectionable, OBJECTIONABLE_MESSAGE } from '../lib/contentFilter';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback — dynamic overrides applied inline in components
 const MAX_CHARS = 500;
@@ -128,6 +130,11 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 
   const handlePost = async (body: string, isPinned: boolean) => {
     if (savingRef.current) return;
+    if (containsObjectionable(body)) {
+      haptics.error();
+      Alert.alert('Not posted', OBJECTIONABLE_MESSAGE);
+      return;
+    }
     savingRef.current = true;
     setPosting(true);
     try {
@@ -271,7 +278,12 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
               showSeenBy
               style={idx === 0 ? undefined : styles.cardGap}
               onPress={() => goToThread(item.id)}
-              onLongPress={item.authorId === user?.uid ? () => setActionItem(item) : undefined}
+              onMore={() => item.authorId === user?.uid
+                ? setActionItem(item)
+                : openContentMenu(
+                    { teamId: activeTeamId, announcementId: item.id, authorId: item.authorId, authorName: item.authorName, body: item.body },
+                    { uid: user?.uid ?? '', isManager: true },
+                  )}
             />
           ))
         )}
@@ -318,7 +330,7 @@ function ManagerView({ embedded }: { embedded?: boolean }) {
 function PlayerView({ embedded }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { activeTeamId } = useUserContext();
+  const { user, activeTeamId } = useUserContext();
   const { announcements: firestoreAnnouncements, loading, error, retry } = useAnnouncements(activeTeamId);
   const announcements = firestoreAnnouncements.map(toDisplayAnn);
   const [readIds, setReadIds] = useState<Set<string>>(new Set<string>());
@@ -360,6 +372,10 @@ function PlayerView({ embedded }: { embedded?: boolean }) {
               unread={!readIds.has(item.id)}
               style={idx === 0 ? undefined : styles.cardGap}
               onPress={() => goToThread(item.id)}
+              onMore={() => openContentMenu(
+                { teamId: activeTeamId, announcementId: item.id, authorId: item.authorId, authorName: item.authorName, body: item.body },
+                { uid: user?.uid ?? '', isManager: false },
+              )}
             />
           ))
         )}
@@ -380,14 +396,15 @@ function AnnouncementCard({
   unread,
   style,
   onPress,
-  onLongPress,
+  onMore,
 }: {
   announcement: DisplayAnn;
   showSeenBy: boolean;
   unread?: boolean;
   style?: object;
   onPress?: () => void;
-  onLongPress?: () => void;
+  // Opens Edit/Delete (own post) or Report/Block/Delete (anyone else's).
+  onMore?: () => void;
 }) {
   const { activeTeamPalette } = useUserContext();
   const TEAM = teams[activeTeamPalette];
@@ -400,7 +417,7 @@ function AnnouncementCard({
         style,
       ]}
       onPress={onPress}
-      onLongPress={onLongPress}
+      onLongPress={onMore}
       delayLongPress={400}
     >
       {announcement.isPinned && (
@@ -419,6 +436,17 @@ function AnnouncementCard({
           <Text style={styles.cardTimestamp}>{announcement.timestamp}</Text>
         </View>
         {unread && <View style={[styles.unreadDot, { backgroundColor: TEAM[300] }]} />}
+        {onMore && (
+          <Pressable
+            onPress={onMore}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Options for this announcement"
+            style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Text style={styles.moreBtnText}>⋯</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Body */}
@@ -689,6 +717,15 @@ const styles = StyleSheet.create({
   authorMeta: {
     flex: 1,
     gap: 1,
+  },
+  moreBtn: {
+    paddingHorizontal: spacing[8],
+    paddingVertical: 2,
+  },
+  moreBtnText: {
+    fontSize: 20,
+    lineHeight: 22,
+    color: navy[300],
   },
   authorName: {
     fontFamily: fonts.uiSemiBold,
