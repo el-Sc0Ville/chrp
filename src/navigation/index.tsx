@@ -33,6 +33,7 @@ import { GameResponseProvider } from '../context/GameResponseContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { ScoreProvider } from '../context/ScoreContext';
 import { UserProvider, useUserContext } from '../context/UserContext';
+import { ModerationProvider } from '../moderation';
 import { navy, teams, fonts, spacing, radius, type TeamKey } from '../theme';
 import { onAuthStateChanged, signOut, type User } from '../firebase/auth';
 import { db, auth } from '../firebase';
@@ -543,6 +544,7 @@ function AppStack() {
 export default function AppNavigator() {
   return (
     <UserProvider>
+    <ModerationProvider>
     <GameResponseProvider>
     <NotificationProvider>
     <ScoreProvider>
@@ -550,6 +552,7 @@ export default function AppNavigator() {
     </ScoreProvider>
     </NotificationProvider>
     </GameResponseProvider>
+    </ModerationProvider>
     </UserProvider>
   );
 }

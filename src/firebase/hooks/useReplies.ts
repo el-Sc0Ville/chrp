@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../config';
 import type { AnnouncementReply } from '../schema';
+import { useModeration, replyKey } from '../../moderation';
 
 interface UseRepliesResult {
   replies: AnnouncementReply[];
@@ -34,5 +35,11 @@ export function useReplies(teamId: string, announcementId: string): UseRepliesRe
     setAttempt(n => n + 1);
   }, []);
 
-  return { replies, loading, error, retry };
+  const { isHidden } = useModeration();
+  const visible = useMemo(
+    () => replies.filter(r => !isHidden(r.authorId, replyKey(announcementId, r.id))),
+    [replies, isHidden, announcementId],
+  );
+
+  return { replies: visible, loading, error, retry };
 }
