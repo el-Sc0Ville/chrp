@@ -76,7 +76,9 @@ type ExpoMessage = {
 async function sendBatchNotifications(messages: ExpoMessage[]): Promise<void> {
   if (messages.length === 0) return;
   for (let i = 0; i < messages.length; i += 100) {
-    const chunk = messages.slice(i, i + 100);
+    // Android delivers through the high-importance "default" channel the app
+    // creates; iOS ignores channelId.
+    const chunk = messages.slice(i, i + 100).map(m => ({ channelId: 'default', ...m }));
     try {
       const res = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',

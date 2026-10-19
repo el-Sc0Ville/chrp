@@ -44,6 +44,14 @@ export function replyHint(platform?: string): string {
  */
 export async function registerNotificationCategories(): Promise<void> {
   if (Platform.OS === 'android') {
+    // Android 13+ shows the notification permission prompt only once a channel
+    // exists, and pushes land in this channel (channelId 'default'). High
+    // importance so reminders pop up instead of arriving silently.
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Game reminders and updates',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+    });
     await Notifications.setNotificationCategoryAsync('AVAILABILITY_REQUEST', [
       { identifier: 'IN',    buttonTitle: "✓ I'm in", options: { opensAppToForeground: true } },
       { identifier: 'MAYBE', buttonTitle: 'Maybe',    options: { opensAppToForeground: true } },

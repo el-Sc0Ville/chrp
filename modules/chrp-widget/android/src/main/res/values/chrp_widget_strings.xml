@@ -1,0 +1,4 @@
+<resources>
+  <string name="chrp_widget_label">Next game</string>
+  <string name="chrp_widget_description">See your next game and answer In, Maybe or Out without opening Chrp.</string>
+</resources>

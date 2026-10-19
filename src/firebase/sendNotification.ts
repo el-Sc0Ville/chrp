@@ -16,6 +16,8 @@ export async function sendPushNotification(
   const message = {
     to: pushToken,
     sound: 'default',
+    // Android: the high-importance channel created in registerNotificationCategories.
+    channelId: 'default',
     title,
     body,
     ...(options?.categoryId ? { categoryId: options.categoryId } : {}),
