@@ -1,4 +1,4 @@
-package com.chrp.app
+package app.chrp.android
 
 import android.app.Application
 import android.content.res.Configuration

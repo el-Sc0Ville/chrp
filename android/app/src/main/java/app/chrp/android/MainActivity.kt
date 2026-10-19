@@ -1,4 +1,4 @@
-package com.chrp.app
+package app.chrp.android
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

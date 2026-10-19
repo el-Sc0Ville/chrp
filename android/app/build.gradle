@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.chrp.app'
+    namespace 'app.chrp.android'
     defaultConfig {
-        applicationId 'com.chrp.app'
+        applicationId 'app.chrp.android'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

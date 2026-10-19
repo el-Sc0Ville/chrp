@@ -28,7 +28,7 @@
       }
     },
     "android": {
-      "package": "com.chrp.app",
+      "package": "app.chrp.android",
       "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#070B14",

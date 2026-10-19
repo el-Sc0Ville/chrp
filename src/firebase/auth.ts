@@ -19,7 +19,7 @@ const ACTION_CODE_SETTINGS = {
     bundleId: 'com.chrp.app',
   },
   android: {
-    packageName: 'com.chrp.app',
+    packageName: 'app.chrp.android',
     installIfNotAvailable: true,
   },
 };
