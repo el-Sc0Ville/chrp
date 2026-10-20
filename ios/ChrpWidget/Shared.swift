@@ -7,13 +7,18 @@ enum Shared {
   static let configKey = "chrp.widget.config"
   static let cacheKey = "chrp.widget.cache"
   static let failedAtKey = "chrp.widget.failedAt"
+  static let fetchedAtKey = "chrp.widget.fetchedAt"
+  static let forceRefreshKey = "chrp.widget.forceRefresh"
+  static let teamFilterKey = "chrp.widget.teamFilter"
+  static let indexKey = "chrp.widget.index"
   static let defaultAPI = "https://northamerica-northeast1-chrp-app.cloudfunctions.net/widgetApi"
+  static let allTeams = "all"
 
   static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
 }
 
 // Written by the app as JSON: who to fetch for, and the per-device key the
-// widgetApi function checks.
+// widgetApi function checks. teamId is the app's active team.
 struct WidgetConfig: Codable {
   let uid: String
   let key: String
@@ -21,7 +26,14 @@ struct WidgetConfig: Codable {
   let apiUrl: String?
 }
 
+struct WidgetTeam: Codable {
+  let teamId: String
+  let teamName: String
+  let teamColor: String
+}
+
 struct WidgetEvent: Codable {
+  let teamId: String?    // absent in caches written before multi-team support
   let eventId: String
   let type: String
   let title: String
@@ -34,9 +46,40 @@ struct WidgetEvent: Codable {
 }
 
 struct WidgetPayload: Codable {
+  // Single-game fields, kept for older caches and older servers.
   let teamName: String
   let teamColor: String
   var event: WidgetEvent?
+  // Every upcoming game across the player's teams, soonest first.
+  var teams: [WidgetTeam]?
+  var events: [WidgetEvent]?
+
+  var allEvents: [WidgetEvent] {
+    if let events = events { return events }
+    if let event = event { return [event] }
+    return []
+  }
+
+  var allTeams: [WidgetTeam] {
+    if let teams = teams, !teams.isEmpty { return teams }
+    return [WidgetTeam(teamId: event?.teamId ?? "", teamName: teamName, teamColor: teamColor)]
+  }
+
+  func team(for event: WidgetEvent) -> WidgetTeam? {
+    allTeams.first { $0.teamId == event.teamId } ?? (allTeams.count == 1 ? allTeams[0] : nil)
+  }
+}
+
+// What the widget shows right now: the chosen team filter and position.
+struct WidgetSelection {
+  let event: WidgetEvent?
+  let eventTeam: WidgetTeam?
+  let index: Int
+  let count: Int
+  let filterLabel: String
+  let filterColor: String
+  let canCycleTeams: Bool
+  let showTeamOnEvent: Bool
 }
 
 enum WidgetState {
@@ -64,9 +107,10 @@ enum ChrpStore {
     return try? JSONDecoder().decode(WidgetPayload.self, from: data)
   }
 
-  static func saveCache(_ payload: WidgetPayload) {
+  static func saveCache(_ payload: WidgetPayload, fresh: Bool) {
     if let data = try? JSONEncoder().encode(payload) {
       Shared.defaults?.set(data, forKey: Shared.cacheKey)
+      if fresh { Shared.defaults?.set(Date().timeIntervalSince1970, forKey: Shared.fetchedAtKey) }
     }
   }
 
@@ -77,9 +121,20 @@ enum ChrpStore {
     return now.timeIntervalSince1970 - failedAt < 120
   }
 
+  // Paging and switching teams only re-read the cache, so they are instant.
+  // Go to the network when the app asked for it, or the data is 15 min old.
+  static func shouldFetch(now: Date = Date()) -> Bool {
+    guard let defaults = Shared.defaults else { return true }
+    if defaults.bool(forKey: Shared.forceRefreshKey) { return true }
+    guard loadCache() != nil,
+          let fetchedAt = defaults.object(forKey: Shared.fetchedAtKey) as? Double else { return true }
+    return now.timeIntervalSince1970 - fetchedAt > 15 * 60
+  }
+
   static func call(
     _ config: WidgetConfig,
     action: String,
+    teamId: String? = nil,
     eventId: String? = nil,
     response: String? = nil
   ) async throws -> WidgetPayload {
@@ -87,7 +142,7 @@ enum ChrpStore {
     var body: [String: String] = [
       "uid": config.uid,
       "key": config.key,
-      "teamId": config.teamId,
+      "teamId": teamId ?? config.teamId,
       "action": action,
     ]
     if let eventId = eventId { body["eventId"] = eventId }
@@ -109,43 +164,121 @@ enum ChrpStore {
     }
   }
 
+  static func cachedState(now: Date = Date()) -> WidgetState {
+    guard loadConfig() != nil else { return .needsSetup }
+    guard var cached = loadCache() else { return .offline }
+    // Never show a game that has already started.
+    cached.events = cached.allEvents.filter { $0.startDate > now }
+    if let event = cached.event, event.startDate <= now { cached.event = nil }
+    return .ready(cached, stale: true)
+  }
+
   static func currentState() async -> WidgetState {
     guard let config = loadConfig() else { return .needsSetup }
+    if !shouldFetch() {
+      if case .ready(let payload, _) = cachedState() { return .ready(payload, stale: false) }
+    }
     do {
       let payload = try await call(config, action: "fetch")
-      saveCache(payload)
+      saveCache(payload, fresh: true)
+      Shared.defaults?.set(false, forKey: Shared.forceRefreshKey)
       return .ready(payload, stale: false)
     } catch WidgetAPIError.unauthorized {
       return .needsReconnect
     } catch {
-      // Offline: fall back to the last answer we had, but never to a game
-      // that has already started.
-      if let cached = loadCache() {
-        if let event = cached.event, event.startDate <= Date() { return .offline }
-        return .ready(cached, stale: true)
+      // Offline: fall back to the last data we had.
+      let state = cachedState()
+      if case .ready(let payload, _) = state, payload.allEvents.isEmpty, loadCache()?.allEvents.isEmpty == false {
+        return .offline
       }
-      return .offline
+      return state
     }
   }
 
-  static func respond(eventId: String, response: String) async {
+  // ─── Filter and position ──────────────────────────────────────────────────
+
+  static func selection(for payload: WidgetPayload) -> WidgetSelection {
+    let teams = payload.allTeams
+    let canCycle = teams.count > 1
+    var filter = Shared.defaults?.string(forKey: Shared.teamFilterKey) ?? Shared.allTeams
+    if filter != Shared.allTeams && !teams.contains(where: { $0.teamId == filter }) {
+      filter = Shared.allTeams  // left that team
+    }
+    let events = payload.allEvents.filter { filter == Shared.allTeams || $0.teamId == filter }
+    let stored = Shared.defaults?.integer(forKey: Shared.indexKey) ?? 0
+    let index = events.isEmpty ? 0 : min(max(stored, 0), events.count - 1)
+    let event = events.isEmpty ? nil : events[index]
+    let filterTeam = teams.first { $0.teamId == filter }
+
+    let label: String
+    let color: String
+    if !canCycle {
+      label = teams.first?.teamName ?? payload.teamName
+      color = teams.first?.teamColor ?? payload.teamColor
+    } else if let filterTeam = filterTeam {
+      label = filterTeam.teamName
+      color = filterTeam.teamColor
+    } else {
+      label = "All teams"
+      color = event.flatMap { payload.team(for: $0)?.teamColor } ?? payload.teamColor
+    }
+
+    return WidgetSelection(
+      event: event,
+      eventTeam: event.flatMap { payload.team(for: $0) },
+      index: index,
+      count: events.count,
+      filterLabel: label,
+      filterColor: color,
+      canCycleTeams: canCycle,
+      showTeamOnEvent: canCycle && filterTeam == nil
+    )
+  }
+
+  static func page(by delta: Int) {
+    guard let payload = loadCache() else { return }
+    let current = selection(for: payload)
+    guard current.count > 0 else { return }
+    let next = min(max(current.index + delta, 0), current.count - 1)
+    Shared.defaults?.set(next, forKey: Shared.indexKey)
+  }
+
+  static func cycleTeam() {
+    guard let payload = loadCache() else { return }
+    let order = [Shared.allTeams] + payload.allTeams.map { $0.teamId }
+    let current = Shared.defaults?.string(forKey: Shared.teamFilterKey) ?? Shared.allTeams
+    let position = order.firstIndex(of: current) ?? 0
+    Shared.defaults?.set(order[(position + 1) % order.count], forKey: Shared.teamFilterKey)
+    Shared.defaults?.set(0, forKey: Shared.indexKey)
+  }
+
+  // ─── Answering ────────────────────────────────────────────────────────────
+
+  static func respond(teamId: String?, eventId: String, response: String) async {
     guard let config = loadConfig() else { return }
     let previous = loadCache()
 
     // Show the tap immediately; the timeline reload that follows confirms it.
-    if var optimistic = previous, optimistic.event?.eventId == eventId {
-      optimistic.event?.response = response
-      optimistic.event?.autoIn = false
-      saveCache(optimistic)
+    if var optimistic = previous {
+      if var events = optimistic.events, let i = events.firstIndex(where: { $0.eventId == eventId }) {
+        events[i].response = response
+        events[i].autoIn = false
+        optimistic.events = events
+      }
+      if optimistic.event?.eventId == eventId {
+        optimistic.event?.response = response
+        optimistic.event?.autoIn = false
+      }
+      saveCache(optimistic, fresh: false)
     }
 
     do {
-      let payload = try await call(config, action: "respond", eventId: eventId, response: response)
-      saveCache(payload)
+      let payload = try await call(config, action: "respond", teamId: teamId, eventId: eventId, response: response)
+      saveCache(payload, fresh: true)
       Shared.defaults?.removeObject(forKey: Shared.failedAtKey)
     } catch {
       // Undo the optimistic answer rather than show one that was never saved.
-      if let previous = previous { saveCache(previous) }
+      if let previous = previous { saveCache(previous, fresh: false) }
       Shared.defaults?.set(Date().timeIntervalSince1970, forKey: Shared.failedAtKey)
     }
   }

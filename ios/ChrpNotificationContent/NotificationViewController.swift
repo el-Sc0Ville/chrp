@@ -322,7 +322,12 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
             let ok   = error == nil && (200..<300).contains(code)
             // The Home Screen widget would otherwise keep showing the old
             // answer until its next scheduled refresh.
-            if ok { WidgetCenter.shared.reloadAllTimelines() }
+            if ok {
+                // Tell the widget to fetch rather than reuse its cache
+                // (ios/ChrpWidget/Shared.swift, forceRefreshKey).
+                UserDefaults(suiteName: "group.com.chrp.app")?.set(true, forKey: "chrp.widget.forceRefresh")
+                WidgetCenter.shared.reloadAllTimelines()
+            }
             DispatchQueue.main.async { completion(ok) }
         }.resume()
     }

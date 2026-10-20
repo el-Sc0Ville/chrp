@@ -8,6 +8,11 @@ private let appGroup = "group.com.chrp.app"
 private let configKey = "chrp.widget.config"
 private let deviceKeyKey = "chrp.widget.deviceKey"
 private let cacheKey = "chrp.widget.cache"
+// The widget only goes to the network when this is set or its data is stale;
+// paging through games uses the cache.
+private let forceRefreshKey = "chrp.widget.forceRefresh"
+private let teamFilterKey = "chrp.widget.teamFilter"
+private let indexKey = "chrp.widget.index"
 
 public class ChrpWidgetModule: Module {
   private var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
@@ -40,16 +45,20 @@ public class ChrpWidgetModule: Module {
         // Another player or team: whatever the widget cached is for someone else.
         self.defaults?.removeObject(forKey: cacheKey)
       }
+      self.defaults?.set(true, forKey: forceRefreshKey)
       WidgetCenter.shared.reloadAllTimelines()
     }
 
     Function("clear") {
       self.defaults?.removeObject(forKey: configKey)
       self.defaults?.removeObject(forKey: cacheKey)
+      self.defaults?.removeObject(forKey: teamFilterKey)
+      self.defaults?.removeObject(forKey: indexKey)
       WidgetCenter.shared.reloadAllTimelines()
     }
 
     Function("reload") {
+      self.defaults?.set(true, forKey: forceRefreshKey)
       WidgetCenter.shared.reloadAllTimelines()
     }
   }

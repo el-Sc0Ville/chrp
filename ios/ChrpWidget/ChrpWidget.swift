@@ -12,21 +12,25 @@ struct ChrpEntry: TimelineEntry {
 
   static var sample: ChrpEntry {
     let inTwoDays = (Date().timeIntervalSince1970 + 2 * 86_400) * 1000
+    let event = WidgetEvent(
+      teamId: "sample",
+      eventId: "sample",
+      type: "game",
+      title: "Next game",
+      venue: "Your rink",
+      startsAt: inTwoDays,
+      response: "in",
+      autoIn: true
+    )
     return ChrpEntry(
       date: Date(),
       state: .ready(
         WidgetPayload(
           teamName: "Your team",
           teamColor: "#2540D6",
-          event: WidgetEvent(
-            eventId: "sample",
-            type: "game",
-            title: "Next game",
-            venue: "Your rink",
-            startsAt: inTwoDays,
-            response: "in",
-            autoIn: true
-          )
+          event: event,
+          teams: [WidgetTeam(teamId: "sample", teamName: "Your team", teamColor: "#2540D6")],
+          events: [event]
         ),
         stale: false
       ),
@@ -62,14 +66,14 @@ struct ChrpProvider: TimelineProvider {
     return ChrpEntry(date: Date(), state: state, saveFailed: ChrpStore.recentlyFailed())
   }
 
-  // Hourly, and right after the game starts so it rolls over to the next one.
-  // Sooner after a failed save, so the error does not linger. Hourly is enough
-  // because the app and the notification extension reload the widget the
-  // moment an answer changes; this schedule only catches new or edited games.
+  // Hourly, and right after the soonest game starts so it rolls over to the
+  // next one. Sooner after a failed save, so the error does not linger. The app
+  // and the notification extension reload the widget the moment an answer
+  // changes; this schedule only catches new or edited games.
   static func nextRefresh(after entry: ChrpEntry) -> Date {
     var next = entry.date.addingTimeInterval(60 * 60)
     if case .ready(let payload, _) = entry.state,
-       let start = payload.event?.startDate,
+       let start = payload.allEvents.first?.startDate,
        start > entry.date, start < next {
       next = start.addingTimeInterval(60)
     }
@@ -126,17 +130,29 @@ struct ChrpWidgetView: View {
     case .offline:
       MessageView(title: "Chrp", message: "Can't reach Chrp right now. We'll try again soon.")
     case .ready(let payload, let stale):
-      if let event = payload.event {
-        EventView(
-          payload: payload,
-          event: event,
-          stale: stale,
-          saveFailed: entry.saveFailed,
-          compact: family == .systemSmall
-        )
-      } else {
-        MessageView(title: payload.teamName, message: "No upcoming games scheduled.")
+      let selection = ChrpStore.selection(for: payload)
+      VStack(alignment: .leading, spacing: 0) {
+        HeaderRow(selection: selection, compact: family == .systemSmall)
+        if let event = selection.event {
+          EventView(
+            selection: selection,
+            event: event,
+            stale: stale,
+            saveFailed: entry.saveFailed,
+            compact: family == .systemSmall
+          )
+        } else {
+          Text(selection.canCycleTeams && selection.filterLabel != "All teams"
+               ? "No upcoming games for this team."
+               : "No upcoming games scheduled.")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .lineLimit(3)
+            .padding(.top, 6)
+          Spacer(minLength: 0)
+        }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
   }
 }
@@ -161,25 +177,83 @@ struct MessageView: View {
   }
 }
 
+// Team switch on the left (tap to cycle when on several teams), ‹ 2/5 › on the right.
+struct HeaderRow: View {
+  let selection: WidgetSelection
+  let compact: Bool
+
+  var body: some View {
+    HStack(spacing: 4) {
+      if selection.canCycleTeams {
+        Button(intent: CycleTeamIntent()) { teamLabel(showSwitch: true) }
+          .buttonStyle(.plain)
+          .accessibilityLabel(Text("\(selection.filterLabel). Tap to switch team"))
+      } else {
+        teamLabel(showSwitch: false)
+      }
+      Spacer(minLength: 2)
+      if selection.count > 1 {
+        Button(intent: PageEventsIntent(step: -1)) { arrow("‹", enabled: selection.index > 0) }
+          .buttonStyle(.plain)
+          .disabled(selection.index == 0)
+          .accessibilityLabel(Text("Previous game"))
+        Text("\(selection.index + 1)/\(selection.count)")
+          .font(.system(size: 10, weight: .semibold).monospacedDigit())
+          .foregroundStyle(Color.white.opacity(0.7))
+        Button(intent: PageEventsIntent(step: 1)) { arrow("›", enabled: selection.index < selection.count - 1) }
+          .buttonStyle(.plain)
+          .disabled(selection.index >= selection.count - 1)
+          .accessibilityLabel(Text("Next game"))
+      }
+    }
+  }
+
+  private func teamLabel(showSwitch: Bool) -> some View {
+    HStack(spacing: 4) {
+      Circle()
+        .fill(Color(hex: selection.filterColor))
+        .frame(width: 6, height: 6)
+      Text(selection.filterLabel.uppercased())
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.7))
+        .lineLimit(1)
+      if showSwitch {
+        Text("⇄")
+          .font(.system(size: 10, weight: .bold))
+          .foregroundStyle(Color.white.opacity(0.7))
+      }
+    }
+    .padding(.vertical, 3)
+    .padding(.horizontal, showSwitch ? 6 : 0)
+    .background(
+      Capsule().fill(showSwitch ? Color.white.opacity(0.10) : Color.clear)
+    )
+  }
+
+  private func arrow(_ symbol: String, enabled: Bool) -> some View {
+    Text(symbol)
+      .font(.system(size: 16, weight: .bold))
+      .foregroundStyle(Color.white.opacity(enabled ? 0.9 : 0.25))
+      .frame(width: compact ? 18 : 24, height: 20)
+      .contentShape(Rectangle())
+  }
+}
+
 struct EventView: View {
-  let payload: WidgetPayload
+  let selection: WidgetSelection
   let event: WidgetEvent
   let stale: Bool
   let saveFailed: Bool
   let compact: Bool
 
-  private var accent: Color { Color(hex: payload.teamColor) }
-
   var body: some View {
-    VStack(alignment: .leading, spacing: compact ? 3 : 5) {
-      HStack(spacing: 5) {
-        Circle()
-          .fill(accent)
-          .frame(width: 6, height: 6)
-        Text(payload.teamName.uppercased())
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(Color.white.opacity(0.55))
+    VStack(alignment: .leading, spacing: compact ? 2 : 4) {
+      if selection.showTeamOnEvent, let team = selection.eventTeam {
+        Text(team.teamName.uppercased())
+          .font(.system(size: 9, weight: .bold))
+          .foregroundStyle(Color(hex: team.teamColor).opacity(0.95))
           .lineLimit(1)
+          .padding(.top, 4)
       }
 
       Text(event.title)
@@ -187,6 +261,7 @@ struct EventView: View {
         .foregroundStyle(Color.white)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
+        .padding(.top, selection.showTeamOnEvent ? 0 : 4)
 
       Text(dateLine)
         .font(.system(size: 12, weight: .medium))
@@ -210,11 +285,11 @@ struct EventView: View {
         .minimumScaleFactor(0.8)
 
       HStack(spacing: compact ? 4 : 8) {
-        ReplyButton(eventId: event.eventId, value: "in", label: "In",
+        ReplyButton(event: event, value: "in", label: "In",
                     tint: Color(hex: "#22C55E"), selected: event.response == "in")
-        ReplyButton(eventId: event.eventId, value: "maybe", label: "Maybe",
+        ReplyButton(event: event, value: "maybe", label: "Maybe",
                     tint: Color(hex: "#F59E0B"), selected: event.response == "maybe")
-        ReplyButton(eventId: event.eventId, value: "out", label: "Out",
+        ReplyButton(event: event, value: "out", label: "Out",
                     tint: Color(hex: "#EF4444"), selected: event.response == "out")
       }
     }
@@ -255,14 +330,14 @@ struct EventView: View {
 }
 
 struct ReplyButton: View {
-  let eventId: String
+  let event: WidgetEvent
   let value: String
   let label: String
   let tint: Color
   let selected: Bool
 
   var body: some View {
-    Button(intent: SetAvailabilityIntent(eventId: eventId, response: value)) {
+    Button(intent: SetAvailabilityIntent(teamId: event.teamId, eventId: event.eventId, response: value)) {
       Text(label)
         .font(.system(size: 12, weight: .bold))
         .lineLimit(1)
