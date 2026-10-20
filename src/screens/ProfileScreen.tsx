@@ -26,6 +26,7 @@ import { useTeam } from '../firebase/hooks/useTeam';
 import type { DuesRecord } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
 import { useModeration } from '../moderation';
+import { LOCATION_CHECK_IN_ENABLED } from '../lib/features';
 import * as Location from 'expo-location';
 
 const TERMS_URL = 'https://chrp-app.web.app/terms';
@@ -531,14 +532,18 @@ export default function ProfileScreen() {
             value={availReminders}
             onValueChange={handleRemindersToggle}
           />
-          <View style={styles.rowDivider} />
-          <ToggleRow
-            icon="📍"
-            label="Location for Gameday"
-            subtitle="Shows your arrival status to all teammates on game day"
-            value={location}
-            onValueChange={handleLocationToggle}
-          />
+          {LOCATION_CHECK_IN_ENABLED && (
+            <>
+              <View style={styles.rowDivider} />
+              <ToggleRow
+                icon="📍"
+                label="Location for Gameday"
+                subtitle="Shows your arrival status to all teammates on game day"
+                value={location}
+                onValueChange={handleLocationToggle}
+              />
+            </>
+          )}
           {TIPS_ENABLED && (
             <>
               <View style={styles.rowDivider} />

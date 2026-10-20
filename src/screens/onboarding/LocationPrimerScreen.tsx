@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation';
 import { navy, fonts, teams, spacing, radius } from '../../theme';
+import { LOCATION_CHECK_IN_ENABLED } from '../../lib/features';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'LocationPrimer'>;
 
@@ -38,7 +39,8 @@ export default function LocationPrimerScreen({ navigation, route }: Props) {
   useEffect(() => {
     (async () => {
       const seen = await AsyncStorage.getItem(SEEN_KEY).catch(() => null);
-      if (seen) {
+      // No location on this platform: nothing to explain or ask for.
+      if (seen || !LOCATION_CHECK_IN_ENABLED) {
         navigation.replace('OnboardingComplete', { teamId, teamName, palette, isManager });
         return;
       }

@@ -21,6 +21,7 @@ import { useCheckIns } from '../firebase/hooks/useCheckIns';
 import { db } from '../firebase/config';
 import * as haptics from '../lib/haptics';
 import { GEOFENCE_TASK } from '../tasks/geofenceTask';
+import { LOCATION_CHECK_IN_ENABLED } from '../lib/features';
 import type { Event as FirestoreEvent } from '../firebase/schema';
 
 const TEAM = teams.trashdogs; // StyleSheet fallback
@@ -101,7 +102,7 @@ export default function GamedayScreen() {
   // no longer a game to watch for or the user has opted out, which is what left a
   // 300m region and its background task running indefinitely after the game.
   useEffect(() => {
-    if (!optInLoaded) return;
+    if (!optInLoaded || !LOCATION_CHECK_IN_ENABLED) return;
 
     if (!autoCheckIn || !gameId || venueLat === null || venueLng === null || !uid) {
       void stopGeofence();
@@ -333,7 +334,7 @@ export default function GamedayScreen() {
         )}
 
         {/* ── Auto check-in opt-in (manual "I'm here" works without it) ── */}
-        {venueLat !== null && venueLng !== null && (
+        {LOCATION_CHECK_IN_ENABLED && venueLat !== null && venueLng !== null && (
           <View style={styles.autoRow}>
             <View style={styles.autoLeft}>
               <Text style={styles.autoLabel}>📍  Auto check-in</Text>

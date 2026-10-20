@@ -38,6 +38,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -61,8 +64,7 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue.",
-          "locationWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue.",
-          "isAndroidBackgroundLocationEnabled": true
+          "locationWhenInUsePermission": "Chrp uses your location to automatically check you in when you arrive at the venue."
         }
       ]
     ],
