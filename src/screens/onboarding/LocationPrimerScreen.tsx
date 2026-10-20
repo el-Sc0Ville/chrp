@@ -93,17 +93,11 @@ export default function LocationPrimerScreen({ navigation, route }: Props) {
       >
         {busy
           ? <ActivityIndicator color={accent.on} />
-          : <Text style={[styles.btnText, { color: accent.on }]}>Allow location</Text>
+          : <Text style={[styles.btnText, { color: accent.on }]}>Continue</Text>
         }
       </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [styles.btnGhost, pressed && styles.btnPressed]}
-        onPress={() => { if (!busy) advance('skipped'); }}
-        disabled={busy}
-      >
-        <Text style={styles.btnGhostText}>Skip for now</Text>
-      </Pressable>
+      {/* App Review 5.1.1(iv): neutral button, and no way to skip the system
+          prompt from here. People decline in the system prompt itself. */}
 
       <Text style={styles.footnote}>You can change this anytime in Profile → Location.</Text>
     </View>

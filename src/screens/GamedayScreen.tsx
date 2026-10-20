@@ -141,12 +141,13 @@ export default function GamedayScreen() {
       return;
     }
     // Explain why before the OS dialog, and only escalate to background/Always
-    // once the user has actively asked for auto check-in.
+    // once the user has actively asked for auto check-in. App Review 5.1.1(iv):
+    // a single neutral button that always leads to the system prompt — people
+    // decline there (and the banner below links to Settings if they do).
     Alert.alert(
-      'Auto check-in when you arrive?',
-      "Chrp will use your location in the background on gameday to check you in the moment you reach the rink, so your manager knows you're there without you opening the app.",
+      'Auto check-in',
+      "Chrp uses your location on game days, even when the app is closed, to check you in the moment you reach the rink so your manager knows you're there. Your location is never stored or shared.",
       [
-        { text: 'Not now', style: 'cancel' },
         {
           text: 'Continue',
           onPress: async () => {

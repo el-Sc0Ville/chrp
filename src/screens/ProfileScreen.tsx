@@ -26,6 +26,7 @@ import { useTeam } from '../firebase/hooks/useTeam';
 import type { DuesRecord } from '../firebase/schema';
 import type { RootStackParamList } from '../navigation';
 import { useModeration } from '../moderation';
+import * as Location from 'expo-location';
 
 const TERMS_URL = 'https://chrp-app.web.app/terms';
 const SUPPORT_EMAIL = 'leSc0vill3@gmail.com';
@@ -173,14 +174,29 @@ export default function ProfileScreen() {
 
   const handleLocationToggle = (value: boolean) => {
     if (value) {
+      // App Review 5.1.1(iv): explain, then always go on to the system prompt
+      // with one neutral button. If they decline, offer Settings instead.
       Alert.alert(
-        'Allow location access?',
+        'Location check-in',
         "On game days Chrp checks whether you've arrived at the rink so it can check you in automatically. Your position is never stored or shared.",
         [
-          { text: 'Not now', style: 'cancel' },
           {
             text: 'Continue',
             onPress: async () => {
+              const { status } = await Location.requestForegroundPermissionsAsync()
+                .catch(() => ({ status: 'denied' as const }));
+              if (status !== 'granted') {
+                setLocation(false);
+                Alert.alert(
+                  'Location is off for Chrp',
+                  'To use automatic check-in, allow location for Chrp in Settings.',
+                  [
+                    { text: 'OK', style: 'cancel' },
+                    { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  ],
+                );
+                return;
+              }
               setLocation(true);
               if (!user?.uid || !activeTeamId) return;
               try {
