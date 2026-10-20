@@ -489,41 +489,84 @@ function keyMatches(keys, key) {
         return stored.length === given.length && crypto.timingSafeEqual(stored, given);
     });
 }
-async function nextEventFor(teamId, uid) {
-    const teamSnap = await db.collection('teams').doc(teamId).get();
-    const team = teamSnap.data() ?? {};
-    const upcoming = await db
-        .collection('teams').doc(teamId)
-        .collection('events')
-        .where('startsAt', '>', firestore_1.Timestamp.now())
-        .orderBy('startsAt', 'asc')
-        // Every document returned is a billed read, and this runs on each widget
-        // refresh. Five still skips past a run of cancelled games.
-        .limit(5)
-        .get();
-    const eventDoc = upcoming.docs.find(d => d.data()['status'] !== 'cancelled');
-    const base = {
-        teamName: team['name'] ?? 'Your team',
-        teamColor: PALETTE_HEX[team['palette']] ?? '#2540D6',
-    };
-    if (!eventDoc)
-        return { ...base, event: null };
-    const e = eventDoc.data();
-    const responseSnap = await eventDoc.ref.collection('responses').doc(uid).get();
-    const r = responseSnap.data();
+// Per refresh, every document read is billed: a few upcoming games per team
+// is enough to page through, and five per query still skips a run of
+// cancelled games.
+const WIDGET_EVENTS_PER_TEAM = 3;
+const WIDGET_EVENTS_MAX = 10;
+async function upcomingFor(teamId, uid) {
+    const teamRef = db.collection('teams').doc(teamId);
+    const [teamSnap, upcoming] = await Promise.all([
+        teamRef.get(),
+        teamRef.collection('events')
+            .where('startsAt', '>', firestore_1.Timestamp.now())
+            .orderBy('startsAt', 'asc')
+            .limit(5)
+            .get(),
+    ]);
+    const team = teamSnap.data();
+    if (!team)
+        return null;
+    const docs = upcoming.docs
+        .filter(d => d.data()['status'] !== 'cancelled')
+        .slice(0, WIDGET_EVENTS_PER_TEAM);
+    const responses = docs.length
+        ? await db.getAll(...docs.map(d => d.ref.collection('responses').doc(uid)))
+        : [];
     return {
-        ...base,
-        event: {
-            eventId: eventDoc.id,
-            type: e['type'] ?? 'game',
-            title: e['title'] ?? 'Game',
-            venue: e['venue'] ?? '',
-            startsAt: e['startsAt'].toMillis(),
-            response: WIDGET_RESPONSES.includes(r?.['response']) ? r?.['response'] : null,
-            // Set only by the auto-in batch at event creation; any real reply
-            // overwrites the whole document and so clears it.
-            autoIn: r?.['autoIn'] === true,
+        team: {
+            teamId,
+            teamName: team['name'] ?? 'Your team',
+            teamColor: PALETTE_HEX[team['palette']] ?? '#2540D6',
         },
+        events: docs.map((d, i) => {
+            const e = d.data();
+            const r = responses[i]?.data();
+            return {
+                teamId,
+                eventId: d.id,
+                type: e['type'] ?? 'game',
+                title: e['title'] ?? 'Game',
+                venue: e['venue'] ?? '',
+                startsAt: e['startsAt'].toMillis(),
+                response: WIDGET_RESPONSES.includes(r?.['response']) ? r?.['response'] : null,
+                // Set only by the auto-in batch at event creation; any real reply
+                // overwrites the whole document and so clears it.
+                autoIn: r?.['autoIn'] === true,
+            };
+        }),
+    };
+}
+// Upcoming games across every team the player belongs to, so the widget can
+// page through them and filter by team. Also returns the original single-game
+// fields (teamName / teamColor / event, for the requested team) so widgets
+// from builds before multi-team support keep working unchanged.
+async function widgetPayload(uid, requestedTeamId) {
+    const userTeams = await db.collection('users').doc(uid).collection('teams').get();
+    const teamIds = userTeams.docs.map(d => d.id);
+    if (!teamIds.includes(requestedTeamId))
+        teamIds.push(requestedTeamId);
+    const memberSnaps = await db.getAll(...teamIds.map(t => db.collection('teams').doc(t).collection('members').doc(uid)));
+    const memberOf = teamIds.filter((_, i) => memberSnaps[i].exists);
+    if (memberOf.length === 0)
+        return null;
+    const results = (await Promise.all(memberOf.map(t => upcomingFor(t, uid))))
+        .filter((r) => r !== null);
+    const teams = results.map(r => r.team)
+        .sort((a, b) => a.teamName.localeCompare(b.teamName));
+    const events = results.flatMap(r => r.events)
+        .sort((a, b) => a.startsAt - b.startsAt)
+        .slice(0, WIDGET_EVENTS_MAX);
+    // Old widgets show one team: the requested one, else whichever plays next.
+    const legacy = results.find(r => r.team.teamId === requestedTeamId)
+        ?? results.find(r => r.team.teamId === events[0]?.teamId)
+        ?? results[0];
+    return {
+        teamName: legacy?.team.teamName ?? 'Your team',
+        teamColor: legacy?.team.teamColor ?? '#2540D6',
+        event: legacy?.events[0] ?? null,
+        teams,
+        events,
     };
 }
 exports.widgetApi = (0, https_1.onRequest)({ region: 'northamerica-northeast1' }, async (req, res) => {
@@ -531,6 +574,8 @@ exports.widgetApi = (0, https_1.onRequest)({ region: 'northamerica-northeast1' }
         res.status(405).send('Method Not Allowed');
         return;
     }
+    // teamId: for "respond", the team the game belongs to; for "fetch", the
+    // app's active team (only used for the legacy single-game fields).
     const { uid, key, teamId, action, eventId, response } = req.body ?? {};
     if (typeof uid !== 'string' || typeof key !== 'string' || typeof teamId !== 'string'
         || !uid || !key || !teamId) {
@@ -543,17 +588,17 @@ exports.widgetApi = (0, https_1.onRequest)({ region: 'northamerica-northeast1' }
             res.status(403).send('Unknown widget key');
             return;
         }
-        const memberSnap = await db
-            .collection('teams').doc(teamId)
-            .collection('members').doc(uid)
-            .get();
-        if (!memberSnap.exists) {
-            res.status(403).send('Not a member of this team');
-            return;
-        }
         if (action === 'respond') {
             if (typeof eventId !== 'string' || !WIDGET_RESPONSES.includes(response)) {
                 res.status(400).send('Invalid response');
+                return;
+            }
+            const memberSnap = await db
+                .collection('teams').doc(teamId)
+                .collection('members').doc(uid)
+                .get();
+            if (!memberSnap.exists) {
+                res.status(403).send('Not a member of this team');
                 return;
             }
             const eventRef = db.collection('teams').doc(teamId).collection('events').doc(eventId);
@@ -574,7 +619,12 @@ exports.widgetApi = (0, https_1.onRequest)({ region: 'northamerica-northeast1' }
                 setByManager: false,
             });
         }
-        res.status(200).json(await nextEventFor(teamId, uid));
+        const payload = await widgetPayload(uid, teamId);
+        if (!payload) {
+            res.status(403).send('Not a member of any team');
+            return;
+        }
+        res.status(200).json(payload);
     }
     catch (err) {
         console.error('[widgetApi] failed:', err);
