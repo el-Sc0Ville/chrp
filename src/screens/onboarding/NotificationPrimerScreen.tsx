@@ -87,17 +87,12 @@ export default function NotificationPrimerScreen({ navigation, route }: Props) {
       >
         {busy
           ? <ActivityIndicator color={accent.on} />
-          : <Text style={[styles.btnText, { color: accent.on }]}>Allow notifications</Text>
+          : <Text style={[styles.btnText, { color: accent.on }]}>Continue</Text>
         }
       </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [styles.btnGhost, pressed && styles.btnPressed]}
-        onPress={() => { if (!busy) advance('skipped'); }}
-        disabled={busy}
-      >
-        <Text style={styles.btnGhostText}>Maybe later</Text>
-      </Pressable>
+      {/* App Review 5.1.1(iv): a screen shown before a permission request must
+          use a neutral button and always lead to the system prompt — no
+          "Maybe later". People decline in the system prompt itself. */}
     </View>
   );
 }
